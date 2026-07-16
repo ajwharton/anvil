@@ -38,7 +38,7 @@ Not Thinking Machines’ cloud. Not a full MoE train stack on day one.
 | Design SSOT | `docs/design.md` |
 | Roadmap | `docs/roadmap.md` |
 | Governance | `docs/governance.md` |
-| Package | `anvil/` (stubs until Phase 1) |
+| Package | `anvil/` (Phase 0 typed API + `fake://` backend; GPU in Phase 1) |
 
 ## Prefer artifacts
 
@@ -58,11 +58,15 @@ README.md           # human front door
 | `docs/governance.md` | Contribution / maintainer / license dispute |
 | `CONTRIBUTING.md` | PR / test expectations |
 | `docs/handoff.md` | Spinning a new agent session off this project |
+| `docs/models.md` | Reference base models (VLM / Jetson); pull script |
+| `anvil/web/` | Control-plane UI (`anvil-web` → :7600); GPU metrics stay on spark-dashboard :3000 |
+| `anvil/recipes/` | **Architecture → pattern → plan** (product intelligence; knobs are derived) |
 
 ## Do not
 
 - Preload mia-rl Ship scoreboard or coach ontology  
 - Commit large weights, datasets, or media blobs  
+- Store multi‑GB bases on the Mac — pull to **forge/hammer** (`docs/models.md`, `scripts/pull_base_model.py`)  
 - Expand to full distributed MoE train before Phase 1 SFT smoke works  
 - Multi-doc “session startup” lists  
 

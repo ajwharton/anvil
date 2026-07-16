@@ -17,3 +17,7 @@ build/
 checkpoints/
 .media/
 *.log
+
+# Local Anvil runtime (fake backend, web exports)
+.anvil-fake/
+.anvil/

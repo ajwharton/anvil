@@ -14,8 +14,10 @@ Success looks like: a researcher or roboticist can SFT/RL a small LLM/VLM from a
 
 - [x] Public repo + thin `start.md` / governance / this roadmap  
 - [x] Design SSOT in `docs/design.md`  
-- [ ] OpenAPI or typed sketch of client verbs (`forward_backward`, `optim_step`, `sample`, `save_state`, export)  
-- [ ] Golden-test harness (even if faked backend) for SFT one-step  
+- [x] Typed sketch of client verbs (`forward_backward`, `optim_step`, `sample`, `save_state`, export) — see `anvil/client/`, `anvil/protocol/`  
+- [x] Golden-test harness (fake backend) for SFT one-step — `tests/test_sft_golden.py`  
+- [x] Web control plane for knobs + runs (`anvil-web`, spark-dashboard look)  
+- [ ] Optional: OpenAPI YAML export of the same types (nice-to-have; Python types are SSOT for now)
 
 **Non-goals:** real multi-node train, production scheduler.
 
@@ -84,3 +86,7 @@ For a spin-off agent session:
 | Date | Note |
 |------|------|
 | 2026-07-16 | Repo scaffold; design imported; Phase 0 open |
+| 2026-07-16 | Phase 0 API stubs + fake backend + SFT golden test (`0.0.1`) |
+| 2026-07-16 | Web control plane `anvil-web` (spark-dashboard visual language) |
+| 2026-07-16 | HF model-card inspect + basic SFT/VLM/GRPO recipes (research-shaped) |
+| 2026-07-16 | 15-recipe catalog with recommended/stretch/blocked architecture gates |

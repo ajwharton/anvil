@@ -1,0 +1,106 @@
+"""ServiceClient — entry point (Tinker-shaped)."""
+
+from __future__ import annotations
+
+from typing import Sequence
+
+from anvil.backends.base import Backend
+from anvil.backends.fake import FakeBackend
+from anvil.client.sampling import SamplingClient
+from anvil.client.training import TrainingClient
+from anvil.control.session import Session
+from anvil.protocol.types import LoraConfig, LoraTargets, TrainConfig
+
+
+def _parse_endpoint(endpoint: str) -> tuple[str, str]:
+    """Return (scheme, rest)."""
+    if "://" in endpoint:
+        scheme, rest = endpoint.split("://", 1)
+        return scheme.lower(), rest
+    return "local", endpoint
+
+
+def resolve_backend(endpoint: str, backend: Backend | None = None) -> Backend:
+    if backend is not None:
+        return backend
+    scheme, rest = _parse_endpoint(endpoint)
+    if scheme in {"fake", "memory", "local"} and (rest in {"", "fake", "memory"} or scheme == "fake"):
+        return FakeBackend()
+    if scheme == "fake":
+        return FakeBackend(root=rest or None)
+    # Phase 1+: http/https → remote control plane
+    raise ValueError(
+        f"unsupported endpoint {endpoint!r}; Phase 0 supports "
+        f"'fake://', 'local://fake', or pass backend= explicitly"
+    )
+
+
+class ServiceClient:
+    """Root client. Create training / sampling clients against a backend.
+
+    Examples::
+
+        svc = anvil.ServiceClient()  # fake:// in-process
+        tc = svc.create_lora_training_client(base_model="sshleifer/tiny-gpt2", rank=8)
+        fut = tc.forward_backward([datum], loss_fn="cross_entropy")
+        loss = fut.result().loss
+    """
+
+    def __init__(
+        self,
+        endpoint: str = "fake://",
+        *,
+        backend: Backend | None = None,
+    ) -> None:
+        self.endpoint = endpoint
+        self._backend = resolve_backend(endpoint, backend)
+        self._session = Session.create(endpoint=endpoint)
+
+    @property
+    def session(self) -> Session:
+        return self._session
+
+    @property
+    def backend(self) -> Backend:
+        return self._backend
+
+    def create_lora_training_client(
+        self,
+        base_model: str,
+        rank: int = 32,
+        *,
+        alpha: int | None = None,
+        dropout: float = 0.0,
+        modalities: Sequence[str] = ("text",),
+        lora_targets: LoraTargets | None = None,
+    ) -> TrainingClient:
+        config = TrainConfig(
+            base_model=base_model,
+            lora=LoraConfig(
+                rank=rank,
+                alpha=alpha,
+                dropout=dropout,
+                targets=lora_targets if lora_targets is not None else LoraTargets(),
+            ),
+            modalities=tuple(modalities),
+        )
+        adapter_id = self._backend.create_lora_session(config)
+        self._session.registry.register(adapter_id, config)
+        return TrainingClient(
+            backend=self._backend,
+            adapter_id=adapter_id,
+            config=config,
+            registry=self._session.registry,
+        )
+
+    def create_sampling_client(
+        self,
+        base_model: str,
+        *,
+        adapter_id=None,
+    ) -> SamplingClient:
+        return SamplingClient(
+            backend=self._backend,
+            base_model=base_model,
+            adapter_id=adapter_id,
+        )

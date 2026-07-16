@@ -1,0 +1,226 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Anvil</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;600&display=swap"
+      rel="stylesheet"
+    />
+    <link rel="stylesheet" href="/assets/styles.css" />
+  </head>
+  <body>
+    <div class="app">
+      <header class="topbar">
+        <div class="brand">
+          <span class="brand-mark" aria-hidden="true"></span>
+          <div>
+            <div class="brand-title">Anvil</div>
+            <div class="brand-sub">post-training control plane</div>
+          </div>
+        </div>
+        <div class="topbar-meta">
+          <span class="pill" id="pill-host">host —</span>
+          <span class="pill" id="pill-backend">backend —</span>
+          <span class="pill pill-ok" id="pill-conn">live</span>
+          <a class="link-btn" id="link-spark-forge" href="#" target="_blank" rel="noopener">spark · forge</a>
+          <a class="link-btn" id="link-spark-hammer" href="#" target="_blank" rel="noopener">spark · hammer</a>
+        </div>
+      </header>
+
+      <section class="stats-row" id="stats-row">
+        <article class="stat-card">
+          <div class="stat-label">Active runs</div>
+          <div class="stat-value mono" id="stat-active">0</div>
+        </article>
+        <article class="stat-card">
+          <div class="stat-label">Completed</div>
+          <div class="stat-value mono" id="stat-done">0</div>
+        </article>
+        <article class="stat-card">
+          <div class="stat-label">Total runs</div>
+          <div class="stat-value mono" id="stat-total">0</div>
+        </article>
+        <article class="stat-card">
+          <div class="stat-label">Models on disk</div>
+          <div class="stat-value mono" id="stat-models">0</div>
+        </article>
+        <article class="stat-card accent">
+          <div class="stat-label">Last loss</div>
+          <div class="stat-value mono" id="stat-loss">—</div>
+        </article>
+      </section>
+
+      <main class="grid">
+        <section class="panel knobs-panel">
+          <div class="panel-head">
+            <h2>Recipes</h2>
+            <span class="muted">catalog · gates · knobs</span>
+          </div>
+          <p class="lede">
+            15 bounded recipes across dense / MoE / VLM / edge. Gates mark
+            <strong>recommended</strong>, <strong>stretch</strong>, or
+            <strong>blocked</strong> for this architecture — stretch if you must,
+            but the boundary is explicit.
+          </p>
+          <form id="run-form" class="knob-form">
+            <label>
+              <span>Name</span>
+              <input name="name" type="text" placeholder="auto from pattern + base" />
+            </label>
+            <label>
+              <span>Base model</span>
+              <select name="base_model" id="base-model"></select>
+            </label>
+            <div class="shape-banner" id="shape-banner">
+              <span class="shape-tag mono" id="shape-tag">—</span>
+              <span class="muted" id="shape-label">pick a base to infer architecture</span>
+            </div>
+            <div class="recipe-cards" id="recipe-cards"></div>
+            <input type="hidden" name="pattern" id="pattern-field" value="" />
+            <details class="advanced">
+              <summary>Expert knobs <span class="muted">(derived — override only if you know)</span></summary>
+            <div class="knob-row">
+              <label>
+                <span>LoRA rank</span>
+                <input name="rank" type="number" min="1" max="256" value="32" />
+              </label>
+              <label>
+                <span>Learning rate</span>
+                <input name="learning_rate" type="number" step="any" value="0.0001" />
+              </label>
+            </div>
+            <div class="knob-row">
+              <label>
+                <span>Loss</span>
+                <select name="loss_fn" id="loss-fn"></select>
+              </label>
+              <label>
+                <span>Max steps</span>
+                <input name="max_steps" type="number" min="1" max="100000" value="100" />
+              </label>
+            </div>
+            <div class="knob-row">
+              <label>
+                <span>Batch size</span>
+                <input name="batch_size" type="number" min="1" max="128" value="4" />
+              </label>
+              <label>
+                <span>Seq len</span>
+                <input name="seq_len" type="number" min="8" max="8192" value="64" />
+              </label>
+            </div>
+            <div class="knob-row">
+              <label>
+                <span>Sample max tokens</span>
+                <input name="max_tokens" type="number" min="1" max="4096" value="64" />
+              </label>
+              <label>
+                <span>Temperature</span>
+                <input name="temperature" type="number" step="0.05" min="0" max="2" value="0.7" />
+              </label>
+            </div>
+            <fieldset class="checks">
+              <legend>LoRA targets</legend>
+              <label class="check"><input type="checkbox" name="language_lora" checked /> language</label>
+              <label class="check"><input type="checkbox" name="mm_projector_lora" checked /> mm projector</label>
+              <label class="check"><input type="checkbox" name="vision_encoder_lora" /> vision encoder</label>
+            </fieldset>
+            <fieldset class="checks">
+              <legend>Modalities</legend>
+              <label class="check"><input type="checkbox" name="mod_text" checked /> text</label>
+              <label class="check"><input type="checkbox" name="mod_image" checked /> image</label>
+            </fieldset>
+            </details>
+            <div id="rationale-box" class="rationale mono"></div>
+            <div class="form-actions">
+              <button type="submit" class="btn primary">Start from recipe</button>
+              <button type="button" class="btn" id="btn-train-1" disabled>Train ×1</button>
+              <button type="button" class="btn" id="btn-train-10" disabled>Train ×10</button>
+              <button type="button" class="btn" id="btn-sample" disabled>Sample</button>
+              <button type="button" class="btn" id="btn-ckpt" disabled>Checkpoint</button>
+              <button type="button" class="btn" id="btn-export" disabled>Export PEFT</button>
+            </div>
+          </form>
+        </section>
+
+        <section class="panel chart-panel">
+          <div class="panel-head">
+            <h2>Loss</h2>
+            <span class="muted mono" id="selected-run-label">no run selected</span>
+          </div>
+          <canvas id="loss-chart" height="160"></canvas>
+          <div class="gauge-row">
+            <div class="gauge">
+              <svg viewBox="0 0 120 70" class="arc">
+                <path class="arc-bg" d="M10 60 A50 50 0 0 1 110 60" />
+                <path id="arc-step" class="arc-fg" d="M10 60 A50 50 0 0 1 110 60" />
+              </svg>
+              <div class="gauge-val mono" id="gauge-step">0</div>
+              <div class="gauge-lbl">step / max</div>
+            </div>
+            <div class="gauge">
+              <svg viewBox="0 0 120 70" class="arc">
+                <path class="arc-bg" d="M10 60 A50 50 0 0 1 110 60" />
+                <path id="arc-progress" class="arc-fg" d="M10 60 A50 50 0 0 1 110 60" />
+              </svg>
+              <div class="gauge-val mono" id="gauge-pct">0%</div>
+              <div class="gauge-lbl">progress</div>
+            </div>
+          </div>
+          <pre class="log mono" id="run-log">select or create a run</pre>
+        </section>
+
+        <section class="panel runs-panel">
+          <div class="panel-head">
+            <h2>Runs</h2>
+            <span class="muted">click to focus</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>name</th>
+                  <th>status</th>
+                  <th>step</th>
+                  <th>loss</th>
+                  <th>base</th>
+                </tr>
+              </thead>
+              <tbody id="runs-body"></tbody>
+            </table>
+          </div>
+        </section>
+
+        <section class="panel models-panel">
+          <div class="panel-head">
+            <h2>Models</h2>
+            <span class="muted mono" id="models-root">/mnt/data/models</span>
+          </div>
+          <div class="table-wrap">
+            <table>
+              <thead>
+                <tr>
+                  <th>name</th>
+                  <th>source</th>
+                  <th>size</th>
+                </tr>
+              </thead>
+              <tbody id="models-body"></tbody>
+            </table>
+          </div>
+        </section>
+      </main>
+
+      <footer class="footer">
+        <span class="mono" id="footer-version">anvil</span>
+        <span class="muted">verbs: forward_backward · optim_step · sample · save_state</span>
+        <span class="muted" id="footer-ts"></span>
+      </footer>
+    </div>
+    <script src="/assets/app.js"></script>
+  </body>
+</html>

@@ -8,16 +8,15 @@ Thanks for helping democratize post-training.
 2. Check [docs/roadmap.md](docs/roadmap.md) for the active phase.  
 3. For API or phase-scope changes, open an issue labeled `rfc` first (see [docs/governance.md](docs/governance.md)).
 
-## Dev setup (when Phase 1 lands)
+## Dev setup
 
 ```bash
-# planned
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev]"
 pytest
 ```
 
-Until a `pyproject.toml` install works, treat `anvil/` as stubs only.
+Phase 0 needs no GPU. The `fake://` backend powers golden tests in `tests/`.
 
 ## PR hygiene
 

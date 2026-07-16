@@ -74,6 +74,31 @@ Open RL stacks already exist (**TRL**, **OpenRLHF**, **veRL**, **Axolotl**, **Un
 
 Democratizing RL = **lower the systems tax** while **keeping algorithm control**. Copy the *API philosophy*, not the proprietary cluster.
 
+### 2.1 Knobs are cheap; architecture patterns are the product
+
+There are only so many training knobs (`rank`, `lr`, `loss_fn`, freeze masks, batch/seq, export format). Exposing them in a UI is not hard and is not differentiation.
+
+The hard part—and where Anvil should spend design energy—is **deriving defensible recipes from model shape + job intent**:
+
+```text
+ModelShape     dense_lm | dense_vlm | edge_student | moe_lm
+JobPattern     sft_chat | vlm_sft | vlm_classifier | rl_verifiable | preference_dpo | robot_offline
+        └──────────► RecipePlan (knobs + freeze policy + export hint + rationale + cautions)
+```
+
+Examples of judgments the stack should encode (see `anvil/recipes/`):
+
+- **Qwen2.5-VL-3B** → `edge_student`: smaller rank, freeze vision encoder, export bias toward ONNX/TRT/Jetson.
+- **Dense VLM SFT** → LoRA language + mm projector; do **not** open the vision encoder until data proves need.
+- **On-policy RL** → lower LR, more steps, `importance_sampling` / PPO family; sample must see current adapter.
+- **Robot offline** → same multimodal message schema as lab; never raw-actuate from sample.
+
+The four verbs remain the **runtime** contract. Recipes are the **intelligence** layer above them. The web UI is recipe-first; knobs are an expert escape hatch.
+
+**Model cards are the architecture oracle.** Prefer `config.json` + HF card (`architectures`, `model_type`, `vision_config`, param count, `pipeline_tag`) over name heuristics. Public RL/SFT research (Tinker verbs, TRL VLM LoRA, GRPO, LoRA-for-post-train) supplies *pattern shape*; we still supply data and run fine-tunes on lab/edge hardware. See `anvil/recipes/` (`inspect_base_model`, `run_sft` / `run_vlm_sft` / `run_grpo`).
+
+**Bounded catalog + gates.** 15 product recipes (`anvil/recipes/catalog.py`) span dense LM, MoE, lab VLM, edge student. Each recipe declares recommended / stretch / blocked shapes plus size and rank bounds. Users may `force=True` past a block, but the boundary stays explicit in the plan’s `gate` field.
+
 ---
 
 ## 3. Working name and layering
@@ -112,9 +137,15 @@ Democratizing RL = **lower the systems tax** while **keeping algorithm control**
 
 ### 4.1 Core verbs (mirror Tinker)
 
+**Implementation status (Phase 0):** typed surface lives under `anvil/client/` + `anvil/protocol/`.  
+`ServiceClient(endpoint="fake://")` exercises the full loop in-process (no GPU).  
+HTTP control plane and real PEFT workers are Phase 1+.
+
 ```python
-# Pseudocode — not implemented
-svc = anvil.ServiceClient(endpoint="http://forge:7600")  # or local://
+import anvil
+from anvil import ServiceClient, Datum, ModelInput, AdamParams, SamplingParams
+
+svc = anvil.ServiceClient(endpoint="fake://")  # later: http://… lab control plane
 
 tc = svc.create_lora_training_client(
     base_model="Qwen/Qwen3.5-4B",   # or vision tower + LM
@@ -122,22 +153,26 @@ tc = svc.create_lora_training_client(
     modalities=["text", "image"],   # capability flags
 )
 
-# Train step
-fut = tc.forward_backward(
-    batch=Batch(...),               # token ids OR multimodal items
-    loss="cross_entropy",           # or custom loss_fn id / pickled? see §5
+# Train step — Datum is Tinker-shaped (model_input + loss_fn_inputs)
+datum = Datum(
+    model_input=ModelInput.from_ints(input_tokens),
+    loss_fn_inputs={"target_tokens": target_tokens, "weights": weights},
 )
-tc.optim_step(AdamParams(lr=1e-4))
+fut = tc.forward_backward([datum], loss_fn="cross_entropy")
+print(fut.result().loss)
+tc.optim_step(AdamParams(learning_rate=1e-4)).result()
 tc.save_state("step-100")
 
 # Online RL
-sc = tc.save_weights_and_get_sampling_client()
-out = sc.sample(prompt=Messages(...), max_tokens=512, temperature=0.7)
-# score out → build batch → forward_backward with RL loss
+sc = tc.save_weights_and_get_sampling_client(name="step-100")
+out = sc.sample(
+    prompt=ModelInput.from_ints(prompt_tokens),
+    sampling_params=SamplingParams(max_tokens=512, temperature=0.7),
+).result()
+# score out → build Datum with logprobs/advantages → forward_backward("importance_sampling")
 
 # Export
-path = tc.export_adapter(format="peft")   # HF LoRA
-path = tc.export_merged(format="gguf")    # optional pipeline
+result = tc.export_adapter("./out-adapter", format="peft")  # HF LoRA dir
 ```
 
 ### 4.2 Loss surface (hardest design choice)
@@ -260,21 +295,20 @@ Always supported: control plane client only. Matches Tinker’s “author on CPU
 
 ```text
 anvil/
-  client/           # ServiceClient, TrainingClient, SamplingClient, futures
-  protocol/         # protobuf/OpenAPI: Batch, LossSpec, SampleRequest
-  render/           # text + multimodal renderers (pluggable)
-  media/            # content-addressed blob store
-  control/          # session, adapter registry, auth (local first)
+  client/           # ServiceClient, TrainingClient, SamplingClient, futures  [Phase 0]
+  protocol/         # Datum, ModelInput, AdamParams, multimodal Message       [Phase 0]
+  render/           # ToyTextRenderer; HF chat templates later                 [Phase 0 toy]
+  media/            # LocalMediaStore (cas://sha256/…)                         [Phase 0]
+  control/          # Session, AdapterRegistry (local; auth later)             [Phase 0]
   workers/
-    train_peft.py   # HF PEFT / Unsloth / custom
-    sample_vllm.py  # vLLM OpenAI-compatible or native
-  losses/           # ce, dpo, grpo, … registered
-  export/           # peft, merge, gguf, onnx
-  recipes/          # sl_loop, rl_loop, vlm_classifier, robot_offline_rl
+    train.py        # PEFT / TRL entry (stub) → Phase 1
+    sample.py       # vLLM entry (stub) → Phase 2
+  losses/           # named registry: ce, is, ppo, dpo, …                      [Phase 0]
+  export/           # format tags peft/gguf/onnx/trt                           [Phase 0]
   backends/
-    local_gpu.yaml
-    dual_spark.yaml
-    jetson_edge.yaml
+    fake.py         # in-process golden tests                                  [Phase 0]
+    # local_gpu / dual_spark / jetson_edge → Phase 1+
+recipes/            # sl_loop, rl_loop, vlm_classifier, robot_offline_rl
 ```
 
 **Bootstrap on existing OSS** rather than rewrite kernels:
@@ -366,8 +400,8 @@ The product is the **contract + control plane + media/render consistency**, not 
 
 1. **Anvil SFT** Qwen3.5-4B LoRA on forge, 100 steps, export, serve beside DS4.  
 2. **Anvil GRPO** on a 10-problem math set with exact-match reward.  
-3. **Vision smoke:** small VLM LoRA “describe grasp frame” on a folder of images.  
-4. **Jetson dry-run:** export student model; measure FPS/power on device (when hardware arrives).  
+3. **Vision smoke:** LoRA on **`Qwen/Qwen2.5-VL-3B-Instruct`** (see `docs/models.md`) — “describe grasp frame” on a folder of images.  
+4. **Jetson dry-run:** export that student (or AWQ/TRT); measure FPS/power on device (when hardware arrives).  
 
 ---
 
