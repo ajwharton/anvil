@@ -3,14 +3,15 @@
 People may stretch past these boundaries; Anvil should still name the boundary
 and say when a combo is *recommended*, *stretch*, or *blocked* for v0.
 
-15 recipes cover dense LM, dense VLM, edge student, and MoE shapes.
+Recipes cover dense LM, dense VLM, edge student, and MoE shapes. Each carries
+operator notes — distilled post-training practice for that job family.
 """
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from enum import Enum
-from typing import Any, Sequence
+from typing import Any
 
 from anvil.recipes.profiles import JobPattern, ModelShape
 
@@ -77,10 +78,12 @@ class RecipeSpec:
     default_lr: float | None = None
     group: str = "train"  # train | rl | preference | edge | eval
     tags: tuple[str, ...] = ()
+    # Operator knowledge: distilled post-training practice for this job.
+    notes: str = ""
 
 
 # ---------------------------------------------------------------------------
-# Catalog (14 recipes) — order is UI display order within groups
+# Catalog — order is UI display order within groups (count lives in RECIPES)
 # ---------------------------------------------------------------------------
 
 RECIPES: tuple[RecipeSpec, ...] = (
@@ -98,6 +101,13 @@ RECIPES: tuple[RecipeSpec, ...] = (
         default_rank=32,
         group="train",
         tags=("sft", "dense", "text"),
+        notes=(
+            "Workhorse. Rank 16-64 (32 default), alpha=2·rank, lr 1e-4 (7B-class) / "
+            "2e-4 (<=3B), cosine + 3% warmup, 1-3 epochs with holdout eval per epoch. "
+            "Assistant-only masking via the renderer — never train on prompt tokens. "
+            "The family layer (families.py) corrects LoRA targets per architecture "
+            "(e.g. Phi fused qkv_proj)."
+        ),
     ),
     RecipeSpec(
         id="sft_chat_moe",
@@ -114,6 +124,54 @@ RECIPES: tuple[RecipeSpec, ...] = (
         rank_max_recommended=32,
         group="train",
         tags=("sft", "moe", "text"),
+        notes=(
+            "Attention-only LoRA is the pragmatic recipe — per-expert LoRA explodes "
+            "adapter size for no measured gain. lr <= 5e-5; validate on a slice before "
+            "the full run. DeepSeek-V2/V3 (MLA + fine-grained experts) are beyond lab "
+            "scale: blocked, not stretch."
+        ),
+    ),
+    RecipeSpec(
+        id="sft_reasoning_traces",
+        title="Reasoning-trace SFT (thinking models)",
+        summary="SFT on <think>-style traces (Qwen3, R1-distills). Preserve think blocks in the loss; keep modes separate.",
+        pattern=JobPattern.SFT_CHAT,
+        shapes_recommended=(ModelShape.DENSE_LM,),
+        shapes_stretch=(ModelShape.MOE_LM, ModelShape.EDGE_STUDENT, ModelShape.UNKNOWN),
+        shapes_blocked=(ModelShape.DENSE_VLM,),
+        max_param_b_recommended=32.0,
+        max_param_b_hard=80.0,
+        default_rank=32,
+        default_lr=1e-4,
+        group="train",
+        tags=("sft", "reasoning", "traces"),
+        notes=(
+            "Keep <think>...</think> blocks in the loss (mask the prompt only) — "
+            "stripping them collapses the reasoning behavior. Never mix think / "
+            "no-think data without explicit mode tags. seq_len >= 2048. R1-distills "
+            "are already RL'd: lr <= 5e-5 or you wreck the trace style. Eval with "
+            "thinking on AND off. The renderer must not strip think blocks."
+        ),
+    ),
+    RecipeSpec(
+        id="sft_continued_pretrain",
+        title="Continued pretrain (domain adaptation)",
+        summary="Raw-text domain adaptation on dense bases. All-token loss; mix in general data against forgetting.",
+        pattern=JobPattern.SFT_CHAT,
+        shapes_recommended=(ModelShape.DENSE_LM,),
+        shapes_stretch=(ModelShape.MOE_LM, ModelShape.UNKNOWN, ModelShape.EDGE_STUDENT),
+        shapes_blocked=(ModelShape.DENSE_VLM,),
+        max_param_b_recommended=32.0,
+        max_param_b_hard=80.0,
+        default_rank=32,
+        group="train",
+        tags=("sft", "domain", "pretrain"),
+        notes=(
+            "Raw text, weight 1 on all tokens — no chat template, no assistant mask. "
+            "LoRA lr 2e-4..5e-4 is fine; rank 32-64 all-linear. One epoch over the "
+            "domain corpus; mix in 5-10% general text against catastrophic forgetting; "
+            "watch general-benchmark regression."
+        ),
     ),
     # --- vision-language ---
     RecipeSpec(
@@ -132,6 +190,12 @@ RECIPES: tuple[RecipeSpec, ...] = (
         default_export="peft",
         group="train",
         tags=("sft", "vlm", "lab"),
+        notes=(
+            "Freeze ladder: projector-only alignment -> LM+projector LoRA -> encoder "
+            "LoRA only on plateau (see vlm_encoder_lora). Freeze the vision tower. "
+            "Qwen2.5-VL: keep the native processor (M-RoPE, window attention) — don't "
+            "flatten image grids."
+        ),
     ),
     RecipeSpec(
         id="vlm_sft_edge",
@@ -149,6 +213,11 @@ RECIPES: tuple[RecipeSpec, ...] = (
         default_export="onnx",
         group="edge",
         tags=("sft", "vlm", "edge", "jetson"),
+        notes=(
+            "SmolVLM / Qwen2.5-VL-3B class. Freeze SigLIP/ViT; the pixel-shuffle / "
+            "merger projector trains with the LM. Short targets; ONNX export path to "
+            "Jetson."
+        ),
     ),
     RecipeSpec(
         id="vlm_classifier",
@@ -163,6 +232,11 @@ RECIPES: tuple[RecipeSpec, ...] = (
         default_rank=16,
         group="train",
         tags=("sft", "vlm", "classifier"),
+        notes=(
+            "Short graded answers; seq <= 256; treat as SFT with tiny targets. "
+            "Class-balance the rubric labels or the model collapses to the majority "
+            "grade."
+        ),
     ),
     RecipeSpec(
         id="vlm_encoder_lora",
@@ -180,6 +254,11 @@ RECIPES: tuple[RecipeSpec, ...] = (
         rank_max_recommended=32,
         group="train",
         tags=("sft", "vlm", "stretch", "encoder"),
+        notes=(
+            "Last resort after projector+LM plateaus. Encoder lr ~10x lower than the "
+            "LM side; watch forgetting on general VQA; SigLIP/ViT adapter memory is "
+            "real."
+        ),
     ),
     # --- RL ---
     RecipeSpec(
@@ -198,6 +277,12 @@ RECIPES: tuple[RecipeSpec, ...] = (
         lr_max_recommended=1e-4,
         group="rl",
         tags=("rl", "grpo", "dense"),
+        notes=(
+            "GRPO-style: group 8-16 (lab) / 64 (paper), rollout temp ~1.0, KL 0-0.04, "
+            "clip 0.2, lr <= 5e-5. Verifiable rewards only (exact match / unit tests). "
+            "Cap completion length against reward hacking. Generation dominates "
+            "wall-clock — the Phase 2 vLLM split exists for this."
+        ),
     ),
     RecipeSpec(
         id="rl_verifiable_vlm",
@@ -214,6 +299,11 @@ RECIPES: tuple[RecipeSpec, ...] = (
         default_lr=5e-5,
         group="rl",
         tags=("rl", "vlm", "grpo"),
+        notes=(
+            "Same discipline as dense RL plus image parts; the reward must stay "
+            "programmatically checkable (no vibe rewards). Vision encoder stays "
+            "frozen."
+        ),
     ),
     RecipeSpec(
         id="rl_verifiable_moe",
@@ -231,6 +321,10 @@ RECIPES: tuple[RecipeSpec, ...] = (
         rank_max_recommended=16,
         group="rl",
         tags=("rl", "moe", "stretch"),
+        notes=(
+            "Expert routing shifts under policy updates — warm-start from SFT, tiny "
+            "groups, watch KL like a hawk. Stretch by design."
+        ),
     ),
     # --- preference ---
     RecipeSpec(
@@ -247,6 +341,13 @@ RECIPES: tuple[RecipeSpec, ...] = (
         default_lr=5e-5,
         group="preference",
         tags=("dpo", "dense"),
+        notes=(
+            "beta 0.1 (0.05-0.3); LoRA lr 5e-6..1e-5 (10-50x below SFT); 1 epoch. "
+            "Ref = base with adapter disabled — no second model in memory. Length "
+            "bias is the classic hack: cap/monitor completion length; an NLL term "
+            "(RPO) helps when chosen is long. ORPO/KTO are the reference-free "
+            "alternatives when pairs are scarce (Phase 2 losses)."
+        ),
     ),
     RecipeSpec(
         id="preference_dpo_vlm",
@@ -263,6 +364,10 @@ RECIPES: tuple[RecipeSpec, ...] = (
         default_lr=5e-5,
         group="preference",
         tags=("dpo", "vlm"),
+        notes=(
+            "Same DPO discipline over image-grounded pairs; encoder frozen; pairs "
+            "must share the same image or the reward signal is confounded."
+        ),
     ),
     # --- edge / robot ---
     RecipeSpec(
@@ -280,6 +385,11 @@ RECIPES: tuple[RecipeSpec, ...] = (
         default_export="onnx",
         group="edge",
         tags=("robot", "edge", "offline"),
+        notes=(
+            "Trajectories as examples with image refs in the media store; same schema "
+            "lab->edge; export ONNX/TRT. Never actuate from raw samples without a "
+            "supervisor."
+        ),
     ),
     RecipeSpec(
         id="distill_to_edge",
@@ -295,6 +405,11 @@ RECIPES: tuple[RecipeSpec, ...] = (
         default_export="onnx",
         group="edge",
         tags=("distill", "edge", "jetson"),
+        notes=(
+            "Teacher generates traces/labels -> student SFT (CE). For reasoning "
+            "students distill FULL traces (see sft_reasoning_traces). Quantize last "
+            "(post-DPO), never before."
+        ),
     ),
     # --- agent / eval ---
     RecipeSpec(
@@ -309,6 +424,11 @@ RECIPES: tuple[RecipeSpec, ...] = (
         default_rank=32,
         group="train",
         tags=("sft", "tools", "agent"),
+        notes=(
+            "Tool-call traces with the exact schema in the system prompt; eval = "
+            "schema-valid rate + end-to-end success. Negative examples (bad calls) "
+            "become DPO pairs later."
+        ),
     ),
     RecipeSpec(
         id="eval_sample_only",
@@ -326,6 +446,10 @@ RECIPES: tuple[RecipeSpec, ...] = (
         shapes_blocked=(),
         group="eval",
         tags=("eval", "sample"),
+        notes=(
+            "Baselines and gates: sample base and adapter under the identical "
+            "renderer; lock the seed; record prompt logprobs for drift checks."
+        ),
     ),
 )
 
@@ -354,6 +478,7 @@ def _spec_public(r: RecipeSpec) -> dict[str, Any]:
         "id": r.id,
         "title": r.title,
         "summary": r.summary,
+        "notes": r.notes,
         "pattern": r.pattern.value,
         "group": r.group,
         "tags": list(r.tags),

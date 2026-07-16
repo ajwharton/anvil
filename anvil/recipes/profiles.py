@@ -11,9 +11,11 @@ know better; the default should already be runnable on lab hardware.
 
 from __future__ import annotations
 
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass
 from enum import Enum
-from typing import Any, Sequence
+from typing import Any
+
+from anvil.recipes.families import lookup_family
 
 
 class ModelShape(str, Enum):
@@ -362,6 +364,38 @@ def plan_recipe(
     else:
         title = f"{pspec.title} · {shape.value}"
 
+    # Per-family training knowledge (families.py): correct LoRA targets per
+    # architecture, LR caps, template footguns. Family beats card-derived
+    # generic targets; explicit user overrides (below) beat family.
+    fam = lookup_family(
+        resolved_base,
+        model_type=getattr(card, "model_type", None) if card is not None else None,
+        architectures=tuple(getattr(card, "architectures", ()) or ())
+        if card is not None
+        else (),
+    )
+    if fam is not None:
+        peft_targets = fam.lora_targets
+        rationale = (f"family={fam.id} ({fam.display})",) + rationale
+        if fam.template_notes:
+            rationale = rationale + (f"template: {fam.template_notes}",)
+        ce_pattern = pattern in {
+            JobPattern.SFT_CHAT,
+            JobPattern.VLM_SFT,
+            JobPattern.VLM_CLASSIFIER,
+            JobPattern.ROBOT_OFFLINE,
+        }
+        if ce_pattern and fam.sft_notes:
+            rationale = rationale + (fam.sft_notes,)
+        if pattern in {JobPattern.RL_VERIFIABLE, JobPattern.PREFERENCE_DPO} and fam.rl_notes:
+            rationale = rationale + (fam.rl_notes,)
+        cautions = cautions + fam.cautions
+        if ce_pattern and fam.sft_lr_cap is not None and lr > fam.sft_lr_cap:
+            cautions = cautions + (
+                f"lr {lr:g} capped at family max {fam.sft_lr_cap:g} for {fam.id}",
+            )
+            lr = fam.sft_lr_cap
+
     rationale = rationale + tuple(research_notes(pattern.value)[:2])
     if card is not None and getattr(card, "model_type", None):
         rationale = (
@@ -407,7 +441,8 @@ def plan_recipe(
         if "temperature" in pre_overrides:
             temperature = float(pre_overrides["temperature"])
         else:
-            temperature = 0.7 if pattern == JobPattern.RL_VERIFIABLE else 0.2
+            # RL rollouts need exploration; SFT/pref sampling stays near-greedy
+            temperature = 1.0 if pattern == JobPattern.RL_VERIFIABLE else 0.2
         if "max_tokens" in pre_overrides:
             max_tokens = int(pre_overrides["max_tokens"])
         else:
@@ -420,7 +455,7 @@ def plan_recipe(
             rationale = rationale + ("user overrides applied",)
     else:
         loss_override = None
-        temperature = 0.7 if pattern == JobPattern.RL_VERIFIABLE else 0.2
+        temperature = 1.0 if pattern == JobPattern.RL_VERIFIABLE else 0.2
         max_tokens = 64 if pattern != JobPattern.VLM_CLASSIFIER else 16
 
     loss_fn = loss_override if loss_override else pspec.default_loss
@@ -506,6 +541,7 @@ def _derive(
         mods = ("text", "image")
         if shape == ModelShape.DENSE_LM:
             cautions.append(f"{pattern.value} wants vision; inferred shape is {shape.value} for {base_model!r}.")
+        rationale.append("Freeze ladder: projector-only → LM+projector LoRA → encoder LoRA (~10× lower lr) only on plateau.")
         if pattern == JobPattern.VLM_CLASSIFIER:
             steps = 150
             seq = min(seq, 256)
@@ -521,12 +557,16 @@ def _derive(
         batch = max(1, batch // 2)
         lr = min(lr, 5e-5)
         rationale.append("On-policy RL: lower LR, more steps; sample must see current adapter.")
+        rationale.append("GRPO practice: group 8-16 (lab) / 64 (paper); rollout temp ~1.0; KL 0-0.04; clip 0.2.")
         cautions.append("Reward is client-side; worker only sees named RL losses + advantages.")
+        cautions.append("Generation dominates wall-clock (the Phase 2 vLLM split exists for this); cap completion length against reward hacking.")
     elif pattern == JobPattern.PREFERENCE_DPO:
         mods = ("text",)
         steps = 200
         lr = min(lr, 5e-5)
         rationale.append("DPO: paired data; modest LR to avoid collapsing the reference gap.")
+        rationale.append("DPO practice: beta≈0.1 (0.05-0.3); LoRA lr 10-50× below SFT; 1 epoch; ref = base with adapter disabled (peft disable_adapter) — no second model in memory.")
+        cautions.append("Length bias is the classic DPO hack — monitor completion length + holdout; NLL term (RPO) helps when chosen responses are long.")
     else:  # SFT_CHAT
         mods = ("text",)
         if shape in {ModelShape.DENSE_VLM, ModelShape.EDGE_STUDENT}:
@@ -534,6 +574,8 @@ def _derive(
             rationale.append("Base is VLM-class; chat SFT still allows image parts in messages.")
         steps = 200
         rationale.append("Chat SFT: CE on assistant tokens only (renderer weights).")
+        rationale.append("LoRA practice: alpha=2·rank (≡ alpha=rank at ~2× lr); rsLoRA stabilizes r≥64.")
+        rationale.append("Data: 1k curated > 100k noisy; 1-3 epochs with holdout eval each.")
 
     if not shapes_compatible(shape, pattern):
         cautions.append("Shape/pattern pairing is unusual — review freeze masks and modalities.")

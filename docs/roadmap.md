@@ -8,7 +8,7 @@ A **Tinker-shaped** open toolkit: four verbs, LoRA-first, train/sample consisten
 
 Success looks like: a researcher or roboticist can SFT/RL a small LLM/VLM from a laptop client against own GPUs without rewriting distributed systems each time.
 
-## Phase 0 — Spec & stubs *(current)*
+## Phase 0 — Spec & stubs *(complete)*
 
 **Exit criteria**
 
@@ -21,16 +21,29 @@ Success looks like: a researcher or roboticist can SFT/RL a small LLM/VLM from a
 
 **Non-goals:** real multi-node train, production scheduler.
 
-## Phase 1 — Local Anvil (text, single GPU)
+## Phase 1 — Local Anvil (text, single GPU) *(current)*
+
+**Locked design decisions**
+
+- Verbs are **hand-implemented over torch + PEFT — no HF Trainer**. A Trainer
+  would swallow the `forward_backward` / `optim_step` separation that *is* the
+  API contract.
+- Train and sample share one renderer. `HFChatRenderer` enforces the
+  *sample-prompt is a token-exact prefix of the training render* invariant in
+  tests (`RendererConsistencyError` on violation).
+- Core package stays dependency-free; transformers+jinja2 behind the `hf`
+  extra, torch+peft behind the `local` extra.
 
 **Exit criteria**
 
-- [ ] `anvil serve --backend local` (or equivalent) on one GPU host  
-- [ ] SFT loop on a small dense model (e.g. 0.5B–4B) via LoRA  
-- [ ] Export adapter → load in vLLM (or HF) for sample  
-- [ ] Minimal recipe: `recipes/sl_loop.py`  
+- [x] `HFChatRenderer` + train/sample prefix-consistency tests — `anvil/render/hf.py`, `tests/test_hf_renderer.py`  
+- [x] `LocalBackend` in-process (hand-rolled verbs, real LoRA grads) + CPU golden SFT test — `anvil/backends/local.py`, `tests/test_local_backend.py`; wired as `local://`  
+- [ ] `anvil serve --backend local` thin CLI shell on one GPU host  
+- [ ] GPU smoke: SFT loop on a small dense model (0.5B–4B) via LoRA on forge  
+- [ ] Export adapter (real PEFT dir) → load in vLLM (or HF) for sample — manual verification  
+- [ ] Minimal recipe: `recipes/sl_loop.py` running against `local://`  
 
-**Non-goals:** dual-Spark TP train; vision.
+**Non-goals:** dual-Spark TP train; vision; RL losses (LocalBackend v0 is CE-only).
 
 ## Phase 2 — Sample/train split
 
@@ -39,6 +52,14 @@ Success looks like: a researcher or roboticist can SFT/RL a small LLM/VLM from a
 - [ ] Dedicated sample worker (vLLM) with adapter hot-swap or snapshot  
 - [ ] Async futures / queue (API-compatible even if local is sync under the hood)  
 - [ ] Simple on-policy RL recipe (e.g. GRPO/math exact-match toy)  
+- [ ] IS/PPO loss family in LocalBackend (v0 is CE-only and raises `NotImplementedError`)  
+- [ ] GRPO datum carries **prompt+completion** with old-policy logprobs aligned to
+      target positions — replaces the completion-only toy shape in `anvil/recipes/grpo.py`  
+- [ ] HTTP transport for the four verbs (control plane serves LAN clients; today
+      the verbs are in-process only)  
+- [ ] Stop-string support in LocalBackend sampling  
+- [ ] Gate-override audit events: every `force=True` past a blocked recipe is
+      logged with recipe, shape, and reasons (start of the control-plane audit trail)  
 
 ## Phase 3 — Vision first-class
 
@@ -64,6 +85,7 @@ Success looks like: a researcher or roboticist can SFT/RL a small LLM/VLM from a
 
 - [ ] Auth + adapter isolation for shared lab hardware  
 - [ ] Warm base pool design (optional; single-tenant may remain default)  
+- [ ] Audit log for multi-user actions (builds on the Phase 2 gate-override events)  
 
 ## Explicit non-goals (until revisited by RFC)
 
@@ -88,5 +110,8 @@ For a spin-off agent session:
 | 2026-07-16 | Repo scaffold; design imported; Phase 0 open |
 | 2026-07-16 | Phase 0 API stubs + fake backend + SFT golden test (`0.0.1`) |
 | 2026-07-16 | Web control plane `anvil-web` (spark-dashboard visual language) |
+| 2026-07-16 | Knowledge pour: `recipes/families.py` (14 per-family records — fused-Phi targets, MoE router ban, Gemma-2 softcap, R1-distill LR), operator notes on all recipes, +2 recipes (reasoning traces, continued pretrain), RL rollout temp 1.0 |
 | 2026-07-16 | HF model-card inspect + basic SFT/VLM/GRPO recipes (research-shaped) |
 | 2026-07-16 | 15-recipe catalog with recommended/stretch/blocked architecture gates |
+| 2026-07-16 | `HFChatRenderer` + prefix-consistency tests; `LocalBackend` (torch+PEFT, hand-rolled verbs) with CPU golden SFT; `local://` endpoint; `[hf]`/`[local]` extras; ruff clean (`0.0.2`) |
+| 2026-07-16 | Opinionated gates: `ModelTooSmallError` hidden-size floor (block <16 / warn <32, `allow_tiny_models` escape), zero-trainable-param check, renderer transformers>=4.44 + jinja2 floors |
