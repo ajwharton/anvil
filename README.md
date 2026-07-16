@@ -16,7 +16,12 @@ forward_backward · optim_step · sample · save_state
 
 ## Status
 
-**Phase 0 stubs.** Typed client contract + in-process `fake://` backend + golden SFT test + web control plane. No real GPU trainer yet. See [docs/roadmap.md](docs/roadmap.md).
+**Phase 1 (in progress).** Typed client contract + `fake://` backend + recipe
+catalog + web control plane (Phase 0) — and now a real in-process trainer:
+`LocalBackend` (`local://`) runs the four verbs over torch + PEFT with
+hand-rolled train steps (no HF Trainer), and `HFChatRenderer` enforces
+train/sample token consistency. CPU golden tests pass; GPU smoke on forge is
+the next gate. See [docs/roadmap.md](docs/roadmap.md).
 
 ### Web UI
 
@@ -61,9 +66,9 @@ anvil/
   client/       # ServiceClient / TrainingClient / SamplingClient / futures
   protocol/     # Datum, ModelInput, messages (vision-ready)
   control/      # session + adapter registry
-  render/       # ToyTextRenderer (+ real templates later)
+  render/       # ToyTextRenderer + HFChatRenderer (real chat templates)
   media/        # content-addressed LocalMediaStore
-  backends/     # FakeBackend; local_gpu / dual_spark later
+  backends/     # FakeBackend; LocalBackend (torch+PEFT); dual_spark later
   workers/      # train + sample worker stubs
   losses/       # named loss registry (ce, is, ppo, dpo, …)
   export/       # peft / gguf / onnx / trt format tags

@@ -24,14 +24,23 @@ def resolve_backend(endpoint: str, backend: Backend | None = None) -> Backend:
     if backend is not None:
         return backend
     scheme, rest = _parse_endpoint(endpoint)
-    if scheme in {"fake", "memory", "local"} and (rest in {"", "fake", "memory"} or scheme == "fake"):
-        return FakeBackend()
     if scheme == "fake":
+        # fake:// → default root; fake://path/to/dir → root there
         return FakeBackend(root=rest or None)
-    # Phase 1+: http/https → remote control plane
+    if scheme == "memory" and rest in {"", "fake", "memory"}:
+        return FakeBackend()
+    if scheme == "local":
+        if rest in {"fake", "memory"}:
+            # local://fake — explicit in-process fake
+            return FakeBackend()
+        # local:// — real in-process torch+PEFT backend (Phase 1)
+        from anvil.backends.local import LocalBackend
+
+        return LocalBackend(root=rest or None)
+    # Phase 2+: http/https → remote control plane
     raise ValueError(
-        f"unsupported endpoint {endpoint!r}; Phase 0 supports "
-        f"'fake://', 'local://fake', or pass backend= explicitly"
+        f"unsupported endpoint {endpoint!r}; supported: 'fake://', "
+        f"'local://' (torch+PEFT), 'local://fake', or pass backend= explicitly"
     )
 
 
