@@ -1,0 +1,86 @@
+# Roadmap
+
+Status legend: **todo** · **doing** · **done** · **blocked**
+
+## North star
+
+A **Tinker-shaped** open toolkit: four verbs, LoRA-first, train/sample consistency, vision in the data model, export to lab serve and **Jetson/edge**.
+
+Success looks like: a researcher or roboticist can SFT/RL a small LLM/VLM from a laptop client against own GPUs without rewriting distributed systems each time.
+
+## Phase 0 — Spec & stubs *(current)*
+
+**Exit criteria**
+
+- [x] Public repo + thin `start.md` / governance / this roadmap  
+- [x] Design SSOT in `docs/design.md`  
+- [ ] OpenAPI or typed sketch of client verbs (`forward_backward`, `optim_step`, `sample`, `save_state`, export)  
+- [ ] Golden-test harness (even if faked backend) for SFT one-step  
+
+**Non-goals:** real multi-node train, production scheduler.
+
+## Phase 1 — Local Anvil (text, single GPU)
+
+**Exit criteria**
+
+- [ ] `anvil serve --backend local` (or equivalent) on one GPU host  
+- [ ] SFT loop on a small dense model (e.g. 0.5B–4B) via LoRA  
+- [ ] Export adapter → load in vLLM (or HF) for sample  
+- [ ] Minimal recipe: `recipes/sl_loop.py`  
+
+**Non-goals:** dual-Spark TP train; vision.
+
+## Phase 2 — Sample/train split
+
+**Exit criteria**
+
+- [ ] Dedicated sample worker (vLLM) with adapter hot-swap or snapshot  
+- [ ] Async futures / queue (API-compatible even if local is sync under the hood)  
+- [ ] Simple on-policy RL recipe (e.g. GRPO/math exact-match toy)  
+
+## Phase 3 — Vision first-class
+
+**Exit criteria**
+
+- [ ] Media store (content-addressed refs)  
+- [ ] Multimodal message schema + renderer  
+- [ ] VLM SFT recipe + optional classifier-style recipe  
+- [ ] Freeze/LoRA knobs for encoder vs projector vs LM  
+
+## Phase 4 — Robot / Jetson edge loop
+
+**Exit criteria**
+
+- [ ] Offline trajectory format (obs/action/reward + frame refs)  
+- [ ] Export path documented (ONNX and/or TRT and/or GGUF as applicable)  
+- [ ] Distill or small-student path for edge FPS/power notes  
+- [ ] Optional `backend=jetson` sample stub (may be remote process)  
+
+## Phase 5 — Multi-tenant lab (optional)
+
+**Exit criteria**
+
+- [ ] Auth + adapter isolation for shared lab hardware  
+- [ ] Warm base pool design (optional; single-tenant may remain default)  
+
+## Explicit non-goals (until revisited by RFC)
+
+- Full-parameter FT of 100B+ MoE on two Sparks as the default path  
+- Proprietary Tinker wire compatibility / trademark use  
+- Arbitrary remote code execution for custom losses (named plugins only)  
+- Replacing day-to-day dual-Spark **serve** of large base models (Anvil is train/adapt/export)
+
+## Near-term handoff checklist
+
+For a spin-off agent session:
+
+1. `read start.md`  
+2. Outcome: e.g. “Phase 0 OpenAPI + fake backend golden test”  
+3. Pull-on-miss: `docs/design.md`, this file  
+4. No mia-rl Ship work in this repo  
+
+## Changelog (project-level)
+
+| Date | Note |
+|------|------|
+| 2026-07-16 | Repo scaffold; design imported; Phase 0 open |

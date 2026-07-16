@@ -1,0 +1,29 @@
+[project]
+name = "anvil-train"
+version = "0.0.0"
+description = "Open-source Tinker-shaped post-training (SFT/RL) — LoRA-first, vision-ready"
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "Apache-2.0" }
+authors = [{ name = "Anvil contributors" }]
+keywords = ["rl", "sft", "lora", "post-training", "vllm", "vision"]
+classifiers = [
+  "Development Status :: 1 - Planning",
+  "License :: OSI Approved :: Apache Software License",
+  "Programming Language :: Python :: 3",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=8.0", "ruff>=0.6"]
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["anvil*"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]

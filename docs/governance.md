@@ -1,0 +1,63 @@
+# Governance
+
+**Anvil** is an open-source project aimed at democratizing post-training (SFT/RL) via a small, stable API. This document defines how we make decisions and accept contributions.
+
+## Principles
+
+1. **User-owned algorithms** — Anvil provides verbs and backends; recipes and rewards stay in user land.
+2. **LoRA-first** — default path is adapters + export, not full-weight FT of frontier MoEs.
+3. **Train/sample consistency** — same renderer and adapter identity across train and sample.
+4. **Vision and edge are in scope** — not optional forever; roadmap may sequence delivery.
+5. **No trademark confusion** — do not brand as “Tinker” or imply affiliation with Thinking Machines Lab.
+6. **Public by default** — discussion and design in the open; secrets never in-repo.
+
+## Roles
+
+| Role | Responsibility |
+|------|----------------|
+| **Maintainer** | Merge rights, releases, roadmap edits, security triage |
+| **Contributor** | PRs, issues, docs, recipes under this governance |
+| **User** | Runs Anvil; files bugs/RFCs; not required to contribute code |
+
+Initial maintainer: **Andrew Wharton** (`@ajwharton`). Additional maintainers are added by explicit PR to this file after sustained contribution.
+
+## Decision process
+
+| Type | How |
+|------|-----|
+| **Typo / docs / small fix** | PR; one maintainer approval (or self-merge if sole maintainer) |
+| **Feature within current roadmap phase** | PR + design note if API surface changes |
+| **New phase / non-goal change** | Issue labeled `rfc` → discussion → PR updating `docs/roadmap.md` |
+| **License or trademark** | Maintainer decision; no silent relicensing |
+| **Security** | Private report preferred; coordinated disclosure |
+
+**RFC issues** should answer: problem, proposal, alternatives, impact on vision/edge, exit criteria.
+
+## Contributions
+
+- By submitting a PR, you agree your contribution is licensed under **Apache-2.0**.
+- Prefer the [Developer Certificate of Origin](https://developercertificate.org/) (sign-off optional but appreciated: `Signed-off-by: Name <email>`).
+- See [CONTRIBUTING.md](../CONTRIBUTING.md) for branch/PR/test hygiene.
+
+## Code of conduct
+
+Be respectful. No harassment, spam, or bad-faith trademark abuse. Maintainers may close issues/PRs that violate this. A fuller CODE_OF_CONDUCT can be added later without blocking early work.
+
+## Relationship to other projects
+
+| Project | Relationship |
+|---------|----------------|
+| **Thinking Machines Tinker** | Inspiration for API *shape*; not a fork; no shared trademark |
+| **TRL / OpenRLHF / veRL / PEFT / vLLM** | Likely backends/libraries under the Anvil contract |
+| **mia-rl / aiops / starwatch** | Upstream inspiration / personal lab context; not required to use Anvil |
+
+## Releases
+
+- **v0.x** — experimental; breaking API OK with changelog note  
+- **v1.0** — stable client verbs + at least one documented local backend  
+
+Version tags: `vMAJOR.MINOR.PATCH` (semver once 0.1+ exists).
+
+## Security
+
+Do not file public issues with private keys, VPN configs, or home LAN inventories. For sensitive reports, contact the maintainer via GitHub private security advisory when enabled.
