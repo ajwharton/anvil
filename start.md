@@ -38,7 +38,7 @@ Not Thinking Machines’ cloud. Not a full MoE train stack on day one.
 | Design SSOT | `docs/design.md` |
 | Roadmap | `docs/roadmap.md` |
 | Governance | `docs/governance.md` |
-| Package | `anvil/` (Phase 0 typed API + `fake://` backend; GPU in Phase 1) |
+| Package | `anvil/` (Phase 1: typed API + `fake://` + `local://` torch/PEFT backend) |
 
 ## Prefer artifacts
 

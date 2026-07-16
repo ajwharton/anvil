@@ -6,7 +6,6 @@ from anvil.recipes.catalog import (
     GateLevel,
     default_recipe_id_for_shape,
     gate_recipe,
-    get_recipe,
     list_recipes,
     recipes_for_shape,
 )

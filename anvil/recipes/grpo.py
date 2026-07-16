@@ -100,7 +100,10 @@ def run_grpo(
                 step_rewards.append(r)
             adv = group_advantages(rewards)
             for seq, a, r in zip(sample.sequences, adv, rewards, strict=True):
-                # Toy: treat completion tokens as targets under IS
+                # Toy: completion tokens only, as if they were the full sequence.
+                # TODO(Phase 2): a real IS/PPO worker must build model_input as
+                # prompt+completion and align old-policy logprobs to the target
+                # positions — do NOT cargo-cult this shape into the real worker.
                 toks = list(seq.tokens)
                 if len(toks) < 2:
                     continue
