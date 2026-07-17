@@ -16,7 +16,7 @@ from __future__ import annotations
 
 from typing import Any, Callable
 
-from fastapi import FastAPI, HTTPException, Request
+from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
 from anvil.backends.base import Backend
@@ -38,14 +38,11 @@ def _aid(raw: str | None) -> AdapterId | None:
     return AdapterId(str(raw)) if raw is not None else None
 
 
-def _error_status(exc: Exception) -> int:
-    if isinstance(exc, NotImplementedError):
-        return 501
-    if isinstance(exc, KeyError):
-        return 404
-    if isinstance(exc, (ValueError, FileNotFoundError)):
-        return 400
-    return 500
+def _error_json(status: int, exc: Exception) -> JSONResponse:
+    return JSONResponse(
+        status_code=status,
+        content={"error": type(exc).__name__, "detail": str(exc)},
+    )
 
 
 def create_app(backend: Backend, *, token: str | None = None) -> FastAPI:
@@ -56,13 +53,27 @@ def create_app(backend: Backend, *, token: str | None = None) -> FastAPI:
     """
     app = FastAPI(title="anvil-serve", version="0.1.0")
 
-    @app.exception_handler(Exception)
-    async def _unhandled(_: Request, exc: Exception) -> JSONResponse:
-        status = _error_status(exc)
-        return JSONResponse(
-            status_code=status,
-            content={"error": type(exc).__name__, "detail": str(exc)},
-        )
+    # Register handlers for *concrete* exception classes. A blanket
+    # `Exception` handler is routed by FastAPI to the outermost
+    # ServerErrorMiddleware, which re-raises after responding — fine for
+    # real bugs (loud 500s in tests), wrong for expected domain errors.
+    # Concrete classes land on the inner ExceptionMiddleware, which
+    # returns the response without re-raising.
+    @app.exception_handler(KeyError)
+    async def _not_found(_: Request, exc: KeyError) -> JSONResponse:
+        return _error_json(404, exc)
+
+    @app.exception_handler(ValueError)
+    async def _bad_request(_: Request, exc: ValueError) -> JSONResponse:
+        return _error_json(400, exc)
+
+    @app.exception_handler(FileNotFoundError)
+    async def _missing(_: Request, exc: FileNotFoundError) -> JSONResponse:
+        return _error_json(400, exc)
+
+    @app.exception_handler(NotImplementedError)
+    async def _unimplemented(_: Request, exc: NotImplementedError) -> JSONResponse:
+        return _error_json(501, exc)
 
     @app.middleware("http")
     async def _auth(request: Request, call_next: Callable[..., Any]):

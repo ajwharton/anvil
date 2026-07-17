@@ -14,7 +14,7 @@ from __future__ import annotations
 import json
 import urllib.error
 import urllib.request
-from typing import Any, Callable, Mapping, Protocol, Sequence
+from typing import Any, Mapping, Protocol, Sequence
 
 from anvil.protocol.serde import (
     checkpoint_ref_from_wire,
