@@ -98,14 +98,17 @@ the base never changes, only the LoRA adapter does, and that is megabytes):
 
 **Exit criteria**
 
-- [ ] Metrics scaffolding: per-run `metrics.jsonl` appended every RL step —
+- [x] Metrics scaffolding: per-run `metrics.jsonl` appended every RL step —
       reward mean/std, within-group reward std (advantage-collapse tripwire),
       IS `mean_ratio` drift, entropy, loss; SSE endpoint + live charts in
-      anvil-web
-- [ ] Live inference tester: fixed probe set sampled from the *current*
-      policy every K steps during a run (Tier 0 first, Tier 1 once the vLLM
-      worker lands); probe completions rendered inline next to the curves —
-      eyes catch reward hacking before scalars do
+      anvil-web — `anvil/observe/metrics.py` (`RunMetricsWriter`),
+      `run_grpo(run_dir=...)`; `/api/observe/*` + `/observe/{run_id}` page
+      (entropy lands when the sampler exposes it)
+- [x] Live inference tester (Tier 0): fixed probe set sampled greedily from
+      the *current* policy every K steps during a run — `run_grpo(probes=...,
+      probe_every=K, detokenize=...)` → `probes.jsonl`, scored with the reward
+      fn; probe completions rendered inline next to the curves — eyes catch
+      reward hacking before scalars do (Tier 1 vLLM-worker probing still open)
 - [ ] Adapter-sync cadence knob in `run_grpo` (every K steps push
       `snapshot_for_sample` → sample worker `load_snapshot`)
 - [ ] J-lens spike (LAST, spike-gated): port `anthropics/jacobian-lens` to a
@@ -186,3 +189,4 @@ For a spin-off agent session:
 | 2026-07-17 | Phase 2.5 scoped — RL observability (the RL debugger): per-run `metrics.jsonl` + SSE live charts, fixed-probe inference tester on the live policy every K steps, adapter-sync cadence knob; J-lens spike LAST, gated on reproducing "intermediate steps light up in order" (Anthropic global-workspace paper, 2026-07-06, `anthropics/jacobian-lens`). Agreed ordering: vLLM worker → metrics → probe tester → J-lens |
 | 2026-07-17 | vLLM sample worker lands: `VLLMSampleBackend` (sampling verbs only; training verbs 501) with LoRA hot-swap via `SnapshotLoader.load_snapshot` + `POST /v1/adapters/{id}/load_snapshot`; fresh LoRA int id per push defeats vLLM's stale-adapter cache; `_prompt_logprob_series` trims vLLM's trailing continuation-logprob quirk so logprobs align to prompt length. 11 tests with a fake vllm module; 106/106, ruff clean |
 | 2026-07-17 | vLLM worker verified cross-node: mac → `forge:8741` (vllm 0.25.1, Qwen2.5-1.5B) — greedy base sample, 404 on unknown adapter, Phase 1 adapter hot-swap shifts output (`' Paris. The capital of France'` → `' Paris. the capital of Paris'`) with deterministic re-push on a fresh LoRA id, `compute_logprobs` prompt-aligned, 501 on training verbs. Forge env: bench-venv needed `ninja` + its bin on PATH for vLLM's JIT; `LoRARequest` deep-imported (not top-level in 0.25) |
+| 2026-07-17 | P2.5 metrics scaffolding lands: `anvil/observe/metrics.py` (`RunMetricsWriter` → `metrics.jsonl`/`probes.jsonl`, `advantage_collapsed` tripwire, `schema_version` on every record); `run_grpo(run_dir=..., probes=..., probe_every=K, detokenize=...)` emits per-step reward mean/std + within-group reward std + IS mean_ratio passthrough + loss + wall time, and greedy probes of the LIVE policy scored with the reward fn; anvil-web serves `/api/observe/*` (tail + SSE stream) and a standalone `/observe/{run_id}` page with live reward/group-std chart, collapse banner, and probe panel. 7 new tests, 113/113, ruff clean |
