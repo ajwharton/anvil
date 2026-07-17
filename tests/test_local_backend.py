@@ -162,14 +162,63 @@ def test_rl_losses_raise_for_now(backend: LocalBackend, adapter_id) -> None:
         backend.forward_backward(adapter_id, _sft_data(), LossFn.PPO)
 
 
-def test_stop_strings_raise(backend: LocalBackend, adapter_id) -> None:
-    with pytest.raises(NotImplementedError, match="stop strings"):
-        backend.sample(
-            base_model=TINY,
-            adapter_id=adapter_id,
-            prompt=ModelInput.from_ints([1, 2, 3]),
-            sampling_params=SamplingParams(max_tokens=2, stop=("</s>",)),
-        )
+def test_stop_strings_truncate_greedy(backend: LocalBackend, adapter_id) -> None:
+    """Greedy is deterministic: learn what it says, then stop inside it."""
+    tok = backend._get(adapter_id).tokenizer
+    prompt = ModelInput.from_ints(ToyTextRenderer().encode("<|user|>\n2+2?\n"))
+    full = backend.sample(
+        base_model=TINY,
+        adapter_id=adapter_id,
+        prompt=prompt,
+        sampling_params=SamplingParams(max_tokens=16, temperature=0.0),
+    )
+    toks = list(full.sequences[0].tokens)
+    if len(toks) < 6:
+        pytest.skip(f"greedy output too short to sub-slice: {toks}")
+    stop_str = tok.decode(toks[2:4], skip_special_tokens=False)
+    assert stop_str
+
+    out = backend.sample(
+        base_model=TINY,
+        adapter_id=adapter_id,
+        prompt=prompt,
+        sampling_params=SamplingParams(max_tokens=16, temperature=0.0, stop=(stop_str,)),
+    )
+    seq = out.sequences[0]
+    assert seq.stop_reason == "stop"
+    assert 0 < len(seq.tokens) < len(toks)
+    assert stop_str not in tok.decode(list(seq.tokens), skip_special_tokens=False)
+    assert seq.logprobs is not None and len(seq.logprobs) == len(seq.tokens)
+
+
+def test_stop_strings_per_row(backend: LocalBackend, adapter_id) -> None:
+    """num_samples>1: rows truncate independently at the stop string."""
+    tok = backend._get(adapter_id).tokenizer
+    prompt = ModelInput.from_ints(ToyTextRenderer().encode("<|user|>\nhello\n"))
+    base = backend.sample(
+        base_model=TINY,
+        adapter_id=adapter_id,
+        prompt=prompt,
+        sampling_params=SamplingParams(max_tokens=12, temperature=1.0, seed=7),
+        num_samples=2,
+    )
+    text0 = tok.decode(list(base.sequences[0].tokens), skip_special_tokens=False)
+    if len(text0) < 4:
+        pytest.skip(f"row-0 text too short to sub-slice: {text0!r}")
+    stop_str = text0[-3:]
+    assert stop_str in text0
+
+    out = backend.sample(
+        base_model=TINY,
+        adapter_id=adapter_id,
+        prompt=prompt,
+        sampling_params=SamplingParams(max_tokens=12, temperature=1.0, seed=7, stop=(stop_str,)),
+        num_samples=2,
+    )
+    seq0 = out.sequences[0]
+    assert seq0.stop_reason == "stop"
+    assert len(seq0.tokens) < len(base.sequences[0].tokens)
+    assert stop_str not in tok.decode(list(seq0.tokens), skip_special_tokens=False)
 
 
 def test_non_text_modality_rejected(backend: LocalBackend) -> None:

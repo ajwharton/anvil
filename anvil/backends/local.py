@@ -74,6 +74,47 @@ def _normalize_loss(loss_fn: LossFn | str) -> str:
     return str(loss_fn)
 
 
+def _stop_string_criteria(
+    transformers: Any, tokenizer: Any, prompt_len: int, stop_strings: tuple[str, ...]
+) -> Any:
+    """Early-exit criteria: True once EVERY row's decoded suffix holds a stop string.
+
+    HF StoppingCriteria halts the whole batch jointly (no per-row exit), so
+    per-row correctness is handled by ``_truncate_at_stop``; this just ends
+    generation early once all rows are done instead of burning max_tokens.
+    """
+
+    class _StopStrings(transformers.StoppingCriteria):
+        def __call__(self, input_ids: Any, scores: Any, **kwargs: Any) -> bool:
+            for row in input_ids:
+                text = tokenizer.decode(
+                    row[prompt_len:].tolist(), skip_special_tokens=False
+                )
+                if not any(s in text for s in stop_strings):
+                    return False
+            return True
+
+    return transformers.StoppingCriteriaList([_StopStrings()])
+
+
+def _truncate_at_stop(
+    tokenizer: Any, toks: list[int], stop_strings: tuple[str, ...]
+) -> tuple[list[int], bool]:
+    """Cut tokens at the earliest stop-string occurrence; whole-token granularity.
+
+    Stop strings match on decoded text; a stop string that starts mid-token
+    drops that whole token (vLLM convention). Returns (tokens, hit).
+    """
+    text = tokenizer.decode(toks, skip_special_tokens=False)
+    hits = [p for p in (text.find(s) for s in stop_strings) if p >= 0]
+    if not hits:
+        return toks, False
+    cut = min(hits)
+    while toks and len(tokenizer.decode(toks, skip_special_tokens=False)) > cut:
+        toks.pop()
+    return toks, True
+
+
 @dataclass
 class _LocalSession:
     config: TrainConfig
@@ -377,12 +418,8 @@ class LocalBackend:
         num_samples: int = 1,
         include_prompt_logprobs: bool = False,
     ) -> SampleResult:
-        torch, _, _ = _deps()
-        if sampling_params.stop:
-            raise NotImplementedError(
-                "stop strings are not supported by LocalBackend v0 (needs "
-                "token-level stopping criteria); use max_tokens/eos for now"
-            )
+        torch, transformers, _ = _deps()
+        stop_strings = tuple(s for s in (sampling_params.stop or ()) if s)
         model, tokenizer = self._model_for_sample(base_model, adapter_id)
 
         prompt_ids = prompt.token_ids()
@@ -414,6 +451,10 @@ class LocalBackend:
                 gen_kwargs["top_p"] = sampling_params.top_p
             if sampling_params.top_k is not None:
                 gen_kwargs["top_k"] = sampling_params.top_k
+        if stop_strings:
+            gen_kwargs["stopping_criteria"] = _stop_string_criteria(
+                transformers, tokenizer, prompt_len, stop_strings
+            )
 
         was_training = model.training
         model.eval()
@@ -437,7 +478,19 @@ class LocalBackend:
                         break
                     lp = torch.log_softmax(score[i].float(), dim=-1)
                     lps.append(float(lp[toks[t]]))
-            stop_reason = "eos" if (eos_id is not None and toks and toks[-1] == eos_id) else "length"
+            stop_reason = "length"
+            if stop_strings:
+                toks, hit_stop = _truncate_at_stop(tokenizer, toks, stop_strings)
+                lps = lps[: len(toks)]
+                if hit_stop:
+                    stop_reason = "stop"
+            if (
+                stop_reason == "length"
+                and eos_id is not None
+                and toks
+                and toks[-1] == eos_id
+            ):
+                stop_reason = "eos"
             sequences.append(
                 SampledSequence(
                     tokens=tuple(toks), logprobs=tuple(lps), stop_reason=stop_reason
