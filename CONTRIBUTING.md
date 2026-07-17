@@ -18,12 +18,23 @@ pytest
 
 Phase 0 needs no GPU. The `fake://` backend powers golden tests in `tests/`.
 
-## PR hygiene
+## PR hygiene (required)
 
+Process detail: [docs/development-process.md](docs/development-process.md) (same shape as Mia).
+
+- **Branch → PR → Andrew merges.** Never push to `main`; never self-merge.  
 - Small, focused PRs.  
-- Update docs when behavior or roadmap exit criteria change.  
+- Tests for new/changed behavior; docs when behavior or roadmap exit criteria change.  
 - No secrets, private hostnames, or large binaries.  
 - Apache-2.0 for all contributions.  
+
+```bash
+git checkout -b feat/my-change
+# … work, pytest …
+git push -u origin HEAD
+gh pr create --title "…" --body $'…\n\nCloses #N'
+# stop — wait for Andrew to merge
+```
 
 ## Naming
 

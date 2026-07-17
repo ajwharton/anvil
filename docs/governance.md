@@ -25,19 +25,28 @@ Initial maintainer: **Andrew Wharton** (`@ajwharton`). Additional maintainers ar
 
 | Type | How |
 |------|-----|
-| **Typo / docs / small fix** | PR; one maintainer approval (or self-merge if sole maintainer) |
-| **Feature within current roadmap phase** | PR + design note if API surface changes |
+| **Typo / docs / small fix** | PR; maintainer merges (no direct `main` push) |
+| **Feature within current roadmap phase** | Branch → PR + design note if API surface changes; **Andrew merges** |
 | **New phase / non-goal change** | Issue labeled `rfc` → discussion → PR updating `docs/roadmap.md` |
 | **License or trademark** | Maintainer decision; no silent relicensing |
 | **Security** | Private report preferred; coordinated disclosure |
 
 **RFC issues** should answer: problem, proposal, alternatives, impact on vision/edge, exit criteria.
 
+## PR & merge (Mia-aligned)
+
+Full process: **[development-process.md](development-process.md)**.
+
+- **No direct pushes to `main`.**  
+- Agents open PRs; they **do not** merge.  
+- **Andrew Wharton** reviews and merges in the GitHub UI.  
+- GitHub is the source of truth; local trees are sandboxes.
+
 ## Contributions
 
 - By submitting a PR, you agree your contribution is licensed under **Apache-2.0**.
 - Prefer the [Developer Certificate of Origin](https://developercertificate.org/) (sign-off optional but appreciated: `Signed-off-by: Name <email>`).
-- See [CONTRIBUTING.md](../CONTRIBUTING.md) for branch/PR/test hygiene.
+- See [CONTRIBUTING.md](../CONTRIBUTING.md) and [development-process.md](development-process.md) for branch/PR/test hygiene.
 
 ## Code of conduct
 
