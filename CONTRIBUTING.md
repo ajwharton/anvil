@@ -27,4 +27,4 @@ Phase 0 needs no GPU. The `fake://` backend powers golden tests in `tests/`.
 
 ## Naming
 
-Call the project **Anvil**. Do not use “Tinker” in package names, CLI binary names, or trademarks. “Tinker-shaped” is OK as descriptive English in docs.
+Call the project **Anvil**. Do not use third-party product names in package names, CLI binaries, or branding.

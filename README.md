@@ -1,8 +1,8 @@
 # Anvil
 
-**Open-source, Tinker-shaped post-training** — SFT and RL with a tiny four-verb API, LoRA-first adapters, pluggable backends (lab GPU → dual DGX Spark → edge export), and a **live RL debugger** so you can see *when* training stops helping.
+**Open-source post-training toolkit** — SFT and RL with a tiny four-verb API, LoRA-first adapters, pluggable backends (lab GPU → dual DGX Spark → edge export), and a **live RL debugger** so you can see *when* training stops helping.
 
-> Not affiliated with Thinking Machines Lab. **Anvil** names the open tool; **Tinker** is their hosted API. We copy the *shape* (four verbs, LoRA, train/sample consistency), not their cloud.
+> Originally inspired by the product shape of Thinking Machines’ Tinker API (four low-level train/sample verbs + LoRA). Anvil is independent open-source software; no affiliation, no wire compatibility.
 
 ## Why
 

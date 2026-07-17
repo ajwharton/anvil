@@ -1,11 +1,8 @@
 """Wire-facing types for the Anvil client contract.
 
-Shape is deliberately close to Thinking Machines' public Tinker SDK
-(ServiceClient → TrainingClient / SamplingClient, Datum, ModelInput, …)
-so cookbook-style recipes can port with light renames. This is *not*
-bit-compatible with Tinker's proprietary wire protocol.
-
-No third-party deps — dataclasses only for Phase 0.
+ServiceClient → TrainingClient / SamplingClient, Datum, ModelInput, and the
+four verbs form the stable product surface. No third-party deps — dataclasses
+only for Phase 0.
 """
 
 from __future__ import annotations
@@ -86,7 +83,7 @@ Chunk = EncodedTextChunk | ImageRefChunk | ImageChunk
 class ModelInput:
     """Token / multimodal sequence for train or sample.
 
-    Tinker-shaped: build from ints or from an ordered chunk list.
+    Build from ints or from an ordered chunk list.
     """
 
     chunks: tuple[Chunk, ...] = ()
@@ -144,7 +141,7 @@ class LossFn(str, Enum):
 
 @dataclass(slots=True)
 class Datum:
-    """Single training example — Tinker-shaped.
+    """Single training example (model_input + loss_fn_inputs).
 
     model_input: full sequence fed to the model
     loss_fn_inputs: tensors the named loss needs (targets, weights, logprobs, …)

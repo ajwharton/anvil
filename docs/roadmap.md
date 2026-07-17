@@ -4,7 +4,7 @@ Status legend: **todo** · **doing** · **done** · **blocked**
 
 ## North star
 
-A **Tinker-shaped** open toolkit: four verbs, LoRA-first, train/sample consistency, vision in the data model, export to lab serve and **Jetson/edge**.
+An open post-training toolkit: four verbs, LoRA-first, train/sample consistency, vision in the data model, export to lab serve and **Jetson/edge**.
 
 Success looks like: a researcher or roboticist can SFT/RL a small LLM/VLM from a laptop client against own GPUs without rewriting distributed systems each time.
 
@@ -152,7 +152,8 @@ autointerp beyond the J-lens readout.
 ## Explicit non-goals (until revisited by RFC)
 
 - Full-parameter FT of 100B+ MoE on two Sparks as the default path  
-- Proprietary Tinker wire compatibility / trademark use  
+- Proprietary third-party API wire compatibility or trademark collision  
+
 - Arbitrary remote code execution for custom losses (named plugins only)  
 - Replacing day-to-day dual-Spark **serve** of large base models (Anvil is train/adapt/export)
 

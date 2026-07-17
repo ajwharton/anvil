@@ -8,7 +8,7 @@
 2. **LoRA-first** — default path is adapters + export, not full-weight FT of frontier MoEs.
 3. **Train/sample consistency** — same renderer and adapter identity across train and sample.
 4. **Vision and edge are in scope** — not optional forever; roadmap may sequence delivery.
-5. **No trademark confusion** — do not brand as “Tinker” or imply affiliation with Thinking Machines Lab.
+5. **No trademark confusion** — brand only as Anvil; do not imply affiliation with any commercial post-training product.
 6. **Public by default** — discussion and design in the open; secrets never in-repo.
 
 ## Roles
@@ -47,9 +47,10 @@ Be respectful. No harassment, spam, or bad-faith trademark abuse. Maintainers ma
 
 | Project | Relationship |
 |---------|----------------|
-| **Thinking Machines Tinker** | Inspiration for API *shape*; not a fork; no shared trademark |
 | **TRL / OpenRLHF / veRL / PEFT / vLLM** | Likely backends/libraries under the Anvil contract |
 | **mia-rl / aiops / starwatch** | Upstream inspiration / personal lab context; not required to use Anvil |
+
+Inspiration one-liner (only place we name the prior art): see `README.md`.
 
 ## Releases
 

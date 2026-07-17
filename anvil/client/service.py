@@ -1,4 +1,4 @@
-"""ServiceClient — entry point (Tinker-shaped)."""
+"""ServiceClient — factory entry point for training and sampling clients."""
 
 from __future__ import annotations
 

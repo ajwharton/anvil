@@ -1,30 +1,28 @@
-# Open-source “Tinker-shaped” post-training — design note
+# Anvil — post-training design note
 
 **Project:** [Anvil](https://github.com/ajwharton/anvil) (this repo)  
-**Status:** Design SSOT · Phase 0 scaffold  
-**Outcome:** Democratized RL+SFT with a Tinker-shaped API, own hardware (lab GPU → dual DGX Spark → Jetson edge), **vision** first-class.  
-**Date:** 2026-07-16  
+**Status:** Design SSOT  
+**Outcome:** Democratized RL+SFT with a small four-verb API, own hardware (lab GPU → dual DGX Spark → Jetson edge), **vision** first-class, and live RL observability.  
+**Date:** 2026-07-16 (de-brand pass 2026-07-17)
 
-Working name **Anvil** = open tool. **Tinker** = Thinking Machines’ hosted API (inspiration only; no affiliation).
+Inspiration / non-affiliation one-liner: see `README.md` (only public place we name prior product art).
 
 Related personal lab context (private): dual-Spark serve, starwatch agents, Jetson robot — not required to use Anvil.
 
 ---
 
-## 1. What Tinker actually is (from public docs + cookbook)
+## 1. Product shape
 
-Sources: [Tinker docs](https://tinker-docs.thinkingmachines.ai/), [tinker-cookbook](https://github.com/thinking-machines-lab/tinker-cookbook), [product page](https://thinkingmachines.ai/tinker/), analyses of the API shape.
-
-### 1.1 Product split
+### 1.1 Layering
 
 | Piece | Role |
 |-------|------|
-| **`tinker` SDK** | Thin client. You write loops on a laptop/CPU box. |
-| **Cloud workers** | Warm base-model pools + LoRA adapters. Scheduling, multi-node, fault tolerance. |
-| **`tinker-cookbook`** | Recipes + abstractions (SFT, GRPO/PPO-style RL, DPO/RLHF, distillation, tools, multi-agent, **audio**, **VLM classifier**). |
-| **`tml-renderers`** | Chat/tool/reasoning/multimodal rendering so train and sample share one message↔token contract. |
+| **Client SDK** | Thin. You write loops on a laptop/CPU box. |
+| **Train / sample workers** | Warm bases + LoRA adapters. Scheduling, multi-node, fault tolerance as backends grow. |
+| **Recipes** | SFT, GRPO/PPO-style RL, DPO/RLHF, distillation, tools, multi-agent, VLM classifier, robot offline. |
+| **Renderers** | Chat/tool/reasoning/multimodal rendering so train and sample share one message↔token contract. |
 
-### 1.2 The primitive surface (the thing to copy)
+### 1.2 The primitive surface
 
 ```text
 ServiceClient
@@ -34,45 +32,47 @@ ServiceClient
         ├─ save_state / load_state              # train+optim checkpoint
         ├─ save_weights_and_get_sampling_client()
         └─ SamplingClient.sample(prompt, params)
-  └─ RestClient → download checkpoint archive (LoRA / weights export)
+  └─ export / download checkpoint archive (LoRA / weights)
 ```
 
-**Design intent:** not a black-box `train()`. You own **data, loss, reward, environment**; they own **distributed PEFT training and colocated sampling**.
+**Design intent:** not a black-box `train()`. You own **data, loss, reward, environment**; Anvil owns a stable contract across **distributed PEFT training and colocated sampling**.
 
 Why LoRA is load-bearing (not just “efficient FT”):
 
-1. **Shared base pools** — many users’ adapters on the same warm base process.  
+1. **Shared base pools** — many adapters on the same warm base process.  
 2. **Small artifacts** (tens–hundreds of MB) — download, version, A/B, edge deploy.  
-3. **RL-friendly** — claim (and TML research) that LoRA can match full FT for many post-training loads when set up correctly.  
+3. **RL-friendly** — LoRA can match full FT for many post-training loads when set up correctly.  
 4. **`sample` sees current adapter** without shipping full MoE weights per step.
 
-### 1.3 What the cookbook proves is in scope
+### 1.3 In-scope recipe families
 
-- **SFT** chat, **math RL** (verifiable), **code RL** (sandbox), **preference** (DPO + multi-stage RLHF), **distillation**, **tool/RAG RL**, **multi-agent**, **audio** (Inkling), **VLM image classification**.  
+- **SFT** chat, **math RL** (verifiable), **code RL** (sandbox), **preference** (DPO + multi-stage RLHF), **distillation**, **tool/RAG RL**, **multi-agent**, **audio**, **VLM image classification**.  
 - **Eval** harness alongside train.  
-- **Weight export** for local serve.
+- **Weight export** for local serve.  
+- **RL debugger** — live metrics, inference probes during training, eventual J-Lens / latent monitors.
 
-### 1.4 What Tinker is *not*
+### 1.4 Explicit non-goals (early)
 
-- Not open-source cloud.  
+- Not a hosted multi-tenant cloud by default.  
 - Not full-weight fine-tune by default.  
-- Not “run any model you download” without their worker support.  
-- Not an edge runtime (Jetson/robot) — export is the bridge.
+- Not “run any model” without a supported worker path.  
+- Jetson is edge inference / data plane first — export is the bridge, not remote train of 30B+ VLMs.
 
 ---
 
-## 2. Why open-source a Tinker *shape*
+## 2. Why a product-shaped API (not another kit)
 
-Open RL stacks already exist (**TRL**, **OpenRLHF**, **veRL**, **Axolotl**, **Unsloth**, etc.). They are powerful **kits**. Tinker is a **product-shaped API**:
+Open RL stacks already exist (**TRL**, **OpenRLHF**, **veRL**, **Axolotl**, **Unsloth**, etc.). They are powerful **kits**. Anvil targets a **product-shaped API**:
 
-| Kit (today) | Tinker-shaped OSS (goal) |
-|-------------|---------------------------|
+| Kit (today) | Anvil (goal) |
+|-------------|----------------|
 | “Run this training script on these GPUs” | “Call four verbs; backend may be Spark, cloud, or Jetson sim” |
 | Train/serve often different stacks | **Same render + adapter ID** for sample and train |
 | Infra is your problem | **Pluggable backends** with one client contract |
 | Text-only recipes | **Modality-neutral** batches (text, image, video frames, later audio) |
+| Post-hoc eval only | **Observe while training** (metrics + live probes) |
 
-Democratizing RL = **lower the systems tax** while **keeping algorithm control**. Copy the *API philosophy*, not the proprietary cluster.
+Democratizing RL = **lower the systems tax** while **keeping algorithm control**.
 
 ### 2.1 Knobs are cheap; architecture patterns are the product
 
@@ -95,25 +95,25 @@ Examples of judgments the stack should encode (see `anvil/recipes/`):
 
 The four verbs remain the **runtime** contract. Recipes are the **intelligence** layer above them. The web UI is recipe-first; knobs are an expert escape hatch.
 
-**Model cards are the architecture oracle.** Prefer `config.json` + HF card (`architectures`, `model_type`, `vision_config`, param count, `pipeline_tag`) over name heuristics. Public RL/SFT research (Tinker verbs, TRL VLM LoRA, GRPO, LoRA-for-post-train) supplies *pattern shape*; we still supply data and run fine-tunes on lab/edge hardware. See `anvil/recipes/` (`inspect_base_model`, `run_sft` / `run_vlm_sft` / `run_grpo`).
+**Model cards are the architecture oracle.** Prefer `config.json` + HF card (`architectures`, `model_type`, `vision_config`, param count, `pipeline_tag`) over name heuristics. Public RL/SFT research (TRL VLM LoRA, GRPO, LoRA-for-post-train, four-verb product analyses) supplies *pattern shape*; we still supply data and run fine-tunes on lab/edge hardware. See `anvil/recipes/` (`inspect_base_model`, `run_sft` / `run_vlm_sft` / `run_grpo`).
 
 **Bounded catalog + gates.** 15 product recipes (`anvil/recipes/catalog.py`) span dense LM, MoE, lab VLM, edge student. Each recipe declares recommended / stretch / blocked shapes plus size and rank bounds. Users may `force=True` past a block, but the boundary stays explicit in the plan’s `gate` field.
 
 ---
 
-## 3. Working name and layering
+## 3. Name and layering
 
-**Working name:** **Anvil** (working title — “tinker on an anvil you own”). Rename freely.
+**Name:** **Anvil**.
 
 ```text
 ┌─────────────────────────────────────────────────────────┐
-│  Client (laptop / Grok / starwatch trainer process)     │
+│  Client (laptop / agent / trainer process)              │
 │  anvil.ServiceClient → TrainingClient / SamplingClient  │
 └───────────────────────────┬─────────────────────────────┘
                             │ HTTP/gRPC + object store for media
 ┌───────────────────────────▼─────────────────────────────┐
 │  Control plane                                          │
-│  sessions · adapter registry · job queue · auth         │
+│  sessions · adapter registry · job queue · audit · UI   │
 └───────┬─────────────────────────────┬───────────────────┘
         │                             │
 ┌───────▼──────────┐         ┌────────▼───────────────────┐
@@ -135,11 +135,11 @@ The four verbs remain the **runtime** contract. Recipes are the **intelligence**
 
 ## 4. API contract (v0 — deliberately small)
 
-### 4.1 Core verbs (mirror Tinker)
+### 4.1 Core verbs
 
-**Implementation status (Phase 0):** typed surface lives under `anvil/client/` + `anvil/protocol/`.  
+Typed surface: `anvil/client/` + `anvil/protocol/`.  
 `ServiceClient(endpoint="fake://")` exercises the full loop in-process (no GPU).  
-HTTP control plane and real PEFT workers are Phase 1+.
+`local://` runs hand-rolled torch+PEFT verbs. HTTP: `anvil serve` + `RemoteBackend`. Sample split: `VLLMSampleBackend`.
 
 ```python
 import anvil
@@ -153,7 +153,7 @@ tc = svc.create_lora_training_client(
     modalities=["text", "image"],   # capability flags
 )
 
-# Train step — Datum is Tinker-shaped (model_input + loss_fn_inputs)
+# Train step — Datum = model_input + loss_fn_inputs
 datum = Datum(
     model_input=ModelInput.from_ints(input_tokens),
     loss_fn_inputs={"target_tokens": target_tokens, "weights": weights},
@@ -177,7 +177,7 @@ result = tc.export_adapter("./out-adapter", format="peft")  # HF LoRA dir
 
 ### 4.2 Loss surface (hardest design choice)
 
-Tinker lets the **server** run `forward_backward` with a known `loss_fn` (e.g. cross_entropy) and accumulate LoRA grads. For RL you typically:
+The **server** runs `forward_backward` with a known `loss_fn` (e.g. cross_entropy) and accumulates LoRA grads. For RL you typically:
 
 1. `sample` completions  
 2. Compute reward **client-side** (or in a sandbox worker)  
@@ -196,13 +196,22 @@ Avoid “upload arbitrary Python to execute on GPU” in v0 (security nightmare)
 
 ### 4.3 Futures / pipelining
 
-Match Tinker: non-blocking handles so you can pipeline `forward_backward` while the next batch prepares. Local backend can implement as true async GPU queue; single-GPU backend can still return futures for API compatibility.
+Non-blocking handles so you can pipeline `forward_backward` while the next batch prepares. Local backend implements a true async GPU queue (`VerbQueue`); single-GPU backends still return futures for API compatibility.
+
+### 4.4 RL observability (Phase 2.5)
+
+While training runs, continuously:
+
+- Append per-step **metrics** (reward mean/std, within-group reward std / advantage-collapse tripwire, IS mean_ratio, loss).  
+- Sample a fixed **probe set** from the live policy every K steps — eyes catch reward hacking and the rollover into negative marginal returns.  
+- Stream both into `anvil-web` (`/observe/{run_id}`).  
+- Later: **J-Lens / latent-space** monitors as a debugger panel (spike-gated; not hot path).
 
 ---
 
 ## 5. Vision as first-class (not a bolt-on)
 
-Tinker already claims **text and vision** and ships a **VLM classifier** recipe. Anvil should not be “LLM trainer + optional images later.”
+Anvil should not be “LLM trainer + optional images later.”
 
 ### 5.1 Unified example schema
 
@@ -220,7 +229,7 @@ Tinker already claims **text and vision** and ships a **VLM classifier** recipe.
 ```
 
 - **Media store:** content-addressed blobs (local dir, MinIO, S3). Batch only carries **refs + crops/timestamps**, not multi-MB base64 in every grad step if avoidable.  
-- **Renderer:** expands refs → model-specific image tokens (Qwen-VL, InternVL, Inkling-style patches, etc.).  
+- **Renderer:** expands refs → model-specific image tokens (Qwen-VL, InternVL, patch schemes, etc.).  
 - **Train worker:** same renderer as sample worker (critical for RL).
 
 ### 5.2 Vision-specific training modes
@@ -228,7 +237,7 @@ Tinker already claims **text and vision** and ships a **VLM classifier** recipe.
 | Mode | Use case | Notes |
 |------|----------|--------|
 | **VLM SFT** | Instruction following with images | Standard CE on text tokens; image encoder may freeze or LoRA |
-| **VLM classifier / rubric** | “Is this a good grasp?” | Cookbook-like classifier head or graded text |
+| **VLM classifier / rubric** | “Is this a good grasp?” | Classifier head or graded text |
 | **Vision RL** | Navigate / pick / UI agent | Reward from sim or human; frames as observations |
 | **Distill** | Big VLM → small edge VLM | On-policy / off-policy teacher |
 | **Encoder PEFT** | Only ViT/adaptor LoRA | Keeps LM frozen for robotics latency |
@@ -251,21 +260,21 @@ Default for robotics: **LoRA language + projector**, freeze heavy vision encoder
 
 ### 6.1 Dual DGX Spark (forge + hammer)
 
-Already in play for **serve** (DS4 TP=2 fabric). For **Anvil train**:
+Already in play for **serve**. For **Anvil train**:
 
 | Backend | Fit |
 |---------|-----|
 | **A. Single-node LoRA train** on forge (or hammer) | v0 — simple, honest |
-| **B. Role split** | Sample on head (vLLM), train on peer — Tinker-like separation |
+| **B. Role split** | Sample on head (vLLM), train on peer — clean separation |
 | **C. TP=2 train** | Only when base is huge; higher systems cost |
 
 Recommendation: **v0 = A + optional B**. Don’t require fabric TP for the first open-source win.
 
-Reuse lessons from DS4 dual-Spark: NVMe models (not USB), explicit host IPs, long NCCL timeouts, worker-first only when multi-node train needs it.
+Reuse dual-Spark lessons: NVMe models (not USB), explicit host IPs, long NCCL timeouts, worker-first only when multi-node train needs it.
 
-### 6.2 Jetson (edge vision robot) — arriving hardware
+### 6.2 Jetson (edge vision robot)
 
-Jetson is **not** a Tinker train worker for 30B+ VLMs. It is:
+Jetson is **not** a train worker for 30B+ VLMs. It is:
 
 1. **Inference edge** for exported small VLMs / policies  
 2. **Data plane** — capture, label, upload trajectories to Anvil  
@@ -280,14 +289,14 @@ Robot (Jetson)                     Lab (Spark / Anvil)
 
 **Design rules for Jetson:**
 
-- Export targets: **ONNX / TensorRT / GGUF / MLX-less** as appropriate.  
-- Prefer **small dense VLMs** or **distilled students**, not full MoE Inkling.  
+- Export targets: **ONNX / TensorRT / GGUF** as appropriate.  
+- Prefer **small dense VLMs** or **distilled students**, not full MoE bases.  
 - Keep **same message schema** as lab so sim→real doesn’t rewrite rewards.  
 - Optional: Anvil `SamplingClient` with `backend=jetson://…` for remote sample (power/thermal constrained).
 
 ### 6.3 Laptop / CPU client
 
-Always supported: control plane client only. Matches Tinker’s “author on CPU.”
+Always supported: control plane client only — author loops on CPU, train on lab GPUs.
 
 ---
 
@@ -295,92 +304,70 @@ Always supported: control plane client only. Matches Tinker’s “author on CPU
 
 ```text
 anvil/
-  client/           # ServiceClient, TrainingClient, SamplingClient, futures  [Phase 0]
-  protocol/         # Datum, ModelInput, AdamParams, multimodal Message       [Phase 0]
-  render/           # ToyTextRenderer; HF chat templates later                 [Phase 0 toy]
-  media/            # LocalMediaStore (cas://sha256/…)                         [Phase 0]
-  control/          # Session, AdapterRegistry (local; auth later)             [Phase 0]
+  client/           # ServiceClient, TrainingClient, SamplingClient, futures, remote
+  protocol/         # Datum, ModelInput, AdamParams, multimodal Message, serde
+  render/           # ToyTextRenderer; HFChatRenderer
+  media/            # LocalMediaStore (cas://sha256/…)
+  control/          # Session, AdapterRegistry, gate-override audit
+  observe/          # RunMetricsWriter — metrics.jsonl + probes.jsonl
   workers/
-    train.py        # PEFT / TRL entry (stub) → Phase 1
-    sample.py       # vLLM entry (stub) → Phase 2
-  losses/           # named registry: ce, is, ppo, dpo, …                      [Phase 0]
-  export/           # format tags peft/gguf/onnx/trt                           [Phase 0]
+    sample.py       # VLLMSampleBackend + LoRA hot-swap
+  serve/            # HTTP four-verb transport
+  web/              # anvil-web control plane + /observe
+  losses/           # named registry: ce, is, ppo, dpo, …
+  export/           # format tags peft/gguf/onnx/trt
   backends/
-    fake.py         # in-process golden tests                                  [Phase 0]
-    # local_gpu / dual_spark / jetson_edge → Phase 1+
-recipes/            # sl_loop, rl_loop, vlm_classifier, robot_offline_rl
+    fake.py         # in-process golden tests
+    local.py        # torch+PEFT hand-rolled verbs
+  recipes/          # architecture → pattern → plan; GRPO/SFT helpers
+recipes/            # sl_loop and operator scripts
 ```
 
 **Bootstrap on existing OSS** rather than rewrite kernels:
 
-- Train: **PEFT + TRL** or **OpenRLHF/veRL** behind the same verbs.  
-- Sample: **vLLM** (already on Sparks).  
+- Train: **PEFT + torch** (hand-rolled verbs; no HF Trainer swallowing the contract).  
+- Sample: **vLLM** (already on Sparks) + HF generate for Tier-0 probes.  
 - Don’t reimplement FlashAttention; wrap.
 
-The product is the **contract + control plane + media/render consistency**, not a new CUDA stack.
+The product is the **contract + control plane + media/render consistency + RL debugger**, not a new CUDA stack.
 
 ---
 
 ## 8. Phased roadmap
 
-### Phase 0 — Spec & compatibility (1–2 weeks, design/code stubs)
+See **`docs/roadmap.md`** for live exit criteria. Summary:
 
-- Freeze OpenAPI for four verbs + export.  
-- Golden tests: SFT loop on 0.5B–4B text model on single GPU.  
-- Document loss plugin ABI.  
-
-### Phase 1 — Local Anvil on forge (text)
-
-- `anvil serve --backend local` on forge.  
-- SFT + simple GRPO on verifiable math (cookbook parity).  
-- Export LoRA → load into existing vLLM container.  
-- Client from Mac.  
-
-### Phase 2 — Sample/train split + dual-Spark optional
-
-- Dedicated sample worker (vLLM) with hot-swap LoRA.  
-- Async futures, basic queue.  
-- Starwatch or tool-use RL toy with real tools.  
-
-### Phase 3 — Vision
-
-- Media store + VLM renderer.  
-- VLM SFT and classifier recipe.  
-- Freeze-encoder defaults.  
-
-### Phase 4 — Robot / Jetson loop
-
-- Offline trajectory format from robot logs.  
-- Distill pipeline: lab teacher → Jetson student.  
-- Edge sample backend + thermal/power constraints documented.  
-
-### Phase 5 — Multi-user / “mini-SaaS” (optional)
-
-- Auth, multi-adapter isolation, warm base pools — only if people run shared lab hardware.  
-- This is where Tinker’s cloud moat is; OSS can stay single-tenant longer.
+| Phase | Focus |
+|-------|--------|
+| **0** | Spec, stubs, fake backend, web shell |
+| **1** | Local Anvil (text, single GPU) — **done** |
+| **2** | Sample/train split, GRPO/IS/PPO, futures — **done** |
+| **2.5** | RL observability (metrics, probes, adapter sync, J-Lens spike) — **current** |
+| **3** | Vision first-class |
+| **4** | Robot / Jetson edge loop |
+| **5** | Multi-tenant lab (optional) |
 
 ---
 
 ## 9. Non-goals (v0–v1)
 
 - Full-parameter fine-tune of 100B+ MoEs on two Sparks.  
-- Bit-identical reimplementation of Tinker’s proprietary scheduler.  
+- Bit-identical reimplementation of any proprietary scheduler.  
 - Arbitrary remote code execution for custom losses.  
-- Replacing DS4 day-to-day serve (keep serve path; Anvil is train/adapt).  
-- Claiming Inkling-Small support before weights exist — design for **any HF VLM/LLM** first.
+- Replacing day-to-day dual-Spark **serve** of large bases (Anvil is train/adapt/export).  
+- Claiming bases before weights exist — design for **any HF VLM/LLM** first.
 
 ---
 
-## 10. Relationship to your concrete stack
+## 10. Relationship to the concrete lab stack
 
 | Asset | Role in Anvil world |
 |-------|---------------------|
 | **forge + hammer** | Train + sample backends; fabric for heavy models later |
 | **DS4 dual-Spark serve** | Production inference; can host **merged/adapter** checkpoints from Anvil |
-| **Bench tools** (`/mnt/data/tools`) | Pre/post train eval (lm-eval, compare scripts) |
+| **Bench tools** | Pre/post train eval |
 | **starwatch** | Real tool-use environment + rewards (align, safety, success) |
 | **Jetson (incoming)** | Edge vision policy + data collection |
-| **Tinker (hosted)** | Optional parallel track for Inkling / huge bases until Small is local |
 | **mia-rl Ship** | Stay separate — Anvil is **Lab** infrastructure, not Phi-4 coach Ship |
 
 ---
@@ -390,16 +377,16 @@ The product is the **contract + control plane + media/render consistency**, not 
 1. **Language:** Python-first client (must); control plane Go vs Python?  
 2. **Transport:** HTTP+JSON v0 vs gRPC for media-heavy batches?  
 3. **Adapter hot-swap:** How fast must sample see new LoRA (every step vs every N)?  
-4. **MoE LoRA:** Expert-specific adapters — need research for Inkling-Small.  
+4. **MoE LoRA:** Expert-specific adapters — need research for large MoE bases.  
 5. **Safety:** Sandbox for code RL rewards; robot actions never raw from sample without supervisor.  
-6. **Name / license:** Apache-2.0 vs MIT; avoid “Tinker” trademark.  
+6. **License:** Apache-2.0 (locked); keep branding as Anvil only.  
 
 ---
 
-## 12. Suggested first experiments (when coding starts)
+## 12. Suggested first experiments
 
-1. **Anvil SFT** Qwen3.5-4B LoRA on forge, 100 steps, export, serve beside DS4.  
-2. **Anvil GRPO** on a 10-problem math set with exact-match reward.  
+1. **Anvil SFT** small dense LoRA on forge, 100 steps, export, serve.  
+2. **Anvil GRPO** on a 10-problem math set with exact-match reward + live probes.  
 3. **Vision smoke:** LoRA on **`Qwen/Qwen2.5-VL-3B-Instruct`** (see `docs/models.md`) — “describe grasp frame” on a folder of images.  
 4. **Jetson dry-run:** export that student (or AWQ/TRT); measure FPS/power on device (when hardware arrives).  
 
@@ -407,25 +394,22 @@ The product is the **contract + control plane + media/render consistency**, not 
 
 ## 13. Bottom line
 
-Tinker democratizes RL by selling a **tiny, stable verb set** + **LoRA multi-tenancy** + **train/sample consistency**, not by inventing new optimizers.
+Anvil democratizes RL by shipping a **tiny, stable verb set** + **LoRA multi-tenancy** + **train/sample consistency** + **observe-while-training**, not by inventing new optimizers.
 
-An open-source Anvil should:
-
-1. **Copy the four verbs and LoRA-first economics.**  
+1. **Four verbs and LoRA-first economics.**  
 2. **Pluggable backends** — dual Spark now, Jetson on the edge path.  
 3. **Vision from day one** in the data model and renderer.  
 4. **Export to real serve** (vLLM today, TensorRT/ONNX on Jetson tomorrow).  
-5. **Sit in Lab**, leverage cookbook ideas, stay compatible enough that recipes port.
+5. **RL debugger** — metrics, probes, eventual latent monitors — so negative returns are visible *during* the run.
 
-When **Inkling-Small** weights land: candidate base for local Anvil + optional hosted Tinker A/B. Until then: Qwen/Phi/VLM small models prove the shape.
+Until larger bases land: Qwen/Phi/VLM small models prove the shape.
 
 ---
 
 ## References
 
-- https://tinker-docs.thinkingmachines.ai/  
-- https://thinkingmachines.ai/tinker/  
-- https://github.com/thinking-machines-lab/tinker-cookbook  
-- https://thinkingmachines.ai/news/introducing-inkling/  
-- Ben Anderson, “Anatomy of a Modern Finetuning API” (Tinker primitive analysis)  
-- Local: `aiops/docs/ds4-dual-spark.md`, forge bench tools under `/mnt/data/tools`
+- Ben Anderson, “Anatomy of a Modern Finetuning API” — https://benanderson.work/blog/anatomy-of-finetuning-api/  
+- TRL GRPO — https://huggingface.co/docs/trl/grpo_trainer  
+- PEFT LoRA — https://huggingface.co/docs/peft/conceptual_guides/lora  
+- HF VLM fine-tune cookbook — https://huggingface.co/learn/cookbook/en/fine_tuning_vlm_trl  
+- Live exit criteria: `docs/roadmap.md`

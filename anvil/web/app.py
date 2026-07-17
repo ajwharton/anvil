@@ -162,7 +162,7 @@ loadProbes(); setInterval(loadProbes, 4000);
 def create_app() -> FastAPI:
     app = FastAPI(
         title="Anvil",
-        description="Tinker-shaped post-training control plane",
+        description="Anvil post-training control plane",
         version="0.0.1",
     )
     store = get_store()

@@ -1,6 +1,6 @@
 """Basic on-policy verifiable RL recipe (GRPO / IS-shaped).
 
-Public pattern (DeepSeekMath GRPO + Tinker RL loop):
+Public pattern (DeepSeekMath GRPO-style on-policy loop):
   1. sample G completions from current policy
   2. score with a verifiable reward (exact match, unit test, …)
   3. group-relative advantages

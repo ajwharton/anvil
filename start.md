@@ -13,21 +13,20 @@ State: `Track: anvil | Outcome: <one line>`
 
 ## What this is
 
-**Anvil** = open-source, Tinker-**shaped** post-training toolkit:
+**Anvil** = open-source post-training toolkit (SFT/RL):
 
 - Four verbs: `forward_backward`, `optim_step`, `sample`, `save_state`
 - LoRA-first adapters; train/sample consistency; vision + edge (Jetson) path
 - Backends: local GPU → dual DGX Spark → export to edge
 - **RL debugger**: web UI (`anvil-web`), live metrics, inference probes during RL (negative-return detection); J-Lens / latent monitors on the roadmap
 
-Not Thinking Machines’ cloud. Not a full MoE train stack on day one.
+Not a full MoE train stack on day one. Inspiration one-liner lives in `README.md` only.
 
 ## Red lines
 
 - **Public repo** — no secrets, keys, host IPs of private LAN, or personal infra dumps in commits.
 - Prefer **small PRs**; design changes go through `docs/` before large code.
-- Do not trademark-collide: never call this project “Tinker.”
-- Do not claim bit-for-bit compatibility with Tinker’s proprietary API.
+- Do not brand Anvil with third-party product names or claim proprietary API compatibility.
 - Vision and robot/Jetson paths stay **first-class in design**; don’t strip them to ship text-only forever.
 
 ## Facts (one screen)
@@ -44,7 +43,7 @@ Not Thinking Machines’ cloud. Not a full MoE train stack on day one.
 ## Prefer artifacts
 
 ```text
-docs/design.md      # architecture & Tinker analysis
+docs/design.md      # architecture SSOT
 docs/roadmap.md     # phases and exit criteria
 docs/governance.md  # maintainers, DCO, decision process
 README.md           # human front door

@@ -67,4 +67,4 @@ suggest_for_model("Qwen/Qwen2.5-VL-3B-Instruct")
 
 ## Design rule
 
-Shape comes from the **HF model card**; the **catalog** maps shape → recipe boundaries; **research** (Tinker / TRL / GRPO) supplies loop families; **we** still fine-tune on our data.
+Shape comes from the **HF model card**; the **catalog** maps shape → recipe boundaries; **research** (TRL / GRPO / PEFT cookbooks) supplies loop families; **we** still fine-tune on our data.

@@ -1,4 +1,4 @@
-"""Anvil — open-source Tinker-shaped post-training toolkit.
+"""Anvil — open-source post-training toolkit (SFT/RL, LoRA-first).
 
 Phase 0: typed client contract + fake backend for golden tests.
 """

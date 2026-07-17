@@ -1,4 +1,4 @@
-"""Future handles so clients can pipeline ops (Tinker-shaped).
+"""Future handles so clients can pipeline ops without blocking.
 
 Local/fake backends resolve immediately; real GPU backends will queue work
 and keep the same ``result()`` / ``result_async()`` surface.

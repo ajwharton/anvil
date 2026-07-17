@@ -19,7 +19,7 @@ if TYPE_CHECKING:
 
 
 class SamplingClient:
-    """Generation handle. Tinker-shaped: sample / compute_logprobs."""
+    """Generation handle: sample / compute_logprobs."""
 
     def __init__(
         self,

@@ -27,7 +27,7 @@ def test_sft_one_step_forward_backward_optim_sample_export(tmp_path):
         modalities=["text"],
     )
 
-    # Manual Datum (Tinker-shaped)
+    # Manual Datum
     tokens = list(range(10, 30))
     datum = Datum(
         model_input=ModelInput.from_ints(tokens[:-1]),

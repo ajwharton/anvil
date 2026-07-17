@@ -1,7 +1,8 @@
 """Research-backed recipe defaults (public sources, not proprietary runs).
 
 We still fine-tune on our data; these encode *community-stable shapes*:
-Tinker verb set, TRL/HF VLM cookbooks, GRPO-style on-policy RL, LoRA PEFT.
+four-verb train/sample loops, TRL/HF VLM cookbooks, GRPO-style on-policy RL,
+LoRA PEFT.
 
 Citations are pointers for humans — not bit-compat claims with any vendor API.
 """
@@ -21,9 +22,9 @@ class Source:
 
 SOURCES: tuple[Source, ...] = (
     Source(
-        key="tinker_verbs",
-        title="Tinker API shape (Thinking Machines docs)",
-        url="https://tinker-docs.thinkingmachines.ai/tinker/quickstart/",
+        key="four_verbs",
+        title="Product-shaped post-training API (four verbs)",
+        url="https://benanderson.work/blog/anatomy-of-finetuning-api/",
         takeaway="SFT = forward_backward(cross_entropy)+optim_step; RL = sample → reward → IS/PPO loss.",
     ),
     Source(
@@ -46,8 +47,8 @@ SOURCES: tuple[Source, ...] = (
     ),
     Source(
         key="lora_posttrain",
-        title="LoRA for post-training (TML research + PEFT practice)",
-        url="https://thinkingmachines.ai/blog/lora/",
+        title="LoRA for post-training (research + PEFT practice)",
+        url="https://huggingface.co/docs/peft/conceptual_guides/lora",
         takeaway="LoRA can match full FT for many post-train loads; small artifacts enable hot-swap/export.",
     ),
     Source(
@@ -58,14 +59,13 @@ SOURCES: tuple[Source, ...] = (
     ),
 )
 
-
 # Pattern → which research keys inform defaults
 PATTERN_SOURCES: dict[str, tuple[str, ...]] = {
-    "sft_chat": ("tinker_verbs", "lora_posttrain"),
-    "vlm_sft": ("hf_vlm_trl", "qwen25vl_card", "lora_posttrain", "tinker_verbs"),
+    "sft_chat": ("four_verbs", "lora_posttrain"),
+    "vlm_sft": ("hf_vlm_trl", "qwen25vl_card", "lora_posttrain", "four_verbs"),
     "vlm_classifier": ("hf_vlm_trl", "qwen25vl_card"),
-    "rl_verifiable": ("tinker_verbs", "grpo", "lora_posttrain"),
-    "preference_dpo": ("tinker_verbs", "lora_posttrain"),
+    "rl_verifiable": ("four_verbs", "grpo", "lora_posttrain"),
+    "preference_dpo": ("four_verbs", "lora_posttrain"),
     "robot_offline": ("qwen25vl_card", "hf_vlm_trl", "lora_posttrain"),
 }
 

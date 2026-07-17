@@ -1,4 +1,4 @@
-"""Basic SFT recipe — CE on assistant tokens (Tinker-shaped loop).
+"""Basic SFT recipe — CE on assistant tokens (forward_backward + optim_step).
 
 Runs against any ServiceClient backend (fake today; PEFT worker later).
 Shape/knobs should come from ``plan_recipe`` / model card inspection.
