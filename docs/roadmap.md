@@ -45,7 +45,7 @@ Success looks like: a researcher or roboticist can SFT/RL a small LLM/VLM from a
 
 **Non-goals:** dual-Spark TP train; vision; RL losses (LocalBackend v0 is CE-only).
 
-## Phase 2 — Sample/train split *(current)*
+## Phase 2 — Sample/train split *(complete)*
 
 **Exit criteria**
 
@@ -72,7 +72,7 @@ Success looks like: a researcher or roboticist can SFT/RL a small LLM/VLM from a
       logged with recipe, shape, and reasons — `anvil/control/audit.py` +
       `/api/audit` (start of the control-plane audit trail)  
 
-## Phase 2.5 — RL observability (the RL debugger)
+## Phase 2.5 — RL observability (the RL debugger) *(core complete; J-Lens shelved)*
 
 **Why:** RL runs fail quietly. Reward climbs while the policy degrades, group
 rewards homogenize and advantages collapse to zero, entropy crashes — and the
@@ -132,14 +132,20 @@ the base never changes, only the LoRA adapter does, and that is megabytes):
 **Non-goals:** per-token J-lens on rollouts (debugger view, not hot path);
 autointerp beyond the J-lens readout.
 
-## Phase 3 — Vision first-class
+## Phase 3 — Vision first-class *(current)*
+
+**Working plan:** [`docs/phase3-vision.md`](phase3-vision.md) · **datasets:** [`docs/datasets-robotics.md`](datasets-robotics.md)
 
 **Exit criteria**
 
-- [ ] Media store (content-addressed refs)  
-- [ ] Multimodal message schema + renderer  
-- [ ] VLM SFT recipe + optional classifier-style recipe  
-- [ ] Freeze/LoRA knobs for encoder vs projector vs LM  
+- [x] Media store (content-addressed refs) — `LocalMediaStore` + `put_path` / path resolve  
+- [x] Multimodal message schema + serde — `Example`/`Message` public JSON; **Trajectory** for robot demos  
+- [x] JSONL / path ingest — `anvil.data.ingest` (Bridge/OXE convert *into* this shape)  
+- [ ] Multimodal **renderer** (processor-backed, e.g. Qwen2.5-VL) + train/sample prefix tests  
+- [ ] VLM SFT recipe on real frames (forge) + optional classifier-style recipe  
+- [x] Freeze/LoRA knobs for encoder vs projector vs LM — already in recipe plans (`vision_encoder` default off)  
+
+**Near-term test sources:** BridgeData V2, OXE subsample, LeRobot hub sets, Robo2VLM — see datasets doc.
 
 ## Phase 4 — Robot / Jetson edge loop
 
@@ -204,3 +210,4 @@ For a spin-off agent session:
 | 2026-07-17 | J0 spike runbook: `scripts/jlens_spike.py` + `docs/spikes/jlens-math.md` (forge GO/NO-GO) |
 | 2026-07-17 | J1 J-Lens artifact path: `anvil/observe/jlens.py` schema v1, `log_jlens` → `jlens.jsonl`, order-score helpers + `jlens_order_collapsed`, `GET /api/observe/{id}/jlens` — no real lens dep; permanent panel still spike-gated |
 | 2026-07-17 | J0 forge run **NO-GO**: Qwen2.5-1.5B + fit_n=32 (~18 min), lens at `/mnt/data/models/lenses/qwen2.5-1.5b-instruct/`; apply on 3 math probes at last prompt token → 0 stage hits / 0 answer hits (late tops = Sure/First/Okay). Artifacts `/mnt/data/anvil-runs/jlens-spike-20260717-191152/`. Writeup filled; permanent panel remains blocked |
+| 2026-07-17 | **Phase 3 opened (P3.0):** media store `put_path`/path resolve; Example/Message public serde; `Trajectory` → VLM SFT examples; `anvil.data.ingest` JSONL path ingest; docs `phase3-vision.md` + `datasets-robotics.md` (OXE, Bridge, OpenVLA, LeRobot, Robo2VLM). Next: processor-backed VLM renderer |
