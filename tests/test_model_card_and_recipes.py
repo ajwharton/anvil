@@ -100,3 +100,19 @@ def test_grpo_group_advantages_and_loop():
     assert out.steps_run == 2
     assert out.plan.loss_fn == "importance_sampling"
     assert len(out.mean_reward) == 2
+
+
+def test_grpo_loop_local_backend():
+    """Full GRPO loop against LocalBackend — sample → reward → group advantages
+    → IS forward_backward → optim_step, all with real logprobs and grads."""
+    out = run_grpo(
+        base_model="hf-internal-testing/tiny-random-gpt2",
+        prompts=[[10, 11, 12, 13]],
+        group_size=2,
+        steps=2,
+        endpoint="local://",
+    )
+    assert out.steps_run == 2
+    assert out.plan.loss_fn == "importance_sampling"
+    assert len(out.losses) == 2 and all(x == x for x in out.losses)  # finite
+    assert len(out.mean_reward) == 2
