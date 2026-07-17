@@ -6,8 +6,13 @@ Public pattern (DeepSeekMath GRPO + Tinker RL loop):
   3. group-relative advantages
   4. forward_backward(importance_sampling | ppo) + optim_step
 
-Real rewards and token logprobs land with Phase 1–2 workers; fake backend
-exercises the control flow today.
+**RL datum convention** (Phase 2; enforced by LocalBackend._forward_backward_rl):
+each datum carries the FULL sequence context — ``model_input`` is
+``prompt + completion[:-1]``, and ``target_tokens`` / ``logprobs`` /
+``advantages`` are all length-C arrays aligned to the completion. Old-policy
+logprobs come straight from ``SampledSequence.logprobs``; the backend slices
+the last C positions' logits so old and current logprobs align by
+construction. Use ``datum_from_rollout`` — do not hand-roll this shape.
 """
 
 from __future__ import annotations
@@ -20,6 +25,40 @@ from anvil.protocol.types import AdamParams, Datum, LoraTargets, ModelInput, Sam
 from anvil.recipes.profiles import JobPattern, RecipePlan, plan_recipe
 
 RewardFn = Callable[[str, Sequence[int]], float]
+
+
+def datum_from_rollout(
+    prompt_tokens: Sequence[int],
+    completion_tokens: Sequence[int],
+    old_logprobs: Sequence[float],
+    advantage: float,
+    *,
+    weights: Sequence[float] | None = None,
+) -> Datum:
+    """Build one GRPO/IS datum from a sampled completion.
+
+    prompt_tokens + completion_tokens are the full episode; old_logprobs are
+    the sampling policy's per-token logprobs (``SampledSequence.logprobs``);
+    advantage is broadcast over all completion tokens (GRPO style).
+    """
+    prompt = [int(t) for t in prompt_tokens]
+    comp = [int(t) for t in completion_tokens]
+    lp = [float(x) for x in old_logprobs]
+    if not comp:
+        raise ValueError("empty completion — nothing to train on")
+    if len(lp) != len(comp):
+        raise ValueError(
+            f"old_logprobs ({len(lp)}) must align to completion tokens ({len(comp)})"
+        )
+    return Datum(
+        model_input=ModelInput.from_ints(prompt + comp[:-1]),
+        loss_fn_inputs={
+            "target_tokens": comp,
+            "logprobs": lp,
+            "advantages": [float(advantage)] * len(comp),
+            "weights": ([float(x) for x in weights] if weights is not None else [1.0] * len(comp)),
+        },
+    )
 
 
 @dataclass
@@ -99,25 +138,16 @@ def run_grpo(
                 rewards.append(r)
                 step_rewards.append(r)
             adv = group_advantages(rewards)
-            for seq, a, r in zip(sample.sequences, adv, rewards, strict=True):
-                # Toy: completion tokens only, as if they were the full sequence.
-                # TODO(Phase 2): a real IS/PPO worker must build model_input as
-                # prompt+completion and align old-policy logprobs to the target
-                # positions — do NOT cargo-cult this shape into the real worker.
-                toks = list(seq.tokens)
-                if len(toks) < 2:
+            for seq, a in zip(sample.sequences, adv, strict=True):
+                if not seq.tokens:
                     continue
-                logprobs = list(seq.logprobs) if seq.logprobs else [-1.0] * len(toks)
-                batch.append(
-                    Datum(
-                        model_input=ModelInput.from_ints(toks[:-1]),
-                        loss_fn_inputs={
-                            "target_tokens": toks[1:],
-                            "weights": [1.0] * (len(toks) - 1),
-                            "logprobs": logprobs[1:] if len(logprobs) > 1 else logprobs,
-                            "advantages": [a] * (len(toks) - 1),
-                        },
+                if seq.logprobs is None:
+                    raise ValueError(
+                        "sampler returned no per-token logprobs — old-policy "
+                        "logprobs are required for the IS/PPO family"
                     )
+                batch.append(
+                    datum_from_rollout(prompt_tokens, seq.tokens, seq.logprobs, a)
                 )
 
         if not batch:
