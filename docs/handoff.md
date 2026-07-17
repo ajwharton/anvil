@@ -30,4 +30,10 @@ Do **not** preload mia-rl scoreboard, coach ontology, or full dual-Spark ops his
 
 ## Done looks like
 
-PR merged against an exit criterion in `docs/roadmap.md`, or a clear blocked note with next decision.
+PR **opened** (not agent-merged) against an exit criterion in `docs/roadmap.md`, ready for Andrew to review and merge — or a clear blocked note with next decision.
+
+## Git / PR (Mia-aligned)
+
+- Never push to `main`.  
+- `feat/…` branch → `gh pr create` → stop; human merges.  
+- Details: `docs/development-process.md`.

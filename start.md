@@ -25,6 +25,7 @@ Not a full MoE train stack on day one. Inspiration one-liner lives in `README.md
 ## Red lines
 
 - **Public repo** — no secrets, keys, host IPs of private LAN, or personal infra dumps in commits.
+- **No direct pushes to `main`.** Branch → PR → **Andrew merges** (Mia-style). Agents never `gh pr merge` unless explicitly told for that PR. See `docs/development-process.md`.
 - Prefer **small PRs**; design changes go through `docs/` before large code.
 - Do not brand Anvil with third-party product names or claim proprietary API compatibility.
 - Vision and robot/Jetson paths stay **first-class in design**; don’t strip them to ship text-only forever.
@@ -45,8 +46,9 @@ Not a full MoE train stack on day one. Inspiration one-liner lives in `README.md
 ```text
 docs/design.md      # architecture SSOT
 docs/roadmap.md     # phases and exit criteria
-docs/governance.md  # maintainers, DCO, decision process
-README.md           # human front door
+docs/governance.md           # maintainers, DCO, decision process
+docs/development-process.md  # branch → PR → human merge (Mia-aligned)
+README.md                    # human front door
 ```
 
 ## Pull-on-miss only
@@ -56,6 +58,7 @@ README.md           # human front door
 | `docs/design.md` | API/backend/vision/Jetson design detail |
 | `docs/roadmap.md` | Phase scope, exit criteria, next gate |
 | `docs/governance.md` | Contribution / maintainer / license dispute |
+| `docs/development-process.md` | PR workflow; who merges |
 | `CONTRIBUTING.md` | PR / test expectations |
 | `docs/handoff.md` | Spinning a new agent session off this project |
 | `docs/models.md` | Reference base models (VLM / Jetson); pull script |
