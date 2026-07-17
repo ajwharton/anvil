@@ -70,7 +70,7 @@ def test_image_part_raises(renderer: HFChatRenderer) -> None:
             Message(role="assistant", content=(TextPart(text="a grasp"),)),
         )
     )
-    with pytest.raises(NotImplementedError, match="Phase 3"):
+    with pytest.raises(NotImplementedError, match="HFVLMRenderer"):
         renderer.render_example_for_sft(ex)
 
 

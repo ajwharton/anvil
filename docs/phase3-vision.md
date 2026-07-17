@@ -12,8 +12,8 @@ A researcher or roboticist can SFT (and later RL) a **VLM** with **image refs** 
 
 | Slice | Deliverable | Status |
 |-------|-------------|--------|
-| **P3.0** | Media store harden + message/trajectory serde + JSONL ingest + robotics dataset notes | **this PR** |
-| **P3.1** | Processor-backed VLM renderer (Qwen2.5-VL) with train/sample prefix tests | next |
+| **P3.0** | Media store harden + message/trajectory serde + JSONL ingest + robotics dataset notes | **done** |
+| **P3.1** | Processor-backed VLM renderer (`HFVLMRenderer`) with train/sample prefix tests | **this PR** |
 | **P3.2** | `LocalBackend` / `local://` multimodal CE path (or explicit “text loss + frozen vision” smoke) | next |
 | **P3.3** | `run_vlm_sft` on forge with real frames (Bridge or toy CAS) + export | next |
 | **P3.4** | Classifier / rubric recipe; web knobs for vision freeze | later |
