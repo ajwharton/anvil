@@ -1,39 +1,21 @@
 #!/usr/bin/env python3
 """J0 forge spike — fit/apply Jacobian lens on a small dense model (math order gate).
 
-Phase 2.5 last gate (see docs/roadmap.md, docs/spikes/jlens-math.md):
+Protocols (``--protocol``):
 
-  Reproduce "intermediate steps light up in order" on multi-step arithmetic
-  before any permanent anvil-web J-Lens panel lands.
+  last_prompt   v1 — apply at last prompt token only (known weak for math)
+  cot_in_prompt v2 — prompt already contains intermediate steps; multi-position
+  generate      v2 — greedy-generate a short CoT, then apply on full sequence
 
-**Where to run:** forge (or hammer) with GPU + lab model path. Not on the Mac
-for fit/apply of multi‑GB bases. Mac may run ``--check`` / dry docs only.
+Phase 2.5 gate: reproduce "intermediate steps light up in order" before a
+permanent anvil-web J-Lens panel. See docs/spikes/jlens-math.md.
 
-Examples (on forge)::
+Examples (forge)::
 
-  # deps + paths
-  python scripts/jlens_spike.py check \\
-    --model-path /mnt/data/models/Qwen2.5-1.5B-Instruct
-
-  # fit once (writes lens under /mnt/data/models/lenses/<name>/)
-  python scripts/jlens_spike.py fit \\
-    --model-path /mnt/data/models/Qwen2.5-1.5B-Instruct \\
-    --device cuda
-
-  # apply math probes + order score → JSON + markdown stub
   python scripts/jlens_spike.py apply \\
-    --model-path /mnt/data/models/Qwen2.5-1.5B-Instruct \\
-    --lens-path /mnt/data/models/lenses/Qwen2.5-1.5B-Instruct/jacobian_lens.pt \\
-    --out /mnt/data/anvil-runs/jlens-spike-$(date +%Y%m%d)
-
-  # fit if missing, then apply
-  python scripts/jlens_spike.py all \\
-    --model-path /mnt/data/models/Qwen2.5-1.5B-Instruct \\
-    --out /mnt/data/anvil-runs/jlens-spike
-
-Requires optional deps (lab venv)::
-
-  pip install 'git+https://github.com/anthropics/jacobian-lens.git' torch transformers
+    --model-path /mnt/data/models/qwen2.5-1.5b-instruct \\
+    --protocol cot_in_prompt,generate \\
+    --out /mnt/data/anvil-runs/jlens-spike-v2
 """
 
 from __future__ import annotations
@@ -48,28 +30,34 @@ from typing import Any, Sequence
 
 
 # ---------------------------------------------------------------------------
-# Math probe set — intermediate concepts should light before the answer
+# Math probe set
 # ---------------------------------------------------------------------------
 
 
 @dataclass(frozen=True)
 class MathProbe:
-    """One multi-step prompt with ordered concept stages (strings to match in tops)."""
+    """Multi-step probe with ordered concept stages + optional CoT body."""
 
     id: str
     prompt: str
-    # stages earliest → latest; each stage is a list of acceptable surface forms
     stages: tuple[tuple[str, ...], ...]
     answer: str
+    # Partial solution already written (protocol cot_in_prompt)
+    cot_prompt: str = ""
 
 
-# Stages are deliberately short token fragments the unembedding might surface.
 DEFAULT_PROBES: tuple[MathProbe, ...] = (
     MathProbe(
         id="add_then_mul",
         prompt=(
             "Solve step by step. First add 3 and 4, then multiply the sum by 2. "
             "Final answer only after the steps.\n"
+        ),
+        cot_prompt=(
+            "Solve step by step.\n"
+            "Problem: First add 3 and 4, then multiply the sum by 2.\n"
+            "Step 1: 3 + 4 = 7\n"
+            "Step 2: 7 * 2 = "
         ),
         stages=(
             ("3", "three"),
@@ -86,6 +74,12 @@ DEFAULT_PROBES: tuple[MathProbe, ...] = (
             "Solve step by step. Start with 20, subtract 5, then subtract 3. "
             "Final answer only after the steps.\n"
         ),
+        cot_prompt=(
+            "Solve step by step.\n"
+            "Problem: Start with 20, subtract 5, then subtract 3.\n"
+            "Step 1: 20 - 5 = 15\n"
+            "Step 2: 15 - 3 = "
+        ),
         stages=(
             ("20",),
             ("5",),
@@ -101,6 +95,12 @@ DEFAULT_PROBES: tuple[MathProbe, ...] = (
             "Solve step by step. Double 6, then add 1. "
             "Final answer only after the steps.\n"
         ),
+        cot_prompt=(
+            "Solve step by step.\n"
+            "Problem: Double 6, then add 1.\n"
+            "Step 1: 6 * 2 = 12\n"
+            "Step 2: 12 + 1 = "
+        ),
         stages=(
             ("6", "six"),
             ("2", "double", "times"),
@@ -113,15 +113,16 @@ DEFAULT_PROBES: tuple[MathProbe, ...] = (
 )
 
 
-DEFAULT_MODEL_PATH = "/mnt/data/models/Qwen2.5-1.5B-Instruct"
+DEFAULT_MODEL_PATH = "/mnt/data/models/qwen2.5-1.5b-instruct"
 DEFAULT_LENS_ROOT = "/mnt/data/models/lenses"
-DEFAULT_FIT_N = 64  # paper uses more; 64 is a usable forge smoke
+DEFAULT_FIT_N = 64
 DEFAULT_SEQ_LEN = 128
 DEFAULT_TOP_K = 8
+DEFAULT_PROTOCOLS = ("cot_in_prompt", "generate", "last_prompt")
 
 
 # ---------------------------------------------------------------------------
-# Scoring — prefer package SSOT (J1); local fallback if anvil not on path
+# Scoring — package SSOT with local fallback
 # ---------------------------------------------------------------------------
 
 try:
@@ -129,24 +130,34 @@ try:
         answer_min_rank,
         earliest_stage_layers,
         intermediate_order_score,
+        token_matches,
         top_tokens_contain,
     )
-except ImportError:  # pragma: no cover — bare script on forge without install
+except ImportError:  # pragma: no cover
 
     def _norm_tok(s: str) -> str:
         return re.sub(r"\s+", "", s.strip().lower())
 
-    def top_tokens_contain(top_strings: Sequence[str], candidates: Sequence[str]) -> bool:
-        tops = {_norm_tok(t) for t in top_strings}
-        for c in candidates:
-            nc = _norm_tok(c)
-            if not nc:
-                continue
-            if nc in tops:
-                return True
-            if any(nc in t or t in nc for t in tops if t):
-                return True
+    def _alnum(s: str) -> str:
+        return re.sub(r"[^0-9a-z]+", "", _norm_tok(s))
+
+    def token_matches(surface: str, candidate: str) -> bool:
+        s, c = _norm_tok(surface), _norm_tok(candidate)
+        if not s or not c:
+            return False
+        if s == c:
+            return True
+        sa, ca = _alnum(surface), _alnum(candidate)
+        if not sa or not ca:
+            return False
+        if ca.isdigit() or sa.isdigit():
+            return sa == ca
+        if len(ca) >= 2 and (ca in sa or sa in ca):
+            return True
         return False
+
+    def top_tokens_contain(top_strings: Sequence[str], candidates: Sequence[str]) -> bool:
+        return any(token_matches(t, c) for t in top_strings if t for c in candidates)
 
     def earliest_stage_layers(
         layer_tops: dict[int, list[str]],
@@ -167,8 +178,7 @@ except ImportError:  # pragma: no cover — bare script on forge without install
         known = [(i, L) for i, L in enumerate(stage_layers) if L is not None]
         if len(known) < 2:
             return None
-        ok = 0
-        total = 0
+        ok = total = 0
         for (_, la), (_, lb) in zip(known, known[1:]):
             total += 1
             if lb >= la:
@@ -179,15 +189,35 @@ except ImportError:  # pragma: no cover — bare script on forge without install
         best: int | None = None
         for tops in layer_tops.values():
             for i, t in enumerate(tops):
-                if _norm_tok(answer) in _norm_tok(t) or _norm_tok(t) in _norm_tok(answer):
+                if token_matches(t, answer):
                     rank = i + 1
                     best = rank if best is None else min(best, rank)
                     break
         return best
 
 
+def position_order_score(
+    pos_tops: dict[int, list[str]],
+    stages: Sequence[Sequence[str]],
+) -> tuple[float | None, list[int | None]]:
+    """Earliest *sequence position index* where each stage hits (mid-layer tops).
+
+    pos_tops maps position index 0..n-1 → top token strings at a fixed layer.
+    """
+    order_idx = sorted(pos_tops.keys())
+    stage_pos: list[int | None] = []
+    for stage in stages:
+        hit: int | None = None
+        for p in order_idx:
+            if top_tokens_contain(pos_tops[p], stage):
+                hit = p
+                break
+        stage_pos.append(hit)
+    return intermediate_order_score(stage_pos), stage_pos
+
+
 # ---------------------------------------------------------------------------
-# jlens backend (optional import)
+# jlens backend
 # ---------------------------------------------------------------------------
 
 
@@ -228,58 +258,74 @@ def load_hf_model(model_path: str, device: str):
     tok = transformers.AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
     if tok.pad_token is None:
         tok.pad_token = tok.eos_token
-    hf = transformers.AutoModelForCausalLM.from_pretrained(
-        model_path,
-        torch_dtype=dtype,
-        trust_remote_code=True,
-    )
+    try:
+        hf = transformers.AutoModelForCausalLM.from_pretrained(
+            model_path, dtype=dtype, trust_remote_code=True
+        )
+    except TypeError:
+        hf = transformers.AutoModelForCausalLM.from_pretrained(
+            model_path, torch_dtype=dtype, trust_remote_code=True
+        )
     hf.to(device)
     hf.eval()
     model = jlens.from_hf(hf, tok)
     return jlens, model, tok, hf
 
 
+def load_lens(jlens: Any, lens_path: Path) -> Any:
+    if hasattr(jlens.JacobianLens, "load"):
+        return jlens.JacobianLens.load(str(lens_path))
+    if hasattr(jlens.JacobianLens, "from_pretrained") and lens_path.is_dir():
+        return jlens.JacobianLens.from_pretrained(str(lens_path))
+    import torch
+
+    obj = torch.load(lens_path, map_location="cpu", weights_only=False)
+    if isinstance(obj, jlens.JacobianLens):
+        return obj
+    if hasattr(jlens.JacobianLens, "from_state_dict"):
+        return jlens.JacobianLens.from_state_dict(obj)
+    return obj
+
+
 def cmd_check(args: argparse.Namespace) -> int:
     print("jlens_spike check")
     model_path = resolve_model_path(args.model_path, args.hf_id)
     p = Path(model_path)
-    exists = p.is_dir()
-    print(f"  model_path: {model_path}  local_dir={exists}")
-    if exists:
-        print(f"  entries: {len(list(p.iterdir()))}")
+    print(f"  model_path: {model_path}  local_dir={p.is_dir()}")
     lens = Path(args.lens_path) if args.lens_path else default_lens_path(model_path)
     print(f"  lens_path: {lens}  exists={lens.is_file()}")
     try:
-        import jlens  # noqa: F401
         import torch
         import transformers
 
         print(f"  torch {torch.__version__} cuda={torch.cuda.is_available()}")
         print(f"  transformers {transformers.__version__}")
+        import jlens  # noqa: F401
+
         print("  jlens OK")
     except ImportError as e:
         print(f"  deps MISSING: {e}")
         return 1
     print("  probes:", len(DEFAULT_PROBES))
     for pr in DEFAULT_PROBES:
-        print(f"    - {pr.id}: {len(pr.stages)} stages → answer {pr.answer}")
+        print(f"    - {pr.id}: stages={len(pr.stages)} answer={pr.answer} cot={bool(pr.cot_prompt)}")
+    print("  protocols:", ",".join(args.protocol) if hasattr(args, "protocol") else DEFAULT_PROTOCOLS)
     return 0
 
 
 def _fit_prompts(n: int, seq_len: int) -> list[str]:
-    """Synthetic fit corpus — no external download required for the smoke."""
     seeds = [
         "The capital of France is Paris and the river is the Seine.",
-        "In arithmetic, two plus two equals four.",
+        "In arithmetic, two plus two equals four. Three plus four equals seven.",
+        "Twenty minus five is fifteen. Fifteen minus three is twelve.",
+        "Double six is twelve. Twelve plus one is thirteen.",
         "A recipe calls for flour, water, yeast, and salt.",
-        "The speed of light is approximately three times ten to the eight meters per second.",
-        "Once upon a time there was a small workshop under a mountain.",
     ]
     out: list[str] = []
     i = 0
     while len(out) < n:
         s = seeds[i % len(seeds)] + f" Example {i}. " + ("lorem " * 20)
-        out.append(s[: seq_len * 4])  # rough char budget; tokenizer truncates in fit
+        out.append(s[: seq_len * 4])
         i += 1
     return out
 
@@ -295,7 +341,6 @@ def cmd_fit(args: argparse.Namespace) -> int:
     prompts = _fit_prompts(args.fit_n, args.seq_len)
     print(f"fitting lens on {len(prompts)} prompts → {out}", flush=True)
     t0 = time.monotonic()
-    # API: jlens.fit(model, prompts=..., checkpoint_path=...)
     lens = jlens.fit(
         model,
         prompts=prompts,
@@ -308,7 +353,6 @@ def cmd_fit(args: argparse.Namespace) -> int:
         "seq_len": args.seq_len,
         "wall_time_s": time.monotonic() - t0,
         "lens_path": str(out),
-        "note": "forge smoke fit; paper uses larger corpus — re-fit for quality",
     }
     out.with_suffix(".meta.json").write_text(json.dumps(meta, indent=2) + "\n", encoding="utf-8")
     print(f"saved {out} in {meta['wall_time_s']:.1f}s", flush=True)
@@ -318,99 +362,210 @@ def cmd_fit(args: argparse.Namespace) -> int:
 def _layer_index(key: Any) -> int:
     if isinstance(key, int):
         return key
-    s = str(key)
-    m = re.search(r"(\d+)", s)
+    m = re.search(r"(\d+)", str(key))
     return int(m.group(1)) if m else 0
 
 
-def apply_one(
-    jlens_mod: Any,
-    lens: Any,
-    model: Any,
-    tok: Any,
-    probe: MathProbe,
-    *,
-    top_k: int,
-    positions: Sequence[int],
-) -> dict[str, Any]:
-    """Apply lens; return layer→top token strings + scores."""
-    t0 = time.monotonic()
-    lens_logits, _model_logits, _extra = lens.apply(
-        model, probe.prompt, positions=list(positions)
-    )
-    # lens_logits: layer → tensor [n_pos, vocab] or similar
+def _row_topk(logits: Any, pos_i: int, top_k: int, tok: Any) -> list[str]:
+    t = logits
+    if hasattr(t, "ndim") and t.ndim == 3:
+        t = t[0]
+    if hasattr(t, "ndim") and t.ndim >= 2:
+        # [n_pos, vocab]
+        n_pos = t.shape[0]
+        idx = pos_i if pos_i >= 0 else n_pos + pos_i
+        idx = max(0, min(n_pos - 1, idx))
+        row = t[idx]
+    else:
+        row = t
+    k = min(top_k, int(row.numel()) if hasattr(row, "numel") else top_k)
+    _, ids = row.topk(k)
+    flat = ids.detach().cpu().tolist()
+    if isinstance(flat, int):
+        flat = [flat]
+    out: list[int] = []
+    for x in flat:
+        if isinstance(x, list):
+            out.extend(int(y) for y in x)
+        else:
+            out.append(int(x))
+    return [tok.decode([i], skip_special_tokens=False) for i in out[:top_k]]
+
+
+def _layer_tops_pooled(
+    lens_logits: dict[Any, Any], tok: Any, top_k: int, pos_indices: Sequence[int]
+) -> dict[int, list[str]]:
+    """Union top-k strings across positions, per layer (order preserved, deduped)."""
     layer_tops: dict[int, list[str]] = {}
     for layer_key, logits in lens_logits.items():
         L = _layer_index(layer_key)
-        # take last position in the returned tensor
-        t = logits
-        if hasattr(t, "ndim") and t.ndim >= 2:
-            row = t[0] if t.shape[0] <= t.shape[-1] else t[-1]
-            if row.ndim > 1:
-                row = row[-1]
-        else:
-            row = t
-        k = min(top_k, int(row.numel()) if hasattr(row, "numel") else top_k)
-        vals, idx = row.topk(k)
-        ids = idx.detach().cpu().tolist()
-        if isinstance(ids, int):
-            ids = [ids]
-        # flatten nested
-        flat: list[int] = []
-        for x in ids:
-            if isinstance(x, list):
-                flat.extend(int(y) for y in x)
-            else:
-                flat.append(int(x))
-        tops = [tok.decode([i], skip_special_tokens=False) for i in flat[:top_k]]
-        layer_tops[L] = tops
+        seen: list[str] = []
+        for pi in range(len(pos_indices)):
+            for t in _row_topk(logits, pi, top_k, tok):
+                if t not in seen:
+                    seen.append(t)
+        layer_tops[L] = seen[: max(top_k * 2, top_k)]
+    return layer_tops
+
+
+def _mid_layer_pos_tops(
+    lens_logits: dict[Any, Any], tok: Any, top_k: int, n_pos: int
+) -> dict[int, list[str]]:
+    layers = sorted(lens_logits.keys(), key=_layer_index)
+    mid = layers[len(layers) // 2]
+    logits = lens_logits[mid]
+    return {pi: _row_topk(logits, pi, top_k, tok) for pi in range(n_pos)}
+
+
+def _greedy_complete(hf: Any, tok: Any, prompt: str, device: str, max_new: int) -> str:
+    import torch
+
+    enc = tok(prompt, return_tensors="pt")
+    enc = {k: v.to(device) for k, v in enc.items()}
+    with torch.no_grad():
+        out = hf.generate(
+            **enc,
+            max_new_tokens=max_new,
+            do_sample=False,
+            pad_token_id=tok.pad_token_id or tok.eos_token_id,
+        )
+    return tok.decode(out[0], skip_special_tokens=True)
+
+
+def apply_text(
+    lens: Any,
+    model: Any,
+    tok: Any,
+    text: str,
+    *,
+    positions: Sequence[int],
+    top_k: int,
+    probe: MathProbe,
+    protocol: str,
+) -> dict[str, Any]:
+    t0 = time.monotonic()
+    lens_logits, _model_logits, _extra = lens.apply(model, text, positions=list(positions))
+    n_pos = len(positions)
+    layer_tops = _layer_tops_pooled(lens_logits, tok, top_k, positions)
+    # also last-position-only for comparison
+    last_only: dict[int, list[str]] = {}
+    for lk, logits in lens_logits.items():
+        last_only[_layer_index(lk)] = _row_topk(logits, n_pos - 1, top_k, tok)
 
     stage_layers = earliest_stage_layers(layer_tops, probe.stages)
     order = intermediate_order_score(stage_layers)
     ans_rank = answer_min_rank(layer_tops, probe.answer)
+    stage_layers_last = earliest_stage_layers(last_only, probe.stages)
+    order_last = intermediate_order_score(stage_layers_last)
+
+    pos_tops = _mid_layer_pos_tops(lens_logits, tok, top_k, n_pos)
+    pos_order, stage_pos = position_order_score(pos_tops, probe.stages)
+
     return {
         "probe_id": probe.id,
-        "prompt": probe.prompt,
+        "protocol": protocol,
+        "text_preview": text[:240],
         "answer": probe.answer,
         "stages": [list(s) for s in probe.stages],
+        "positions": list(positions),
         "stage_layers": stage_layers,
         "intermediate_order_score": order,
         "answer_min_rank": ans_rank,
-        "layer_tops": {str(k): v for k, v in sorted(layer_tops.items())},
+        "stage_layers_last_pos": stage_layers_last,
+        "order_score_last_pos": order_last,
+        "position_order_score": pos_order,
+        "stage_positions_mid_layer": stage_pos,
+        "layer_tops_pooled": {str(k): v for k, v in sorted(layer_tops.items())},
+        "layer_tops_last": {str(k): v for k, v in sorted(last_only.items())},
+        "mid_layer_pos_tops": {str(k): v for k, v in sorted(pos_tops.items())},
         "wall_time_s": time.monotonic() - t0,
     }
 
 
-def _gate_decision(results: list[dict[str, Any]]) -> dict[str, Any]:
-    """Binary go/no-go from order scores + answer ranks."""
-    orders = [
-        r["intermediate_order_score"]
-        for r in results
-        if r.get("intermediate_order_score") is not None
+def _positions_for(text: str, tok: Any, protocol: str, explicit: Sequence[int] | None) -> list[int]:
+    if explicit:
+        return list(explicit)
+    n = len(tok.encode(text))
+    if protocol == "last_prompt":
+        return [-1]
+    # multi-position: last min(12, n) tokens
+    span = min(12, max(1, n))
+    return list(range(-span, 0))
+
+
+def apply_probe(
+    lens: Any,
+    model: Any,
+    tok: Any,
+    hf: Any,
+    probe: MathProbe,
+    *,
+    protocol: str,
+    top_k: int,
+    device: str,
+    max_new: int,
+    explicit_positions: Sequence[int] | None,
+) -> dict[str, Any]:
+    if protocol == "last_prompt":
+        text = probe.prompt
+    elif protocol == "cot_in_prompt":
+        text = probe.cot_prompt or probe.prompt
+    elif protocol == "generate":
+        text = _greedy_complete(hf, tok, probe.prompt, device, max_new)
+    else:
+        raise ValueError(f"unknown protocol {protocol!r}")
+
+    positions = _positions_for(text, tok, protocol, explicit_positions)
+    rec = apply_text(
+        lens, model, tok, text, positions=positions, top_k=top_k, probe=probe, protocol=protocol
+    )
+    if protocol == "generate":
+        rec["generated_full"] = text
+    return rec
+
+
+def _primary_order(rec: dict[str, Any]) -> float | None:
+    """Gate uses best of pooled-layer order and position order (v2)."""
+    scores = [
+        rec.get("intermediate_order_score"),
+        rec.get("position_order_score"),
     ]
-    ans_hits = sum(1 for r in results if r.get("answer_min_rank") is not None)
+    nums = [float(s) for s in scores if s is not None]
+    return max(nums) if nums else None
+
+
+def _gate_decision(results: list[dict[str, Any]]) -> dict[str, Any]:
+    # Prefer primary_order if set by apply loop
+    orders = []
+    for r in results:
+        if r.get("error"):
+            continue
+        o = r.get("primary_order_score")
+        if o is None:
+            o = _primary_order(r)
+        if o is not None:
+            orders.append(float(o))
+    ans_hits = sum(1 for r in results if r.get("answer_min_rank") is not None and not r.get("error"))
+    n_ok = sum(1 for r in results if not r.get("error"))
     mean_order = sum(orders) / len(orders) if orders else None
-    # Gate (documented in docs/spikes/jlens-math.md):
-    #  - mean intermediate_order_score >= 0.6 over scored probes
-    #  - answer appears in top-k on >= half of probes
     go = (
         mean_order is not None
         and mean_order >= 0.6
-        and ans_hits >= max(1, (len(results) + 1) // 2)
+        and ans_hits >= max(1, (n_ok + 1) // 2)
+        and n_ok > 0
     )
     return {
         "go": go,
         "mean_intermediate_order_score": mean_order,
-        "n_probes": len(results),
+        "n_probes": n_ok,
         "n_order_scored": len(orders),
         "n_answer_in_topk": ans_hits,
-        "thresholds": {
-            "mean_order_min": 0.6,
-            "answer_hit_fraction_min": 0.5,
-        },
-        "decision": "GO — proceed to permanent observe panel"
-        if go
-        else "NO-GO — keep CLI-only; try larger model or more fit data",
+        "thresholds": {"mean_order_min": 0.6, "answer_hit_fraction_min": 0.5},
+        "decision": (
+            "GO — intermediate-order signal supports product panel work"
+            if go
+            else "NO-GO — signal too weak; deprioritize permanent J-Lens panel"
+        ),
     }
 
 
@@ -420,117 +575,149 @@ def cmd_apply(args: argparse.Namespace) -> int:
     if not lens_path.is_file():
         raise SystemExit(f"lens not found: {lens_path} — run fit first")
 
-    jlens, model, tok, _hf = load_hf_model(model_path, args.device)
+    jlens, model, tok, hf = load_hf_model(model_path, args.device)
     print(f"loading lens {lens_path}", flush=True)
-    # Prefer from_pretrained-style if path is a dir; else load local pt
-    if hasattr(jlens.JacobianLens, "load"):
-        lens = jlens.JacobianLens.load(str(lens_path))
-    elif hasattr(jlens.JacobianLens, "from_pretrained") and lens_path.is_dir():
-        lens = jlens.JacobianLens.from_pretrained(str(lens_path))
-    else:
-        # torch load fallback via jlens if available
-        import torch
+    lens = load_lens(jlens, lens_path)
 
-        obj = torch.load(lens_path, map_location="cpu", weights_only=False)
-        if isinstance(obj, jlens.JacobianLens):
-            lens = obj
-        elif hasattr(jlens.JacobianLens, "from_state_dict"):
-            lens = jlens.JacobianLens.from_state_dict(obj)
-        else:
-            lens = obj  # hope it has .apply
+    protocols = list(args.protocol)
+    explicit = None
+    if args.positions.strip() and args.positions.strip() != "auto":
+        explicit = [int(x) for x in args.positions.split(",")]
 
     out_dir = Path(args.out)
     out_dir.mkdir(parents=True, exist_ok=True)
-    results: list[dict[str, Any]] = []
-    positions = [int(x) for x in args.positions.split(",")]
 
-    for probe in DEFAULT_PROBES:
-        print(f"apply {probe.id}…", flush=True)
-        try:
-            rec = apply_one(
-                jlens,
-                lens,
-                model,
-                tok,
-                probe,
-                top_k=args.top_k,
-                positions=positions,
-            )
-        except Exception as e:
-            rec = {
-                "probe_id": probe.id,
-                "error": f"{type(e).__name__}: {e}",
-                "intermediate_order_score": None,
-                "answer_min_rank": None,
-            }
-            print(f"  ERROR {rec['error']}", flush=True)
-        results.append(rec)
-        if rec.get("intermediate_order_score") is not None:
-            print(
-                f"  order={rec['intermediate_order_score']:.2f} "
-                f"answer_rank={rec.get('answer_min_rank')} "
-                f"stages={rec.get('stage_layers')}",
-                flush=True,
-            )
+    all_results: list[dict[str, Any]] = []
+    by_protocol: dict[str, list[dict[str, Any]]] = {}
 
-    gate = _gate_decision(results)
+    for protocol in protocols:
+        print(f"\n=== protocol={protocol} ===", flush=True)
+        prec: list[dict[str, Any]] = []
+        for probe in DEFAULT_PROBES:
+            print(f"apply {probe.id}…", flush=True)
+            try:
+                rec = apply_probe(
+                    lens,
+                    model,
+                    tok,
+                    hf,
+                    probe,
+                    protocol=protocol,
+                    top_k=args.top_k,
+                    device=args.device,
+                    max_new=args.max_new_tokens,
+                    explicit_positions=explicit,
+                )
+                rec["primary_order_score"] = _primary_order(rec)
+                print(
+                    f"  layer_order={rec.get('intermediate_order_score')} "
+                    f"pos_order={rec.get('position_order_score')} "
+                    f"ans_rank={rec.get('answer_min_rank')} "
+                    f"stages_L={rec.get('stage_layers')}",
+                    flush=True,
+                )
+            except Exception as e:
+                rec = {
+                    "probe_id": probe.id,
+                    "protocol": protocol,
+                    "error": f"{type(e).__name__}: {e}",
+                    "intermediate_order_score": None,
+                    "answer_min_rank": None,
+                    "primary_order_score": None,
+                }
+                print(f"  ERROR {rec['error']}", flush=True)
+            prec.append(rec)
+            all_results.append(rec)
+        by_protocol[protocol] = prec
+
+    # Per-protocol gates + overall (best protocol mean used for decision summary)
+    protocol_gates = {p: _gate_decision(rs) for p, rs in by_protocol.items()}
+    # Overall: GO if any protocol is GO
+    any_go = any(g["go"] for g in protocol_gates.values())
+    # Aggregate for primary decision: use best mean among protocols with scores
+    means = [
+        (p, g["mean_intermediate_order_score"])
+        for p, g in protocol_gates.items()
+        if g["mean_intermediate_order_score"] is not None
+    ]
+    best = max(means, key=lambda x: x[1]) if means else (None, None)
+    overall = {
+        "go": any_go,
+        "best_protocol": best[0],
+        "best_mean_order": best[1],
+        "protocol_gates": protocol_gates,
+        "decision": (
+            f"GO via protocol={best[0]}"
+            if any_go
+            else "NO-GO across all protocols — weak pursue signal for permanent panel"
+        ),
+    }
+
     payload = {
-        "schema_version": 1,
-        "spike": "jlens-math-j0",
+        "schema_version": 2,
+        "spike": "jlens-math-j0-v2",
         "model_path": model_path,
         "lens_path": str(lens_path),
         "device": args.device,
         "top_k": args.top_k,
-        "positions": positions,
-        "results": results,
-        "gate": gate,
+        "protocols": protocols,
+        "results": all_results,
+        "gate": overall,
         "ts": time.time(),
     }
     json_path = out_dir / "jlens_spike_results.json"
     json_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     md_path = out_dir / "jlens_spike_results.md"
     md_path.write_text(_results_markdown(payload), encoding="utf-8")
-    print(json.dumps(gate, indent=2))
+    print(json.dumps(overall, indent=2))
     print(f"wrote {json_path}")
     print(f"wrote {md_path}")
-    print("Fill docs/spikes/jlens-math.md from this run (paste gate + notes).")
-    return 0 if gate["go"] else 2  # exit 2 = NO-GO but ran successfully
+    return 0 if any_go else 2
 
 
 def _results_markdown(payload: dict[str, Any]) -> str:
     g = payload["gate"]
     lines = [
-        "# J-Lens spike results",
+        "# J-Lens spike results (protocol v2)",
         "",
         f"- model: `{payload['model_path']}`",
         f"- lens: `{payload['lens_path']}`",
         f"- device: `{payload['device']}`",
+        f"- protocols: `{payload.get('protocols')}`",
         "",
         f"## Gate: **{'GO' if g['go'] else 'NO-GO'}**",
         "",
-        f"- mean intermediate_order_score: `{g['mean_intermediate_order_score']}`",
-        f"- answer in top-k: `{g['n_answer_in_topk']}/{g['n_probes']}`",
-        f"- decision: {g['decision']}",
-        "",
-        "## Per probe",
+        f"- best protocol: `{g.get('best_protocol')}` mean_order=`{g.get('best_mean_order')}`",
+        f"- decision: {g.get('decision')}",
         "",
     ]
+    for p, pg in (g.get("protocol_gates") or {}).items():
+        lines.append(
+            f"### protocol `{p}`: {'GO' if pg['go'] else 'NO-GO'} "
+            f"(mean={pg['mean_intermediate_order_score']}, "
+            f"ans_hits={pg['n_answer_in_topk']}/{pg['n_probes']})"
+        )
+        lines.append("")
+    lines.append("## Per probe")
+    lines.append("")
     for r in payload["results"]:
         if r.get("error"):
-            lines.append(f"### {r['probe_id']} — ERROR\n\n`{r['error']}`\n")
+            lines.append(f"### {r.get('protocol')}/{r.get('probe_id')} — ERROR\n\n`{r['error']}`\n")
             continue
-        lines.append(f"### {r['probe_id']}")
+        lines.append(f"### {r.get('protocol')}/{r.get('probe_id')}")
         lines.append("")
-        lines.append(f"- order score: `{r.get('intermediate_order_score')}`")
-        lines.append(f"- stage layers: `{r.get('stage_layers')}`")
-        lines.append(f"- answer min rank: `{r.get('answer_min_rank')}`")
+        lines.append(f"- primary_order: `{r.get('primary_order_score')}`")
+        lines.append(f"- layer_order (pooled pos): `{r.get('intermediate_order_score')}` stages `{r.get('stage_layers')}`")
+        lines.append(f"- pos_order (mid layer): `{r.get('position_order_score')}` stages `{r.get('stage_positions_mid_layer')}`")
+        lines.append(f"- answer_min_rank: `{r.get('answer_min_rank')}`")
+        lines.append(f"- text: `{r.get('text_preview', '')[:120]}…`")
         lines.append("")
-        # compact mid-layer tops
-        tops = r.get("layer_tops") or {}
+        tops = r.get("layer_tops_last") or {}
         keys = sorted(tops.keys(), key=lambda x: int(x))
-        mid = keys[len(keys) // 3 : 2 * len(keys) // 3] if keys else []
-        for L in mid[:6]:
-            lines.append(f"  - L{L}: {tops[L][:5]}")
+        if keys:
+            mid = keys[len(keys) // 2]
+            lines.append(f"  - last-pos mid L{mid}: {tops[mid][:6]}")
+            lines.append(f"  - last-pos final L{keys[-1]}: {tops[keys[-1]][:6]}")
         lines.append("")
     return "\n".join(lines) + "\n"
 
@@ -550,33 +737,33 @@ def cmd_all(args: argparse.Namespace) -> int:
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
-    p.add_argument(
-        "command",
-        choices=("check", "fit", "apply", "all"),
-        help="check deps/paths | fit lens | apply math probes | fit-if-needed+apply",
-    )
-    p.add_argument("--model-path", default=DEFAULT_MODEL_PATH, help="local HF dir on lab NVMe")
-    p.add_argument("--hf-id", default=None, help="optional HF hub id instead of local path")
-    p.add_argument("--lens-path", default=None, help="path to jacobian_lens.pt")
-    p.add_argument("--device", default="cuda", help="cuda | cuda:0 | cpu")
-    p.add_argument("--fit-n", type=int, default=DEFAULT_FIT_N, help="number of fit prompts")
+    p.add_argument("command", choices=("check", "fit", "apply", "all"))
+    p.add_argument("--model-path", default=DEFAULT_MODEL_PATH)
+    p.add_argument("--hf-id", default=None)
+    p.add_argument("--lens-path", default=None)
+    p.add_argument("--device", default="cuda")
+    p.add_argument("--fit-n", type=int, default=DEFAULT_FIT_N)
     p.add_argument("--seq-len", type=int, default=DEFAULT_SEQ_LEN)
     p.add_argument("--top-k", type=int, default=DEFAULT_TOP_K)
     p.add_argument(
-        "--positions",
-        default="-1",
-        help="comma-separated source positions (default: last token of prompt)",
+        "--protocol",
+        default=",".join(DEFAULT_PROTOCOLS),
+        help="comma list: last_prompt,cot_in_prompt,generate",
     )
     p.add_argument(
-        "--out",
-        default="/mnt/data/anvil-runs/jlens-spike",
-        help="directory for apply JSON/MD results",
+        "--positions",
+        default="auto",
+        help="'auto' or comma-separated positions (e.g. -1 or -8,-7,...,-1)",
     )
+    p.add_argument("--max-new-tokens", type=int, default=48, help="for protocol=generate")
+    p.add_argument("--out", default="/mnt/data/anvil-runs/jlens-spike-v2")
     return p
 
 
 def main(argv: Sequence[str] | None = None) -> int:
     args = build_parser().parse_args(argv)
+    # normalize protocol list
+    args.protocol = [x.strip() for x in str(args.protocol).split(",") if x.strip()]
     if args.command == "check":
         return cmd_check(args)
     if args.command == "fit":

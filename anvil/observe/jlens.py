@@ -53,15 +53,36 @@ def _norm_tok(s: str) -> str:
     return re.sub(r"\s+", "", s.strip().lower())
 
 
+def _alnum(s: str) -> str:
+    return re.sub(r"[^0-9a-z]+", "", _norm_tok(s))
+
+
+def token_matches(surface: str, candidate: str) -> bool:
+    """Match a lens top-token surface form to a stage/answer candidate.
+
+    Digit-only candidates require exact digit equality after stripping
+    non-alnum (so ``"1"`` does **not** match ``"14"`` — v1 bug).
+    Non-digit candidates allow short soft contains (len ≥ 2).
+    """
+    s = _norm_tok(surface)
+    c = _norm_tok(candidate)
+    if not s or not c:
+        return False
+    if s == c:
+        return True
+    sa, ca = _alnum(surface), _alnum(candidate)
+    if not sa or not ca:
+        return False
+    if ca.isdigit() or sa.isdigit():
+        return sa == ca
+    if len(ca) >= 2 and (ca in sa or sa in ca):
+        return True
+    return False
+
+
 def top_tokens_contain(top_strings: Sequence[str], candidates: Sequence[str]) -> bool:
-    tops = {_norm_tok(t) for t in top_strings}
     for c in candidates:
-        nc = _norm_tok(c)
-        if not nc:
-            continue
-        if nc in tops:
-            return True
-        if any(nc in t or t in nc for t in tops if t):
+        if any(token_matches(t, c) for t in top_strings if t):
             return True
     return False
 
@@ -111,7 +132,7 @@ def answer_min_rank(
     best: int | None = None
     for tops in layer_tops.values():
         for i, t in enumerate(tops):
-            if _norm_tok(answer) in _norm_tok(t) or _norm_tok(t) in _norm_tok(answer):
+            if token_matches(t, answer):
                 rank = i + 1
                 best = rank if best is None else min(best, rank)
                 break
