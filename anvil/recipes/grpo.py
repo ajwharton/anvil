@@ -13,14 +13,24 @@ each datum carries the FULL sequence context — ``model_input`` is
 logprobs come straight from ``SampledSequence.logprobs``; the backend slices
 the last C positions' logits so old and current logprobs align by
 construction. Use ``datum_from_rollout`` — do not hand-roll this shape.
+
+**Observability** (Phase 2.5): pass ``run_dir`` and every step appends a
+metrics record (reward mean/std, within-group reward std — the
+advantage-collapse tripwire — loss, fb metrics pass-through) to
+``<run_dir>/metrics.jsonl``; pass ``probes`` and the live policy is
+re-sampled greedily on those fixed prompts every ``probe_every`` steps into
+``<run_dir>/probes.jsonl``. anvil-web tails both (see /api/observe/*).
 """
 
 from __future__ import annotations
 
+import statistics
+import time
 from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 
 from anvil.client.service import ServiceClient
+from anvil.observe.metrics import RunMetricsWriter
 from anvil.protocol.types import AdamParams, Datum, LoraTargets, ModelInput, SamplingParams
 from anvil.recipes.profiles import JobPattern, RecipePlan, plan_recipe
 
@@ -96,7 +106,21 @@ def run_grpo(
     endpoint: str = "fake://",
     plan: RecipePlan | None = None,
     overrides: dict[str, Any] | None = None,
+    run_dir: str | None = None,
+    probes: Sequence[Sequence[int]] | None = None,
+    probe_every: int = 1,
+    detokenize: Callable[[Sequence[int]], str] | None = None,
 ) -> GRPOResult:
+    """Run the GRPO/IS loop.
+
+    Phase 2.5 observability: pass ``run_dir`` to append per-step records to
+    ``<run_dir>/metrics.jsonl`` (reward mean/std, within-group reward std —
+    the advantage-collapse tripwire, loss, IS mean_ratio passthrough) and,
+    when ``probes`` are given, greedy probe completions of the LIVE policy to
+    ``probes.jsonl`` every ``probe_every`` steps. ``detokenize`` maps probe
+    tokens to text for the UI (reward-hacking has no scalar signature — eyes
+    do).
+    """
     plan = plan or build_plan(base_model, **(overrides or {}))
     k = plan.as_knobs()
     svc = ServiceClient(endpoint=endpoint)
@@ -112,14 +136,17 @@ def run_grpo(
     )
     reward_fn = reward_fn or _exact_match_toy
     prompts = list(prompts) if prompts else [list(range(10, 26))]
+    writer = RunMetricsWriter(run_dir) if run_dir else None
 
     losses: list[float] = []
     mean_rewards: list[float] = []
 
-    for _ in range(steps):
-        sc = tc.save_weights_and_get_sampling_client(name=f"grpo-{_}")
+    for step_ix in range(steps):
+        t0 = time.monotonic()
+        sc = tc.save_weights_and_get_sampling_client(name=f"grpo-{step_ix}")
         batch: list[Datum] = []
         step_rewards: list[float] = []
+        group_stds: list[float] = []
 
         for prompt_tokens in prompts:
             prompt = ModelInput.from_ints(prompt_tokens)
@@ -137,6 +164,7 @@ def run_grpo(
                 r = reward_fn("", seq.tokens)
                 rewards.append(r)
                 step_rewards.append(r)
+            group_stds.append(statistics.pstdev(rewards) if len(rewards) > 1 else 0.0)
             adv = group_advantages(rewards)
             for seq, a in zip(sample.sequences, adv, strict=True):
                 if not seq.tokens:
@@ -152,10 +180,45 @@ def run_grpo(
 
         if not batch:
             break
+
+        # Probe the LIVE policy (same weights that generated this batch) —
+        # greedy + fixed seed so completions are comparable across steps.
+        if writer is not None and probes and step_ix % probe_every == 0:
+            for probe_ix, probe_tokens in enumerate(probes):
+                out = sc.sample(
+                    ModelInput.from_ints(probe_tokens),
+                    SamplingParams(max_tokens=plan.max_tokens, temperature=0.0, seed=0),
+                    num_samples=1,
+                ).result()
+                seq = out.sequences[0] if out.sequences else None
+                toks = tuple(seq.tokens) if seq is not None else ()
+                writer.log_probe(
+                    step=step_ix,
+                    probe_idx=probe_ix,
+                    tokens=toks,
+                    text=detokenize(toks) if detokenize else None,
+                    reward=reward_fn("", toks),
+                )
+
         fb = tc.forward_backward(batch, loss_fn=plan.loss_fn).result()
         tc.optim_step(AdamParams(learning_rate=plan.learning_rate)).result()
         losses.append(fb.loss)
         mean_rewards.append(sum(step_rewards) / max(len(step_rewards), 1))
+        if writer is not None:
+            writer.log_step(
+                step=step_ix,
+                reward_mean=mean_rewards[-1],
+                reward_std=(
+                    statistics.pstdev(step_rewards) if len(step_rewards) > 1 else 0.0
+                ),
+                group_reward_std_mean=(
+                    sum(group_stds) / len(group_stds) if group_stds else 0.0
+                ),
+                loss=fb.loss,
+                n_datums=len(batch),
+                fb_metrics=dict(fb.metrics),
+                wall_time_s=time.monotonic() - t0,
+            )
 
     return GRPOResult(
         plan=plan,

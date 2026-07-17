@@ -8,7 +8,8 @@ from __future__ import annotations
 
 import asyncio
 from concurrent.futures import Future as ConcurrentFuture
-from typing import Generic, TypeVar
+from concurrent.futures import ThreadPoolExecutor
+from typing import Callable, Generic, TypeVar
 
 T = TypeVar("T")
 
@@ -52,3 +53,29 @@ def failed(exc: BaseException) -> AnvilFuture[T]:
     fut: ConcurrentFuture[T] = ConcurrentFuture()
     fut.set_exception(exc)
     return AnvilFuture(fut)
+
+
+class VerbQueue:
+    """Single-worker FIFO queue behind one backend — the P2 async path.
+
+    One thread means every verb submitted through a ServiceClient executes in
+    submission order (forward_backward before the optim_step that follows it,
+    per adapter and globally) and backend state is never touched concurrently.
+    On a GPU backend this is the "true async GPU queue" of design §4.3; the
+    caller-facing surface (AnvilFuture.result/done/exception/await) is
+    identical to the inline path, so clients and recipes don't care which
+    side of the queue a backend sits on.
+    """
+
+    def __init__(self) -> None:
+        self._pool = ThreadPoolExecutor(max_workers=1, thread_name_prefix="anvil-verbs")
+
+    def submit(self, fn: Callable[..., T], *args, **kwargs) -> AnvilFuture[T]:
+        return AnvilFuture(self._pool.submit(fn, *args, **kwargs))
+
+    def run(self, fn: Callable[..., T], *args, **kwargs) -> T:
+        """Submit and block — for verbs whose API returns a plain value."""
+        return self.submit(fn, *args, **kwargs).result()
+
+    def shutdown(self) -> None:
+        self._pool.shutdown(wait=True)

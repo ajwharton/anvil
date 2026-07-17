@@ -19,7 +19,7 @@ from typing import Any, Callable
 from fastapi import FastAPI, Request
 from fastapi.responses import JSONResponse
 
-from anvil.backends.base import Backend
+from anvil.backends.base import Backend, SnapshotLoader
 from anvil.protocol.serde import (
     adam_from_wire,
     checkpoint_ref_from_wire,
@@ -153,6 +153,14 @@ def create_app(backend: Backend, *, token: str | None = None) -> FastAPI:
             prompt=model_input_from_wire(body["prompt"]),
         )
         return {"logprobs": to_wire(out)}
+
+    if isinstance(backend, SnapshotLoader):
+
+        @app.post(f"{API}/adapters/{{adapter_id}}/load_snapshot")
+        def load_snapshot(adapter_id: str, body: dict[str, Any]) -> dict[str, Any]:
+            path = str(body["path"])
+            backend.load_snapshot(AdapterId(adapter_id), path)
+            return {"ok": True, "adapter_id": adapter_id, "path": path}
 
     return app
 

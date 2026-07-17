@@ -10,7 +10,7 @@ import argparse
 import os
 
 
-def _build_backend(name: str, root: str | None):
+def _build_backend(name: str, root: str | None, model: str | None = None):
     if name == "fake":
         from anvil.backends.fake import FakeBackend
 
@@ -19,7 +19,13 @@ def _build_backend(name: str, root: str | None):
         from anvil.backends.local import LocalBackend
 
         return LocalBackend(root=root)
-    raise SystemExit(f"unknown backend {name!r}; choose 'local' or 'fake'")
+    if name == "vllm-sample":
+        if not model:
+            raise SystemExit("--model is required for --backend vllm-sample")
+        from anvil.workers.sample import VLLMSampleBackend
+
+        return VLLMSampleBackend(model=model, root=root)
+    raise SystemExit(f"unknown backend {name!r}; choose 'local', 'fake', or 'vllm-sample'")
 
 
 def main(argv: list[str] | None = None) -> None:
@@ -30,8 +36,17 @@ def main(argv: list[str] | None = None) -> None:
     serve.add_argument(
         "--backend",
         default="local",
-        choices=("local", "fake"),
-        help="'local' = torch+PEFT (needs the [local] extra); 'fake' = golden-test stub",
+        choices=("local", "fake", "vllm-sample"),
+        help=(
+            "'local' = torch+PEFT (needs the [local] extra); 'fake' = golden-test "
+            "stub; 'vllm-sample' = sampling-only worker over a vLLM engine (needs "
+            "vllm + --model)"
+        ),
+    )
+    serve.add_argument(
+        "--model",
+        default=None,
+        help="base model id/path for --backend vllm-sample (e.g. Qwen/Qwen2.5-1.5B-Instruct)",
     )
     serve.add_argument("--root", default=None, help="state root for checkpoints/adapters")
     serve.add_argument("--host", default="127.0.0.1", help="bind address (LAN: 0.0.0.0)")
@@ -53,7 +68,7 @@ def main(argv: list[str] | None = None) -> None:
             ) from e
         from anvil.serve.app import create_app
 
-        backend = _build_backend(args.backend, args.root)
+        backend = _build_backend(args.backend, args.root, args.model)
         app = create_app(backend, token=args.token)
         uvicorn.run(app, host=args.host, port=args.port)
 

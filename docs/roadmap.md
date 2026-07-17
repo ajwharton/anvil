@@ -49,7 +49,15 @@ Success looks like: a researcher or roboticist can SFT/RL a small LLM/VLM from a
 
 **Exit criteria**
 
-- [ ] Dedicated sample worker (vLLM) with adapter hot-swap or snapshot  
+- [x] Async futures / queue: `VerbQueue` (single-worker FIFO) behind
+      `ServiceClient(queue=True)` — verbs return genuinely non-blocking
+      `AnvilFuture`s with submission-order execution; same caller surface as
+      the inline path (design §4.3)  
+- [x] Dedicated sample worker (vLLM) with adapter hot-swap — `anvil/workers/sample.py`
+      (`VLLMSampleBackend`, sampling verbs only over a vLLM engine; `load_snapshot`
+      registers PEFT dirs with a fresh LoRA id per push so vLLM never serves a
+      stale cached adapter) + `POST /v1/adapters/{id}/load_snapshot` (registered
+      only for `SnapshotLoader` backends) + `anvil serve --backend vllm-sample --model`  
 - [x] Simple on-policy RL recipe — GRPO/exact-match toy runs end-to-end on
       LocalBackend (sample → reward → group advantages → IS fwd/bwd → optim)  
 - [x] IS/PPO loss family in LocalBackend — importance_sampling + ppo (ε=0.2)
@@ -63,6 +71,57 @@ Success looks like: a researcher or roboticist can SFT/RL a small LLM/VLM from a
 - [x] Gate-override audit events: every `force=True` past a blocked recipe is
       logged with recipe, shape, and reasons — `anvil/control/audit.py` +
       `/api/audit` (start of the control-plane audit trail)  
+
+## Phase 2.5 — RL observability (the RL debugger)
+
+**Why:** RL runs fail quietly. Reward climbs while the policy degrades, group
+rewards homogenize and advantages collapse to zero, entropy crashes — and the
+final eval is the last place any of it shows up. The product answer is a
+debugger for RL: while training runs, continuously probe the live policy,
+graph the signals that precede the downturn, and watch the rollover into
+negative marginal gains as it happens instead of after.
+
+**Ordering (agreed 2026-07-17):** finish the Phase 2 vLLM sample worker first
+(it is the sync substrate), then metrics scaffolding, then the live inference
+tester, then the J-lens bolt-on last.
+
+**Weight-sync tiers** (inference on a model that is simultaneously training —
+the base never changes, only the LoRA adapter does, and that is megabytes):
+
+- Tier 0 (exists): `LocalBackend` samples from the live adapter in-process —
+  free, slow (HF generate), fine for probes
+- Tier 1 (P2 worker): write adapter to tmpfs, `load_snapshot` hot-swap into
+  the running vLLM engine on a K-step cadence; sub-second, no base reload
+- Tier 2 (optional, later): in-memory weight push via vLLM worker RPC
+  (`apply_model`/`collective_rpc`, the TRL-colocate / veRL / NeMo-RL pattern)
+  + `sleep`/`wake_up` for single-box colocation — no memory-editor hacks
+
+**Exit criteria**
+
+- [x] Metrics scaffolding: per-run `metrics.jsonl` appended every RL step —
+      reward mean/std, within-group reward std (advantage-collapse tripwire),
+      IS `mean_ratio` drift, entropy, loss; SSE endpoint + live charts in
+      anvil-web — `anvil/observe/metrics.py` (`RunMetricsWriter`),
+      `run_grpo(run_dir=...)`; `/api/observe/*` + `/observe/{run_id}` page
+      (entropy lands when the sampler exposes it)
+- [x] Live inference tester (Tier 0): fixed probe set sampled greedily from
+      the *current* policy every K steps during a run — `run_grpo(probes=...,
+      probe_every=K, detokenize=...)` → `probes.jsonl`, scored with the reward
+      fn; probe completions rendered inline next to the curves — eyes catch
+      reward hacking before scalars do (Tier 1 vLLM-worker probing still open)
+- [ ] Adapter-sync cadence knob in `run_grpo` (every K steps push
+      `snapshot_for_sample` → sample worker `load_snapshot`)
+- [ ] J-lens spike (LAST, spike-gated): port `anthropics/jacobian-lens` to a
+      small model on forge; reproduce "intermediate steps light up in order"
+      on the GRPO math task; only then a permanent run-detail panel.
+      Grounding: Gurnee, Sofroniew, Lindsey et al., "Verbalizable
+      Representations Form a Global Workspace in Language Models" (Anthropic,
+      2026-07-06) — the J-space is a readout of the model's *unverbalized*
+      reasoning trace, which doubles as evidence for the Mia
+      DPO-needs-reasoning-traces thesis
+
+**Non-goals:** per-token J-lens on rollouts (debugger view, not hot path);
+autointerp beyond the J-lens readout.
 
 ## Phase 3 — Vision first-class
 
@@ -126,3 +185,8 @@ For a spin-off agent session:
 | 2026-07-17 | Gate-override audit events: `anvil/control/audit.py` + `/api/audit`; `plan_recipe(record_override=)`; also fixes latent `POST /api/plan` 422 (closure-local `PlanIn` under future-annotations) |
 | 2026-07-17 | IS/PPO loss family lands in LocalBackend over GRPO-shaped datums (`grpo.datum_from_rollout`: model_input = prompt+completion[:-1], old-policy logprobs aligned to completion targets). Golden tests caught two real bugs: sampler logprobs came from warped HF *scores* (post top-p/temp) instead of raw logits — old-policy logprobs must be the true policy distribution; and the completion-position slice gathered along the vocab dim instead of the sequence dim. Both fixed; `mean_ratio≈1.0` on-policy and +advantage raises completion logprobs |
 | 2026-07-17 | GRPO loop runs end-to-end on LocalBackend — `run_grpo(endpoint="local://")` with real logprobs and grads (sample → reward → group advantages → IS fwd/bwd → optim); covered by `test_grpo_loop_local_backend` |
+| 2026-07-17 | Async futures / queue (design §4.3): `VerbQueue` single-worker FIFO behind `ServiceClient(queue=True)`; `forward_backward`/`optim_step`/`sample`/`compute_logprobs` return non-blocking `AnvilFuture`s, sync verbs route through the queue for serialization; `queue=False` keeps the inline path. 95/95 tests, ruff clean |
+| 2026-07-17 | Phase 2.5 scoped — RL observability (the RL debugger): per-run `metrics.jsonl` + SSE live charts, fixed-probe inference tester on the live policy every K steps, adapter-sync cadence knob; J-lens spike LAST, gated on reproducing "intermediate steps light up in order" (Anthropic global-workspace paper, 2026-07-06, `anthropics/jacobian-lens`). Agreed ordering: vLLM worker → metrics → probe tester → J-lens |
+| 2026-07-17 | vLLM sample worker lands: `VLLMSampleBackend` (sampling verbs only; training verbs 501) with LoRA hot-swap via `SnapshotLoader.load_snapshot` + `POST /v1/adapters/{id}/load_snapshot`; fresh LoRA int id per push defeats vLLM's stale-adapter cache; `_prompt_logprob_series` trims vLLM's trailing continuation-logprob quirk so logprobs align to prompt length. 11 tests with a fake vllm module; 106/106, ruff clean |
+| 2026-07-17 | vLLM worker verified cross-node: mac → `forge:8741` (vllm 0.25.1, Qwen2.5-1.5B) — greedy base sample, 404 on unknown adapter, Phase 1 adapter hot-swap shifts output (`' Paris. The capital of France'` → `' Paris. the capital of Paris'`) with deterministic re-push on a fresh LoRA id, `compute_logprobs` prompt-aligned, 501 on training verbs. Forge env: bench-venv needed `ninja` + its bin on PATH for vLLM's JIT; `LoRARequest` deep-imported (not top-level in 0.25) |
+| 2026-07-17 | P2.5 metrics scaffolding lands: `anvil/observe/metrics.py` (`RunMetricsWriter` → `metrics.jsonl`/`probes.jsonl`, `advantage_collapsed` tripwire, `schema_version` on every record); `run_grpo(run_dir=..., probes=..., probe_every=K, detokenize=...)` emits per-step reward mean/std + within-group reward std + IS mean_ratio passthrough + loss + wall time, and greedy probes of the LIVE policy scored with the reward fn; anvil-web serves `/api/observe/*` (tail + SSE stream) and a standalone `/observe/{run_id}` page with live reward/group-std chart, collapse banner, and probe panel. 7 new tests, 113/113, ruff clean |
