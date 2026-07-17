@@ -1,8 +1,9 @@
 # Spike: J-Lens on multi-step math (J0)
 
-**Status:** **ran on forge — NO-GO** (2026-07-17)  
-**Roadmap:** Phase 2.5 last open gate (panel still blocked)  
-**Script:** [`scripts/jlens_spike.py`](../../scripts/jlens_spike.py)  
+**Status:** **ran on forge — NO-GO (v1 + v2 protocols)** (2026-07-17)  
+**Product call:** **Deprioritize permanent J-Lens panel** on current evidence (see §Product call).  
+**Roadmap:** Phase 2.5 panel remains blocked; research CLI optional  
+**Script:** [`scripts/jlens_spike.py`](../../scripts/jlens_spike.py) (`--protocol last_prompt,cot_in_prompt,generate`)  
 **Paper:** Gurnee, Sofroniew, Lindsey et al., *Verbalizable Representations Form a Global Workspace in Language Models* (Anthropic / Transformer Circuits, 2026-07-06)  
 **Code:** [`anthropics/jacobian-lens`](https://github.com/anthropics/jacobian-lens) (Apache-2.0, reference impl)
 
@@ -110,38 +111,74 @@ Mid-layers (e.g. L9–L14) were dominated by unrelated tokens (`SELL`, `salary`,
 4. **Fit quality.** `fit_n=32` synthetic web-ish strings is a smoke fit, not paper-scale. Re-fit with larger / math-leaning corpus before blaming the model alone.  
 5. **LoRA path.** Not run (base only).
 
-### Decision
+### Decision (v1)
 
 - [ ] GO — proceed to permanent panel / J2 real apply in loop  
 - [x] **NO-GO** — do **not** build permanent J-Lens UI yet  
 
-**Allowed after NO-GO:**
+---
 
-- Keep **J1** (`jlens.jsonl` schema + API tail) — already on main.  
-- Keep forge CLI spike + lens checkpoint for further experiments.  
-- Next experiments (optional, separate PRs):  
-  1. Spike protocol v2: generate short CoT *or* inject partial solution, apply at multiple positions.  
-  2. Re-fit with larger `fit_n` and/or math-heavy prompts.  
-  3. Retry on a larger dense instruct if v2 still fails (e.g. 3–4B on forge).  
+## Results v2 (2026-07-17 forge — protocol improvements)
 
-**Blocked until GO:**
+Same model + **same fitted lens** (`fit_n=32`). Script: protocol v2 on branch / PR.
 
-- Permanent `/observe` J-Lens panel (J4)  
-- Treating J-Lens as a product acceptance feature  
+| Field | Value |
+|-------|--------|
+| Date | 2026-07-17 |
+| Artifact dir | `/mnt/data/anvil-runs/jlens-spike-v2-20260717-194416/` |
+| Protocols | `cot_in_prompt`, `generate`, `last_prompt` |
+| Digit matching | exact (no `"1"` ⊆ `"14"` false positive) |
+| **Overall gate** | **NO-GO** (exit 2) |
+
+### Per-protocol gates
+
+| Protocol | mean order | answer top-k hits | Gate |
+|----------|------------|-------------------|------|
+| `last_prompt` (v1) | null | 0/3 | NO-GO |
+| `cot_in_prompt` | **0.25** | 0/3 | NO-GO |
+| `generate` | **0.75** | 0/3 | NO-GO (order ok, **never** answer in top-k) |
+
+Best protocol by order: **`generate`** (mean 0.75) — still fails the dual gate because **0/3 probes** show the final answer in lens top-k. Position-order scores were all `null` (stages never hit mid-layer across positions in order).
+
+### What improved vs v1
+
+- CoT-in-prompt and generate **do** produce *some* stage hits (partial operands / ops), so v1’s pure “no signal” was partly protocol.
+- Order scores can look respectable on thin stage subsets (e.g. generate/`double_plus` layer_order=1.0 on 2–3 hit stages).
+
+### What did *not* improve
+
+- **Final answer never appears** in top-k under digit-safe matching (final-layer tops often `1,2,4,8` or discourse/math verbs — not `14` / `12` / `13`).
+- Mid-layer tops remain noisy / multilingual junk (`Wei`, `补`, `数学`, `SELL`, …).
+- Smoke lens + 1.5B is not showing a clean “intermediate workspace → answer” ladder on this task set.
+
+### Decision (v2) / product call
+
+- [ ] GO — invest in permanent panel + train-loop apply  
+- [x] **NO-GO again** — **deprioritize permanent J-Lens product work**
+
+**Pursue / keep (low cost):**
+
+- **J1** schema + API (already landed) — inert until something writes real slices  
+- Forge CLI spike + saved lens for occasional research  
+- Existing RL debugger (metrics, probes, adapter sync) — **this is the product path**
+
+**Do not schedule next (unless new evidence):**
+
+- J2 real apply in `run_grpo`  
+- J3 J-Lens worker  
+- J4 permanent `/observe` panel  
+- J5 J-Lens UI tripwires  
+- Larger-model spike “just to hope” without a better task design  
+
+**Re-open criteria (high bar):** paper-scale fit on a stronger base **and** a protocol where ≥ half probes show **answer in top-k** *and* mean order ≥ 0.6 on a fixed probe set. Until then, treat J-Lens as **interesting research, not Anvil roadmap load-bearing**.
 
 ## Product next steps
 
 | Step | Status |
 |------|--------|
-| **J0** forge spike + writeup | **done — NO-GO** |
-| **J1** artifact schema (`jlens.jsonl`, `log_jlens`, API tail) | **landed** |
-| **J2** `run_grpo(jlens_every=…)` real apply | **blocked** on GO (fake-slice stub OK for CI only) |
-| **J3** optional J-Lens worker | blocked |
-| **J4** permanent `/observe` panel | **blocked** (spike GO only) |
-| **J5** tripwires in UI | blocked |
+| **J0 v1** last-prompt spike | **done — NO-GO** |
+| **J0 v2** CoT / generate / digit-safe | **done — NO-GO** → **deprioritize panel** |
+| **J1** artifact schema | **landed** (keep; optional) |
+| **J2–J5** product hooks / UI | **shelved** until re-open criteria met |
 
-Still **debugger cadence**, never hot-path rollouts. Attribution in README deferred until a GO product path exists.
-
-## Roadmap
-
-Annotate Phase 2.5 J-lens line: spike **executed**, gate **NO-GO**, panel remains open/blocked.
+Attribution in README stays deferred until a real product path exists.
