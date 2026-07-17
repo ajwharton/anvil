@@ -115,19 +115,19 @@ the base never changes, only the LoRA adapter does, and that is megabytes):
       metrics record `adapter_synced` / `snapshot_path`; web RL debugger knobs
       (`probe_every`, `sync_every`, sample endpoint, write_metrics) on
       `anvil-web` + `/api/defaults.rl_knobs`
-- [ ] J-lens spike (LAST, spike-gated): port `anthropics/jacobian-lens` to a
-      small model on forge; reproduce "intermediate steps light up in order"
-      on multi-step math; only then a permanent run-detail panel.
-      **Runbook:** `scripts/jlens_spike.py` + fill-in
-      [`docs/spikes/jlens-math.md`](spikes/jlens-math.md).
-      **J1 artifact path (schema):** `anvil/observe/jlens.py` +
+- [x] J-lens spike **run** on forge (2026-07-17): `scripts/jlens_spike.py` +
+      writeup [`docs/spikes/jlens-math.md`](spikes/jlens-math.md).
+      **Gate: NO-GO** on Qwen2.5-1.5B last-prompt protocol (0/3 stage hits;
+      late layers = discourse openers). Permanent panel still blocked.
+      Follow-ups: CoT/mid-gen positions, larger fit, optional larger model.
+- [x] J1 artifact path (schema): `anvil/observe/jlens.py` +
       `RunMetricsWriter.log_jlens` → `jlens.jsonl`;
-      `GET /api/observe/{run_id}/jlens` (panel still gated on spike GO).
+      `GET /api/observe/{run_id}/jlens` (panel still gated on future GO).
+- [ ] J-lens **product GO** (re-spike): intermediate-order lighting that
+      passes script thresholds — only then permanent run-detail panel.
       Grounding: Gurnee, Sofroniew, Lindsey et al., "Verbalizable
       Representations Form a Global Workspace in Language Models" (Anthropic,
-      2026-07-06) — the J-space is a readout of the model's *unverbalized*
-      reasoning trace, which doubles as evidence for the Mia
-      DPO-needs-reasoning-traces thesis
+      2026-07-06)
 
 **Non-goals:** per-token J-lens on rollouts (debugger view, not hot path);
 autointerp beyond the J-lens readout.
@@ -203,3 +203,4 @@ For a spin-off agent session:
 | 2026-07-17 | P2.5 adapter-sync cadence: `run_grpo(sample_endpoint=|sample_backend=, sync_every=K)` pushes `snapshot_for_sample` → `load_snapshot` on the sample worker; FakeBackend + RemoteBackend implement `load_snapshot`; metrics carry `adapter_synced`/`snapshot_path`/`sample_endpoint`; anvil-web RL debugger section exposes probe_every, sync_every, sample_endpoint, sample_adapter_id, write_metrics (+ defaults.rl_knobs). J-lens remains the last open 2.5 gate |
 | 2026-07-17 | J0 spike runbook: `scripts/jlens_spike.py` + `docs/spikes/jlens-math.md` (forge GO/NO-GO) |
 | 2026-07-17 | J1 J-Lens artifact path: `anvil/observe/jlens.py` schema v1, `log_jlens` → `jlens.jsonl`, order-score helpers + `jlens_order_collapsed`, `GET /api/observe/{id}/jlens` — no real lens dep; permanent panel still spike-gated |
+| 2026-07-17 | J0 forge run **NO-GO**: Qwen2.5-1.5B + fit_n=32 (~18 min), lens at `/mnt/data/models/lenses/qwen2.5-1.5b-instruct/`; apply on 3 math probes at last prompt token → 0 stage hits / 0 answer hits (late tops = Sure/First/Okay). Artifacts `/mnt/data/anvil-runs/jlens-spike-20260717-191152/`. Writeup filled; permanent panel remains blocked |
