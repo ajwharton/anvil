@@ -37,10 +37,17 @@ def resolve_backend(endpoint: str, backend: Backend | None = None) -> Backend:
         from anvil.backends.local import LocalBackend
 
         return LocalBackend(root=rest or None)
-    # Phase 2+: http/https → remote control plane
+    if scheme in {"http", "https"}:
+        # http(s)://host:port — remote worker running `anvil serve` (Phase 2)
+        import os
+
+        from anvil.client.remote import RemoteBackend
+
+        return RemoteBackend(endpoint, token=os.environ.get("ANVIL_TOKEN"))
     raise ValueError(
         f"unsupported endpoint {endpoint!r}; supported: 'fake://', "
-        f"'local://' (torch+PEFT), 'local://fake', or pass backend= explicitly"
+        f"'local://' (torch+PEFT), 'local://fake', 'http(s)://host:port' "
+        f"(anvil serve), or pass backend= explicitly"
     )
 
 
