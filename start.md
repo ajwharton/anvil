@@ -18,6 +18,7 @@ State: `Track: anvil | Outcome: <one line>`
 - Four verbs: `forward_backward`, `optim_step`, `sample`, `save_state`
 - LoRA-first adapters; train/sample consistency; vision + edge (Jetson) path
 - Backends: local GPU → dual DGX Spark → export to edge
+- **RL debugger**: web UI (`anvil-web`), live metrics, inference probes during RL (negative-return detection); J-Lens / latent monitors on the roadmap
 
 Not Thinking Machines’ cloud. Not a full MoE train stack on day one.
 

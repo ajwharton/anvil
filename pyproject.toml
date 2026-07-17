@@ -1,16 +1,35 @@
 [project]
 name = "anvil-train"
 version = "0.0.2"
-description = "Open-source Tinker-shaped post-training (SFT/RL) — LoRA-first, vision-ready"
+description = "Tinker-shaped post-training: SFT/RL, LoRA-first, live RL observability & probes, web control plane"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
 authors = [{ name = "Anvil contributors" }]
-keywords = ["rl", "sft", "lora", "post-training", "vllm", "vision"]
+keywords = [
+  "post-training",
+  "sft",
+  "reinforcement-learning",
+  "rl",
+  "grpo",
+  "ppo",
+  "lora",
+  "peft",
+  "vllm",
+  "observability",
+  "rl-debugger",
+  "fine-tuning",
+  "llm",
+  "vision",
+  "jetson",
+  "edge-ai",
+]
 classifiers = [
-  "Development Status :: 1 - Planning",
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Science/Research",
   "License :: OSI Approved :: Apache Software License",
   "Programming Language :: Python :: 3",
+  "Topic :: Scientific/Engineering :: Artificial Intelligence",
 ]
 dependencies = []
 
