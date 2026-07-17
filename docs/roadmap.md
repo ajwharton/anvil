@@ -117,7 +117,9 @@ the base never changes, only the LoRA adapter does, and that is megabytes):
       `anvil-web` + `/api/defaults.rl_knobs`
 - [ ] J-lens spike (LAST, spike-gated): port `anthropics/jacobian-lens` to a
       small model on forge; reproduce "intermediate steps light up in order"
-      on the GRPO math task; only then a permanent run-detail panel.
+      on multi-step math; only then a permanent run-detail panel.
+      **Runbook:** `scripts/jlens_spike.py` + fill-in
+      [`docs/spikes/jlens-math.md`](spikes/jlens-math.md).
       Grounding: Gurnee, Sofroniew, Lindsey et al., "Verbalizable
       Representations Form a Global Workspace in Language Models" (Anthropic,
       2026-07-06) — the J-space is a readout of the model's *unverbalized*
