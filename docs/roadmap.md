@@ -49,6 +49,10 @@ Success looks like: a researcher or roboticist can SFT/RL a small LLM/VLM from a
 
 **Exit criteria**
 
+- [x] Async futures / queue: `VerbQueue` (single-worker FIFO) behind
+      `ServiceClient(queue=True)` — verbs return genuinely non-blocking
+      `AnvilFuture`s with submission-order execution; same caller surface as
+      the inline path (design §4.3)  
 - [ ] Dedicated sample worker (vLLM) with adapter hot-swap or snapshot  
 - [x] Simple on-policy RL recipe — GRPO/exact-match toy runs end-to-end on
       LocalBackend (sample → reward → group advantages → IS fwd/bwd → optim)  
@@ -126,3 +130,4 @@ For a spin-off agent session:
 | 2026-07-17 | Gate-override audit events: `anvil/control/audit.py` + `/api/audit`; `plan_recipe(record_override=)`; also fixes latent `POST /api/plan` 422 (closure-local `PlanIn` under future-annotations) |
 | 2026-07-17 | IS/PPO loss family lands in LocalBackend over GRPO-shaped datums (`grpo.datum_from_rollout`: model_input = prompt+completion[:-1], old-policy logprobs aligned to completion targets). Golden tests caught two real bugs: sampler logprobs came from warped HF *scores* (post top-p/temp) instead of raw logits — old-policy logprobs must be the true policy distribution; and the completion-position slice gathered along the vocab dim instead of the sequence dim. Both fixed; `mean_ratio≈1.0` on-policy and +advantage raises completion logprobs |
 | 2026-07-17 | GRPO loop runs end-to-end on LocalBackend — `run_grpo(endpoint="local://")` with real logprobs and grads (sample → reward → group advantages → IS fwd/bwd → optim); covered by `test_grpo_loop_local_backend` |
+| 2026-07-17 | Async futures / queue (design §4.3): `VerbQueue` single-worker FIFO behind `ServiceClient(queue=True)`; `forward_backward`/`optim_step`/`sample`/`compute_logprobs` return non-blocking `AnvilFuture`s, sync verbs route through the queue for serialization; `queue=False` keeps the inline path. 95/95 tests, ruff clean |

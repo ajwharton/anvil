@@ -2,9 +2,10 @@
 
 from __future__ import annotations
 
+from functools import partial
 from typing import TYPE_CHECKING
 
-from anvil.client.futures import AnvilFuture, completed
+from anvil.client.futures import AnvilFuture, VerbQueue, completed
 from anvil.protocol.types import (
     AdapterId,
     CheckpointRef,
@@ -27,11 +28,13 @@ class SamplingClient:
         base_model: str,
         adapter_id: AdapterId | None = None,
         checkpoint: CheckpointRef | None = None,
+        queue: VerbQueue | None = None,
     ) -> None:
         self._backend = backend
         self.base_model = base_model
         self.adapter_id = adapter_id
         self.checkpoint = checkpoint
+        self._queue = queue
 
     def sample(
         self,
@@ -42,7 +45,8 @@ class SamplingClient:
         include_prompt_logprobs: bool = False,
     ) -> AnvilFuture[SampleResult]:
         params = sampling_params if sampling_params is not None else SamplingParams()
-        out = self._backend.sample(
+        call = partial(
+            self._backend.sample,
             base_model=self.base_model,
             adapter_id=self.adapter_id,
             prompt=prompt,
@@ -50,7 +54,9 @@ class SamplingClient:
             num_samples=num_samples,
             include_prompt_logprobs=include_prompt_logprobs,
         )
-        return completed(out)
+        if self._queue is not None:
+            return self._queue.submit(call)
+        return completed(call())
 
     async def sample_async(
         self,
@@ -68,12 +74,15 @@ class SamplingClient:
         ).result()
 
     def compute_logprobs(self, prompt: ModelInput) -> AnvilFuture[list[float | None]]:
-        out = self._backend.compute_logprobs(
+        call = partial(
+            self._backend.compute_logprobs,
             base_model=self.base_model,
             adapter_id=self.adapter_id,
             prompt=prompt,
         )
-        return completed(out)
+        if self._queue is not None:
+            return self._queue.submit(call)
+        return completed(call())
 
     async def compute_logprobs_async(self, prompt: ModelInput) -> list[float | None]:
         return self.compute_logprobs(prompt).result()

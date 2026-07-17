@@ -6,6 +6,7 @@ from typing import Sequence
 
 from anvil.backends.base import Backend
 from anvil.backends.fake import FakeBackend
+from anvil.client.futures import VerbQueue
 from anvil.client.sampling import SamplingClient
 from anvil.client.training import TrainingClient
 from anvil.control.session import Session
@@ -67,10 +68,14 @@ class ServiceClient:
         endpoint: str = "fake://",
         *,
         backend: Backend | None = None,
+        queue: bool = True,
     ) -> None:
         self.endpoint = endpoint
         self._backend = resolve_backend(endpoint, backend)
         self._session = Session.create(endpoint=endpoint)
+        # P2 (design §4.3): verbs run on a single-worker FIFO so returned
+        # futures are genuinely non-blocking and backend state is serialized.
+        self._queue = VerbQueue() if queue else None
 
     @property
     def session(self) -> Session:
@@ -79,6 +84,16 @@ class ServiceClient:
     @property
     def backend(self) -> Backend:
         return self._backend
+
+    def close(self) -> None:
+        if self._queue is not None:
+            self._queue.shutdown()
+
+    def __enter__(self) -> ServiceClient:
+        return self
+
+    def __exit__(self, *exc) -> None:
+        self.close()
 
     def create_lora_training_client(
         self,
@@ -100,13 +115,18 @@ class ServiceClient:
             ),
             modalities=tuple(modalities),
         )
-        adapter_id = self._backend.create_lora_session(config)
+        adapter_id = (
+            self._queue.run(self._backend.create_lora_session, config)
+            if self._queue is not None
+            else self._backend.create_lora_session(config)
+        )
         self._session.registry.register(adapter_id, config)
         return TrainingClient(
             backend=self._backend,
             adapter_id=adapter_id,
             config=config,
             registry=self._session.registry,
+            queue=self._queue,
         )
 
     def create_sampling_client(
@@ -119,4 +139,5 @@ class ServiceClient:
             backend=self._backend,
             base_model=base_model,
             adapter_id=adapter_id,
+            queue=self._queue,
         )
