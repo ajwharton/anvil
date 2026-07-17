@@ -7,7 +7,7 @@
 > Thin harness: `~/.grok/docs/thin-harness.md`
 
 **Outcome default:** advance the next roadmap phase gate without expanding scope.  
-**Track:** Lab / OSS product (not mia-rl Ship coach).
+**Track:** Lab / OSS product (not mia-rl Ship coach). **Current phase:** vision (Phase 3).
 
 State: `Track: anvil | Outcome: <one line>`
 
@@ -64,6 +64,8 @@ README.md                    # human front door
 | `docs/models.md` | Reference base models (VLM / Jetson); pull script |
 | `anvil/web/` | Control-plane UI (`anvil-web` → :7600); GPU metrics stay on spark-dashboard :3000 |
 | `anvil/recipes/` | **Architecture → pattern → plan** (product intelligence; knobs are derived) |
+| `docs/phase3-vision.md` | Vision phase slices (media → renderer → forge VLM) |
+| `docs/datasets-robotics.md` | OXE / Bridge / LeRobot / Robo2VLM → Anvil Examples |
 
 ## Do not
 

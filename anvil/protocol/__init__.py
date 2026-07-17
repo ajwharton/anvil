@@ -7,7 +7,9 @@ from anvil.protocol.messages import (
     ImageUrlPart,
     Message,
     TextPart,
+    content_part_from_public,
 )
+from anvil.protocol.trajectory import Trajectory, TrajectoryStep, trajectories_to_examples
 from anvil.protocol.types import (
     AdamParams,
     AdapterId,
@@ -58,4 +60,8 @@ __all__ = [
     "SessionId",
     "TextPart",
     "TrainConfig",
+    "Trajectory",
+    "TrajectoryStep",
+    "content_part_from_public",
+    "trajectories_to_examples",
 ]
