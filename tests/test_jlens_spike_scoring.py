@@ -79,3 +79,22 @@ def test_check_command_runs_without_gpu(spike, capsys):
     assert rc in (0, 1)
     out = capsys.readouterr().out
     assert "jlens_spike check" in out
+
+
+def test_position_order_score(spike):
+    pos_tops = {
+        0: ["3", "x"],
+        1: ["7", "sum"],
+        2: ["14", "done"],
+    }
+    score, stage_pos = spike.position_order_score(pos_tops, (("3",), ("7",), ("14",)))
+    assert stage_pos == [0, 1, 2]
+    assert score == 1.0
+
+
+def test_gate_uses_primary_order(spike):
+    results = [
+        {"primary_order_score": 0.9, "answer_min_rank": 1},
+        {"primary_order_score": 0.8, "answer_min_rank": 2},
+    ]
+    assert spike._gate_decision(results)["go"] is True
