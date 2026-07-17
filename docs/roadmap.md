@@ -57,9 +57,10 @@ Success looks like: a researcher or roboticist can SFT/RL a small LLM/VLM from a
       target positions — replaces the completion-only toy shape in `anvil/recipes/grpo.py`  
 - [x] HTTP transport for the four verbs — landed early in Phase 1 (`anvil serve`
       + `RemoteBackend`, LAN trust model with optional bearer token)  
-- [ ] Stop-string support in LocalBackend sampling  
-- [ ] Gate-override audit events: every `force=True` past a blocked recipe is
-      logged with recipe, shape, and reasons (start of the control-plane audit trail)  
+- [x] Stop-string support in LocalBackend sampling — batch-wide early-exit criteria + whole-token truncation at the earliest stop string (`stop_reason="stop"`)  
+- [x] Gate-override audit events: every `force=True` past a blocked recipe is
+      logged with recipe, shape, and reasons — `anvil/control/audit.py` +
+      `/api/audit` (start of the control-plane audit trail)  
 
 ## Phase 3 — Vision first-class
 
@@ -119,3 +120,5 @@ For a spin-off agent session:
 | 2026-07-16 | Fix: serve error mapping via concrete exception classes (blanket `Exception` handler re-raised through ServerErrorMiddleware) |
 | 2026-07-16 | `recipes/sl_loop.py` — minimal SFT loop + smoke gate; verified against `local://` in-process and over HTTP |
 | 2026-07-17 | **Phase 1 complete** — forge GPU smoke: Qwen2.5-1.5B-Instruct LoRA rank 16 × 100 steps on GB10 (bf16/CUDA), loss 1.92 → 0.00, trained adapter answers `'4<|im_end|>'`; exported PEFT dir reloaded in plain HF transformers+peft, 4/4 correct with proper EOS. Forge env: `/mnt/data/anvil-venv` (torch 2.11.0+cu130), repo at `/mnt/data/anvil`, runs under `/mnt/data/anvil-runs` |
+| 2026-07-17 | Phase 2 opened — stop-string support in LocalBackend sampling (batch early-exit + per-row whole-token truncation, `stop_reason="stop"`) |
+| 2026-07-17 | Gate-override audit events: `anvil/control/audit.py` + `/api/audit`; `plan_recipe(record_override=)`; also fixes latent `POST /api/plan` 422 (closure-local `PlanIn` under future-annotations) |
