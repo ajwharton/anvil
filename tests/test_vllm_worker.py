@@ -67,11 +67,17 @@ def fake_vllm(monkeypatch: pytest.MonkeyPatch) -> types.ModuleType:
     mod = types.ModuleType("vllm")
     mod.LLM = _FakeLLM
     mod.SamplingParams = lambda **kw: types.SimpleNamespace(**kw)
-    mod.LoRARequest = lambda lora_name, lora_int_id, lora_path: types.SimpleNamespace(
-        lora_name=lora_name, lora_int_id=lora_int_id, lora_path=lora_path
-    )
     mod.TokensPrompt = dict
     monkeypatch.setitem(sys.modules, "vllm", mod)
+    # LoRARequest is NOT top-level in real vllm; the worker deep-imports it.
+    lora_mod = types.ModuleType("vllm.lora.request")
+    lora_mod.LoRARequest = (
+        lambda lora_name, lora_int_id, lora_path: types.SimpleNamespace(
+            lora_name=lora_name, lora_int_id=lora_int_id, lora_path=lora_path
+        )
+    )
+    monkeypatch.setitem(sys.modules, "vllm.lora", types.ModuleType("vllm.lora"))
+    monkeypatch.setitem(sys.modules, "vllm.lora.request", lora_mod)
     return mod
 
 

@@ -186,8 +186,12 @@ class VLLMSampleBackend(Backend):
         """Register a PEFT snapshot dir as the live LoRA for adapter_id."""
         if not os.path.isdir(path):
             raise FileNotFoundError(f"adapter snapshot dir not found: {path}")
+        # vllm 0.25 does NOT re-export LoRARequest at top level; deep-import
+        # (verified against the forge engine).
+        from vllm.lora.request import LoRARequest
+
         key = str(adapter_id)
-        self._loras[key] = self._vllm.LoRARequest(
+        self._loras[key] = LoRARequest(
             lora_name=key,
             lora_int_id=next(self._lora_ids),
             lora_path=path,
