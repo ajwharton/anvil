@@ -111,3 +111,13 @@ def test_observe_jlens_api(tmp_path, monkeypatch):
 def test_intermediate_order_shared_with_spike_semantics():
     assert intermediate_order_score([4, 8, 12]) == 1.0
     assert intermediate_order_score([12, 4]) == 0.0
+
+
+def test_digit_match_no_false_prefix():
+    """v1 bug: answer '14' matched surface '1' via substring."""
+    from anvil.observe.jlens import answer_min_rank, top_tokens_contain
+
+    assert top_tokens_contain(["14", "done"], ("14",))
+    assert not top_tokens_contain(["1", "2", "4"], ("14",))
+    assert answer_min_rank({10: ["1", "2", "4"]}, "14") is None
+    assert answer_min_rank({10: ["14", "x"]}, "14") == 1

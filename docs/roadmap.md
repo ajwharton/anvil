@@ -115,19 +115,18 @@ the base never changes, only the LoRA adapter does, and that is megabytes):
       metrics record `adapter_synced` / `snapshot_path`; web RL debugger knobs
       (`probe_every`, `sync_every`, sample endpoint, write_metrics) on
       `anvil-web` + `/api/defaults.rl_knobs`
-- [x] J-lens spike **run** on forge (2026-07-17): `scripts/jlens_spike.py` +
-      writeup [`docs/spikes/jlens-math.md`](spikes/jlens-math.md).
-      **Gate: NO-GO** on Qwen2.5-1.5B last-prompt protocol (0/3 stage hits;
-      late layers = discourse openers). Permanent panel still blocked.
-      Follow-ups: CoT/mid-gen positions, larger fit, optional larger model.
+- [x] J-lens spike **v1** on forge (2026-07-17): last-prompt protocol **NO-GO**
+      (writeup [`docs/spikes/jlens-math.md`](spikes/jlens-math.md)).
+- [x] J-lens spike **v2** on forge (2026-07-17): `cot_in_prompt` + `generate` +
+      digit-safe match — still **NO-GO** (best mean order 0.75 on generate but
+      **0/3 answer top-k hits**). Artifacts
+      `/mnt/data/anvil-runs/jlens-spike-v2-20260717-194416/`.
 - [x] J1 artifact path (schema): `anvil/observe/jlens.py` +
       `RunMetricsWriter.log_jlens` → `jlens.jsonl`;
-      `GET /api/observe/{run_id}/jlens` (panel still gated on future GO).
-- [ ] J-lens **product GO** (re-spike): intermediate-order lighting that
-      passes script thresholds — only then permanent run-detail panel.
-      Grounding: Gurnee, Sofroniew, Lindsey et al., "Verbalizable
-      Representations Form a Global Workspace in Language Models" (Anthropic,
-      2026-07-06)
+      `GET /api/observe/{run_id}/jlens` (optional; no panel).
+- [ ] J-lens **permanent panel / train-loop apply** — **shelved** until re-open
+      criteria in the spike writeup (not near-term roadmap load-bearing).
+      Grounding paper remains Gurnee et al. 2026-07-06 if revived.
 
 **Non-goals:** per-token J-lens on rollouts (debugger view, not hot path);
 autointerp beyond the J-lens readout.
@@ -210,4 +209,5 @@ For a spin-off agent session:
 | 2026-07-17 | J0 spike runbook: `scripts/jlens_spike.py` + `docs/spikes/jlens-math.md` (forge GO/NO-GO) |
 | 2026-07-17 | J1 J-Lens artifact path: `anvil/observe/jlens.py` schema v1, `log_jlens` → `jlens.jsonl`, order-score helpers + `jlens_order_collapsed`, `GET /api/observe/{id}/jlens` — no real lens dep; permanent panel still spike-gated |
 | 2026-07-17 | J0 forge run **NO-GO**: Qwen2.5-1.5B + fit_n=32 (~18 min), lens at `/mnt/data/models/lenses/qwen2.5-1.5b-instruct/`; apply on 3 math probes at last prompt token → 0 stage hits / 0 answer hits (late tops = Sure/First/Okay). Artifacts `/mnt/data/anvil-runs/jlens-spike-20260717-191152/`. Writeup filled; permanent panel remains blocked |
+| 2026-07-17 | J0 protocol **v2** re-spike **NO-GO**: cot_in_prompt / generate / last_prompt + digit-safe match; generate best mean order 0.75 but 0/3 answer top-k. **Product call: shelve permanent J-Lens panel** (keep J1 schema + CLI). Artifacts `/mnt/data/anvil-runs/jlens-spike-v2-20260717-194416/` |
 | 2026-07-17 | **Phase 3 opened (P3.0):** media store `put_path`/path resolve; Example/Message public serde; `Trajectory` → VLM SFT examples; `anvil.data.ingest` JSONL path ingest; docs `phase3-vision.md` + `datasets-robotics.md` (OXE, Bridge, OpenVLA, LeRobot, Robo2VLM). Next: processor-backed VLM renderer |
