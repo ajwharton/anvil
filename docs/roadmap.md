@@ -53,7 +53,11 @@ Success looks like: a researcher or roboticist can SFT/RL a small LLM/VLM from a
       `ServiceClient(queue=True)` — verbs return genuinely non-blocking
       `AnvilFuture`s with submission-order execution; same caller surface as
       the inline path (design §4.3)  
-- [ ] Dedicated sample worker (vLLM) with adapter hot-swap or snapshot  
+- [x] Dedicated sample worker (vLLM) with adapter hot-swap — `anvil/workers/sample.py`
+      (`VLLMSampleBackend`, sampling verbs only over a vLLM engine; `load_snapshot`
+      registers PEFT dirs with a fresh LoRA id per push so vLLM never serves a
+      stale cached adapter) + `POST /v1/adapters/{id}/load_snapshot` (registered
+      only for `SnapshotLoader` backends) + `anvil serve --backend vllm-sample --model`  
 - [x] Simple on-policy RL recipe — GRPO/exact-match toy runs end-to-end on
       LocalBackend (sample → reward → group advantages → IS fwd/bwd → optim)  
 - [x] IS/PPO loss family in LocalBackend — importance_sampling + ppo (ε=0.2)
@@ -180,3 +184,4 @@ For a spin-off agent session:
 | 2026-07-17 | GRPO loop runs end-to-end on LocalBackend — `run_grpo(endpoint="local://")` with real logprobs and grads (sample → reward → group advantages → IS fwd/bwd → optim); covered by `test_grpo_loop_local_backend` |
 | 2026-07-17 | Async futures / queue (design §4.3): `VerbQueue` single-worker FIFO behind `ServiceClient(queue=True)`; `forward_backward`/`optim_step`/`sample`/`compute_logprobs` return non-blocking `AnvilFuture`s, sync verbs route through the queue for serialization; `queue=False` keeps the inline path. 95/95 tests, ruff clean |
 | 2026-07-17 | Phase 2.5 scoped — RL observability (the RL debugger): per-run `metrics.jsonl` + SSE live charts, fixed-probe inference tester on the live policy every K steps, adapter-sync cadence knob; J-lens spike LAST, gated on reproducing "intermediate steps light up in order" (Anthropic global-workspace paper, 2026-07-06, `anthropics/jacobian-lens`). Agreed ordering: vLLM worker → metrics → probe tester → J-lens |
+| 2026-07-17 | vLLM sample worker lands: `VLLMSampleBackend` (sampling verbs only; training verbs 501) with LoRA hot-swap via `SnapshotLoader.load_snapshot` + `POST /v1/adapters/{id}/load_snapshot`; fresh LoRA int id per push defeats vLLM's stale-adapter cache; `_prompt_logprob_series` trims vLLM's trailing continuation-logprob quirk so logprobs align to prompt length. 11 tests with a fake vllm module; 106/106, ruff clean |

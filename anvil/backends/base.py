@@ -73,3 +73,15 @@ class Backend(Protocol):
         format: ExportFormat,
         path: str,
     ) -> ExportResult: ...
+
+
+@runtime_checkable
+class SnapshotLoader(Protocol):
+    """Optional backend capability: hot-load a PEFT snapshot dir at runtime.
+
+    Sample workers (vLLM) implement this so the train side can push fresh
+    adapter weights without restarting the engine. `anvil serve` exposes it
+    as POST /v1/adapters/{adapter_id}/load_snapshot when present.
+    """
+
+    def load_snapshot(self, adapter_id: AdapterId, path: str) -> None: ...
