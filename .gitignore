@@ -21,3 +21,5 @@ checkpoints/
 # Local Anvil runtime (fake backend, web exports)
 .anvil-fake/
 .anvil/
+.anvil-local/
+out/

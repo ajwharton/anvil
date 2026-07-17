@@ -21,7 +21,7 @@ Success looks like: a researcher or roboticist can SFT/RL a small LLM/VLM from a
 
 **Non-goals:** real multi-node train, production scheduler.
 
-## Phase 1 — Local Anvil (text, single GPU) *(current)*
+## Phase 1 — Local Anvil (text, single GPU) *(complete)*
 
 **Locked design decisions**
 
@@ -38,14 +38,14 @@ Success looks like: a researcher or roboticist can SFT/RL a small LLM/VLM from a
 
 - [x] `HFChatRenderer` + train/sample prefix-consistency tests — `anvil/render/hf.py`, `tests/test_hf_renderer.py`  
 - [x] `LocalBackend` in-process (hand-rolled verbs, real LoRA grads) + CPU golden SFT test — `anvil/backends/local.py`, `tests/test_local_backend.py`; wired as `local://`  
-- [ ] `anvil serve --backend local` thin CLI shell on one GPU host  
-- [ ] GPU smoke: SFT loop on a small dense model (0.5B–4B) via LoRA on forge  
-- [ ] Export adapter (real PEFT dir) → load in vLLM (or HF) for sample — manual verification  
-- [ ] Minimal recipe: `recipes/sl_loop.py` running against `local://`  
+- [x] `anvil serve --backend local` thin CLI shell — `anvil/cli.py`, `anvil/serve/app.py` (+ `RemoteBackend` client half, pulled forward from Phase 2); GPU-host deployment happens with the smoke below  
+- [x] GPU smoke: SFT loop on a small dense model (0.5B–4B) via LoRA on forge — Qwen2.5-1.5B-Instruct, rank 16, 100 steps, bf16/CUDA: loss 1.92 → 0.00, greedy sample `'4<|im_end|>'`  
+- [x] Export adapter (real PEFT dir) → load in vLLM (or HF) for sample — verified via HF: exported adapter on plain transformers+peft answers 4/4 demo prompts with correct `<|im_end|>`; vLLM load optional follow-up  
+- [x] Minimal recipe: `recipes/sl_loop.py` running against `local://` — verified in-process and over HTTP; exit code gates on loss decrease  
 
 **Non-goals:** dual-Spark TP train; vision; RL losses (LocalBackend v0 is CE-only).
 
-## Phase 2 — Sample/train split
+## Phase 2 — Sample/train split *(current)*
 
 **Exit criteria**
 
@@ -55,8 +55,8 @@ Success looks like: a researcher or roboticist can SFT/RL a small LLM/VLM from a
 - [ ] IS/PPO loss family in LocalBackend (v0 is CE-only and raises `NotImplementedError`)  
 - [ ] GRPO datum carries **prompt+completion** with old-policy logprobs aligned to
       target positions — replaces the completion-only toy shape in `anvil/recipes/grpo.py`  
-- [ ] HTTP transport for the four verbs (control plane serves LAN clients; today
-      the verbs are in-process only)  
+- [x] HTTP transport for the four verbs — landed early in Phase 1 (`anvil serve`
+      + `RemoteBackend`, LAN trust model with optional bearer token)  
 - [ ] Stop-string support in LocalBackend sampling  
 - [ ] Gate-override audit events: every `force=True` past a blocked recipe is
       logged with recipe, shape, and reasons (start of the control-plane audit trail)  
@@ -115,3 +115,7 @@ For a spin-off agent session:
 | 2026-07-16 | 15-recipe catalog with recommended/stretch/blocked architecture gates |
 | 2026-07-16 | `HFChatRenderer` + prefix-consistency tests; `LocalBackend` (torch+PEFT, hand-rolled verbs) with CPU golden SFT; `local://` endpoint; `[hf]`/`[local]` extras; ruff clean (`0.0.2`) |
 | 2026-07-16 | Opinionated gates: `ModelTooSmallError` hidden-size floor (block <16 / warn <32, `allow_tiny_models` escape), zero-trainable-param check, renderer transformers>=4.44 + jinja2 floors |
+| 2026-07-16 | `anvil serve` — HTTP transport for the four verbs + `RemoteBackend` (serde codec, FastAPI shell, bearer token); Phase 2 transport item pulled forward |
+| 2026-07-16 | Fix: serve error mapping via concrete exception classes (blanket `Exception` handler re-raised through ServerErrorMiddleware) |
+| 2026-07-16 | `recipes/sl_loop.py` — minimal SFT loop + smoke gate; verified against `local://` in-process and over HTTP |
+| 2026-07-17 | **Phase 1 complete** — forge GPU smoke: Qwen2.5-1.5B-Instruct LoRA rank 16 × 100 steps on GB10 (bf16/CUDA), loss 1.92 → 0.00, trained adapter answers `'4<|im_end|>'`; exported PEFT dir reloaded in plain HF transformers+peft, 4/4 correct with proper EOS. Forge env: `/mnt/data/anvil-venv` (torch 2.11.0+cu130), repo at `/mnt/data/anvil`, runs under `/mnt/data/anvil-runs` |
