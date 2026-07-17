@@ -59,6 +59,8 @@ class FakeBackend:
 
     def __init__(self, *, root: str | Path | None = None) -> None:
         self._sessions: dict[str, _Session] = {}
+        # Sample-only hot-swaps (Tier 1): adapter_id → weights, no train session.
+        self._hot_adapters: dict[str, dict[int, float]] = {}
         self._root = Path(root) if root is not None else Path(os.environ.get("ANVIL_FAKE_ROOT", ".anvil-fake"))
         self._root.mkdir(parents=True, exist_ok=True)
 
@@ -201,6 +203,23 @@ class FakeBackend:
         path.write_text(json.dumps({"weights": snap, "step": sess.step}), encoding="utf-8")
         return CheckpointRef(name=name, path=str(path), kind="sampler")
 
+    def load_snapshot(self, adapter_id: AdapterId, path: str) -> None:
+        """Hot-load a sampler snapshot file written by snapshot_for_sample.
+
+        Lets a second FakeBackend act as a Tier-1 sample worker in tests
+        (and exercises the same push path as vLLM's load_snapshot).
+        """
+        p = Path(path)
+        if not p.is_file():
+            raise FileNotFoundError(f"adapter snapshot not found: {path}")
+        payload = json.loads(p.read_text(encoding="utf-8"))
+        weights = {int(k): float(v) for k, v in payload["weights"].items()}
+        self._hot_adapters[str(adapter_id)] = weights
+        # If a train session exists under this id, also refresh its sampler cache.
+        sess = self._sessions.get(str(adapter_id))
+        if sess is not None:
+            sess.sampler_snapshots[p.name] = dict(weights)
+
     def sample(
         self,
         *,
@@ -213,13 +232,17 @@ class FakeBackend:
     ) -> SampleResult:
         weights: dict[int, float] = {}
         if adapter_id is not None:
-            sess = self._get(adapter_id)
-            # Prefer latest sampler snapshot if any; else live weights
-            if sess.sampler_snapshots:
-                last = next(reversed(sess.sampler_snapshots))
-                weights = sess.sampler_snapshots[last]
+            key = str(adapter_id)
+            if key in self._hot_adapters:
+                weights = self._hot_adapters[key]
             else:
-                weights = sess.weights
+                sess = self._get(adapter_id)
+                # Prefer latest sampler snapshot if any; else live weights
+                if sess.sampler_snapshots:
+                    last = next(reversed(sess.sampler_snapshots))
+                    weights = sess.sampler_snapshots[last]
+                else:
+                    weights = sess.weights
 
         prompt_tokens = prompt.token_ids()
         seed = sampling_params.seed

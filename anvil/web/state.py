@@ -6,7 +6,7 @@ import os
 import threading
 import time
 import uuid
-from dataclasses import asdict, dataclass, field
+from dataclasses import asdict, dataclass, field, fields
 from pathlib import Path
 from typing import Any
 
@@ -53,6 +53,12 @@ class RunKnobs:
     vision_encoder_lora: bool = False
     mm_projector_lora: bool = True
     language_lora: bool = True
+    # Phase 2.5 RL debugger / sample-train split
+    probe_every: int = 1
+    sync_every: int = 1
+    sample_endpoint: str = ""
+    sample_adapter_id: str = ""
+    write_metrics: bool = True
 
 
 @dataclass
@@ -173,6 +179,30 @@ class RunStore:
             "version": __version__,
             "backend": self._backend.name,
             "spark_dashboard": self.spark_dashboard_urls,
+            "rl_knobs": {
+                "probe_every": {
+                    "default": 1,
+                    "min": 1,
+                    "help": "Greedy live-policy probes every K steps (metrics/probes.jsonl)",
+                },
+                "sync_every": {
+                    "default": 1,
+                    "min": 1,
+                    "help": "Push train LoRA → sample worker load_snapshot every K steps (Tier 1)",
+                },
+                "sample_endpoint": {
+                    "default": "",
+                    "help": "Sample worker URL (e.g. http://host:8741). Empty = Tier 0 in-process",
+                },
+                "sample_adapter_id": {
+                    "default": "",
+                    "help": "Adapter id on the sample worker (default: train adapter id)",
+                },
+                "write_metrics": {
+                    "default": True,
+                    "help": "Emit metrics.jsonl / probes.jsonl for /observe/{run_id}",
+                },
+            },
         }
 
     def overview(self) -> dict[str, Any]:
@@ -204,7 +234,10 @@ class RunStore:
         shape: str | None = None,
         rationale: list[str] | None = None,
     ) -> RunRecord:
-        k = RunKnobs(**{**asdict(RunKnobs()), **(knobs or {})})
+        raw = {**asdict(RunKnobs()), **(knobs or {})}
+        # Ignore unknown keys so the UI can grow without 500s
+        known = {f.name for f in fields(RunKnobs)}
+        k = RunKnobs(**{key: raw[key] for key in known if key in raw})
         run_id = f"run-{uuid.uuid4().hex[:10]}"
         suffix = f"-{pattern}" if pattern else f"-r{k.rank}"
         rec = RunRecord(
@@ -233,6 +266,18 @@ class RunStore:
         rec.adapter_id = str(tc.adapter_id)
         rec.status = "created"
         rec.log(f"created adapter {rec.adapter_id} base={k.base_model} rank={k.rank}")
+        if k.sample_endpoint:
+            rec.log(
+                f"rl sample_endpoint={k.sample_endpoint} sync_every={k.sync_every} "
+                f"probe_every={k.probe_every}"
+            )
+        elif k.loss_fn in {"importance_sampling", "ppo"}:
+            rec.log(
+                f"rl Tier-0 (in-process sample) sync_every={k.sync_every} "
+                f"probe_every={k.probe_every}"
+            )
+        if k.write_metrics:
+            rec.log(f"observe → /observe/{run_id} (when run_dir is set by trainer)")
         with self._lock:
             self._runs[run_id] = rec
             self._clients[run_id] = tc

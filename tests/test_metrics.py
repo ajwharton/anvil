@@ -95,6 +95,42 @@ def test_run_grpo_constant_reward_shows_advantage_collapse(tmp_path):
     assert all(advantage_collapsed(s) for s in steps)
 
 
+def test_run_grpo_adapter_sync_cadence(tmp_path):
+    """Tier-1: push train snapshot → sample worker every sync_every steps."""
+    from anvil.backends.fake import FakeBackend
+
+    train_root = tmp_path / "train"
+    sample = FakeBackend(root=tmp_path / "sample")
+    run_dir = tmp_path / "synced"
+    res = run_grpo(
+        endpoint=f"fake://{train_root}",
+        steps=5,
+        group_size=2,
+        sample_backend=sample,
+        sync_every=2,
+        run_dir=str(run_dir),
+    )
+    # steps 0,2,4 → 3 syncs
+    assert res.sync_count == 3
+    assert res.steps_run == 5
+    steps = read_jsonl(run_dir / METRICS_FILENAME)
+    flags = [s["adapter_synced"] for s in steps]
+    assert flags == [True, False, True, False, True]
+    assert all(s["sample_endpoint"] for s in steps)
+    # On sync steps, path is recorded and was loaded into the sample worker
+    synced_paths = [s["snapshot_path"] for s in steps if s["adapter_synced"]]
+    assert all(p for p in synced_paths)
+    assert len(sample._hot_adapters) == 1
+    assert res.adapter_id in sample._hot_adapters
+
+
+def test_run_grpo_rejects_bad_cadence():
+    import pytest
+
+    with pytest.raises(ValueError, match="sync_every"):
+        run_grpo(endpoint="fake://", steps=1, sync_every=0)
+
+
 # --- web endpoints ----------------------------------------------------------
 
 
@@ -143,12 +179,13 @@ def test_observe_metrics_stream(tmp_path, monkeypatch):
     from anvil.web.app import create_app
 
     client = TestClient(create_app())
-    with client.stream("GET", "/api/observe/r1/metrics/stream") as r:
+    # once=true: finite stream so TestClient does not block on the live loop
+    with client.stream("GET", "/api/observe/r1/metrics/stream?once=true") as r:
         assert r.status_code == 200
         assert r.headers["content-type"].startswith("text/event-stream")
-        lines = r.iter_lines()
-        first = next(lines)
-        assert first.startswith("data: ")
-        payload = json.loads(first[len("data: "):])
+        lines = list(r.iter_lines())
+        data_lines = [ln for ln in lines if ln.startswith("data: ")]
+        assert data_lines
+        payload = json.loads(data_lines[0][len("data: "):])
         assert payload["step"] == 0
         assert payload["group_reward_std_mean"] == 0.2

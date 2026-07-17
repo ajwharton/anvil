@@ -76,6 +76,9 @@ class RunMetricsWriter:
         n_datums: int,
         fb_metrics: dict[str, float] | None = None,
         wall_time_s: float | None = None,
+        adapter_synced: bool | None = None,
+        snapshot_path: str | None = None,
+        sample_endpoint: str | None = None,
     ) -> dict[str, Any]:
         fb = dict(fb_metrics or {})
         record: dict[str, Any] = {
@@ -91,6 +94,9 @@ class RunMetricsWriter:
             "is_mean_ratio": fb.get("mean_ratio"),
             "fb": fb,
             "wall_time_s": wall_time_s,
+            "adapter_synced": adapter_synced,
+            "snapshot_path": snapshot_path,
+            "sample_endpoint": sample_endpoint,
         }
         _append_jsonl(self.metrics_path, record)
         return record

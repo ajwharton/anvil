@@ -139,6 +139,11 @@ function formKnobs(form) {
     mm_projector_lora: Boolean(fd.get("mm_projector_lora")),
     vision_encoder_lora: Boolean(fd.get("vision_encoder_lora")),
     modalities,
+    probe_every: Math.max(1, Number(fd.get("probe_every") || 1)),
+    sync_every: Math.max(1, Number(fd.get("sync_every") || 1)),
+    sample_endpoint: String(fd.get("sample_endpoint") || "").trim(),
+    sample_adapter_id: String(fd.get("sample_adapter_id") || "").trim(),
+    write_metrics: Boolean(fd.get("write_metrics")),
   };
 }
 
@@ -163,6 +168,11 @@ function applyPlanToForm(plan) {
   set("language_lora", k.language_lora);
   set("mm_projector_lora", k.mm_projector_lora);
   set("vision_encoder_lora", k.vision_encoder_lora);
+  if (k.probe_every != null) set("probe_every", k.probe_every);
+  if (k.sync_every != null) set("sync_every", k.sync_every);
+  if (k.sample_endpoint != null) set("sample_endpoint", k.sample_endpoint);
+  if (k.sample_adapter_id != null) set("sample_adapter_id", k.sample_adapter_id);
+  if (k.write_metrics != null) set("write_metrics", k.write_metrics);
   const mods = k.modalities || [];
   form.elements.namedItem("mod_text").checked = mods.includes("text");
   form.elements.namedItem("mod_image").checked = mods.includes("image");
@@ -172,6 +182,14 @@ function applyPlanToForm(plan) {
   (plan.cautions || []).forEach((c) => lines.push(`! ${c}`));
   if (plan.export_hint) lines.push(`export → ${plan.export_hint}`);
   $("rationale-box").textContent = lines.join("\n") || "";
+  // Open RL panel for verifiable / preference patterns
+  const pat = String(plan.pattern || plan.loss_fn || "");
+  const rl =
+    pat.includes("rl") ||
+    pat.includes("grpo") ||
+    ["importance_sampling", "ppo"].includes(k.loss_fn);
+  const rlEl = $("rl-debug");
+  if (rlEl) rlEl.open = rl;
 }
 
 function gateClass(level) {
@@ -297,6 +315,17 @@ function renderRunDetail(run) {
   $("stat-loss").textContent =
     run.last_loss == null ? "—" : Number(run.last_loss).toFixed(4);
   enableActions(true);
+  const obs = $("link-observe");
+  if (obs) {
+    obs.href = `/observe/${encodeURIComponent(run.run_id)}`;
+    const kn = run.knobs || {};
+    const bits = [];
+    if (kn.sample_endpoint) bits.push(`sample ${kn.sample_endpoint}`);
+    else bits.push("Tier-0 sample");
+    bits.push(`sync/${kn.sync_every ?? 1}`);
+    bits.push(`probe/${kn.probe_every ?? 1}`);
+    obs.title = bits.join(" · ");
+  }
 }
 
 function renderRuns(runs) {

@@ -132,11 +132,16 @@ function draw() {{
     ctx.stroke();
   }}
   const last = recs[recs.length - 1];
+  let sync = '';
+  if (last.adapter_synced === true) sync = ' · adapter SYNC';
+  else if (last.adapter_synced === false) sync = ' · adapter held';
   document.getElementById('laststep').textContent =
     'step ' + last.step + ' · reward_mean ' + last.reward_mean.toFixed(4)
     + ' · group_std ' + last.group_reward_std_mean.toFixed(6)
     + ' · loss ' + (last.loss == null ? '—' : last.loss.toFixed(5))
-    + (last.is_mean_ratio != null ? ' · IS ratio ' + last.is_mean_ratio.toFixed(4) : '');
+    + (last.is_mean_ratio != null ? ' · IS ratio ' + last.is_mean_ratio.toFixed(4) : '')
+    + sync
+    + (last.sample_endpoint ? ' · sample ' + last.sample_endpoint : '');
   document.getElementById('trip').style.display = (last.group_reward_std_mean < EPS) ? '' : 'none';
 }}
 function loadProbes() {{
@@ -290,7 +295,16 @@ def create_app() -> FastAPI:
         rationale = list(payload.rationale)
         shape = payload.shape
         pattern = payload.pattern
-        # Recipe/pattern path: re-derive plan (knobs = overrides; gates enforced)
+        # Recipe/pattern path: re-derive plan (knobs = overrides; gates enforced).
+        # RL debugger fields are UI/run-level — not part of RecipePlan — so keep them.
+        _RL_KNOB_KEYS = (
+            "probe_every",
+            "sync_every",
+            "sample_endpoint",
+            "sample_adapter_id",
+            "write_metrics",
+        )
+        rl_keep = {k: knobs[k] for k in _RL_KNOB_KEYS if k in knobs}
         if payload.recipe_id or payload.pattern:
             try:
                 plan = plan_recipe(
@@ -302,7 +316,7 @@ def create_app() -> FastAPI:
                     overrides=knobs or None,
                     force=payload.force,
                 )
-                knobs = plan.as_knobs()
+                knobs = {**plan.as_knobs(), **rl_keep}
                 if not rationale:
                     rationale = list(plan.rationale)
                 if plan.gate and plan.gate.get("level") == "stretch":
@@ -313,6 +327,8 @@ def create_app() -> FastAPI:
                 raise HTTPException(400, str(e)) from e
             except KeyError as e:
                 raise HTTPException(404, str(e)) from e
+        else:
+            knobs = {**knobs, **rl_keep}
         try:
             rec = store.create_run(
                 payload.name,
@@ -383,7 +399,11 @@ def create_app() -> FastAPI:
         return {"run_id": run_id, "probes": read_jsonl(d / PROBES_FILENAME, tail=tail)}
 
     @app.get("/api/observe/{run_id}/metrics/stream")
-    async def observe_metrics_stream(run_id: str, request: Request) -> StreamingResponse:
+    async def observe_metrics_stream(
+        run_id: str, request: Request, once: bool = False
+    ) -> StreamingResponse:
+        """SSE tail of metrics.jsonl. ``once=true`` emits current lines and exits
+        (for tests / one-shot clients); default is a live poll loop."""
         path = _observe_run_dir(run_id) / METRICS_FILENAME
 
         async def gen():
@@ -395,6 +415,8 @@ def create_app() -> FastAPI:
                 for rec in records[sent:]:
                     yield f"data: {json.dumps(rec)}\n\n"
                 sent = len(records)
+                if once:
+                    return
                 yield ": hb\n\n"
                 await asyncio.sleep(1.5)
 

@@ -38,7 +38,7 @@ Shipped:
 - vLLM sample worker with adapter hot-swap (verified mac → forge)
 - Metrics scaffolding + Tier-0 live probes + `/observe/{run_id}` UI
 
-Next gates: adapter-sync cadence into the sample worker, then a J-lens spike (last). See [docs/roadmap.md](docs/roadmap.md).
+Next gate: J-lens spike (last). See [docs/roadmap.md](docs/roadmap.md).
 
 ### Web UI & live observe
 
@@ -75,16 +75,19 @@ tc.optim_step(AdamParams(learning_rate=1e-4)).result()
 from anvil.recipes.grpo import run_grpo
 
 # Emits metrics.jsonl + probes.jsonl under run_dir; anvil-web tails them live.
+# Tier 1: push LoRA to a vLLM sample worker every sync_every steps.
 run_grpo(
-    endpoint="local://…",
+    endpoint="local://…",                 # train
+    sample_endpoint="http://forge:8741",  # sample worker (empty → Tier 0 in-process)
+    sync_every=5,
     run_dir="runs/demo",
-    probes=["What is 2+2?"],
+    probes=[[…token ids…]],
     probe_every=10,
     # …reward, groups, steps
 )
 ```
 
-Watch for **advantage collapse** (`group_reward_std_mean → 0`), IS ratio drift, and probe completions that go off-rails — the point of negative returns often shows up here first.
+In **anvil-web**, open **RL debugger** for `probe_every`, `sync_every`, sample endpoint, and observe links. Watch for **advantage collapse** (`group_reward_std_mean → 0`), IS ratio drift, adapter sync flags, and probe completions that go off-rails — the point of negative returns often shows up here first.
 
 ## Docs (thin start)
 

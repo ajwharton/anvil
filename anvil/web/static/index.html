@@ -135,6 +135,53 @@
               <label class="check"><input type="checkbox" name="mod_image" checked /> image</label>
             </fieldset>
             </details>
+            <details class="advanced rl-debug" id="rl-debug">
+              <summary>RL debugger <span class="muted">(probes · adapter sync · observe)</span></summary>
+              <p class="lede rl-lede">
+                Live inference probes and Tier-1 LoRA push into a sample worker
+                (vLLM). Leave sample endpoint empty for Tier-0 in-process sampling.
+              </p>
+              <div class="knob-row">
+                <label>
+                  <span>Probe every (steps)</span>
+                  <input name="probe_every" type="number" min="1" max="10000" value="1" />
+                </label>
+                <label>
+                  <span>Sync every (steps)</span>
+                  <input name="sync_every" type="number" min="1" max="10000" value="1" title="snapshot_for_sample → load_snapshot cadence" />
+                </label>
+              </div>
+              <label>
+                <span>Sample endpoint</span>
+                <input
+                  name="sample_endpoint"
+                  type="text"
+                  placeholder="http://host:8741 (empty = in-process)"
+                  autocomplete="off"
+                />
+              </label>
+              <label>
+                <span>Sample adapter id</span>
+                <input
+                  name="sample_adapter_id"
+                  type="text"
+                  placeholder="default: train adapter id"
+                  autocomplete="off"
+                />
+              </label>
+              <fieldset class="checks">
+                <legend>Observability</legend>
+                <label class="check"
+                  ><input type="checkbox" name="write_metrics" checked /> write metrics +
+                  probes (observe UI)</label
+                >
+              </fieldset>
+              <div class="form-actions" style="margin-top: 0.5rem">
+                <a class="link-btn" id="link-observe" href="#" target="_blank" rel="noopener"
+                  >open observe for selected run</a
+                >
+              </div>
+            </details>
             <div id="rationale-box" class="rationale mono"></div>
             <div class="form-actions">
               <button type="submit" class="btn primary">Start from recipe</button>

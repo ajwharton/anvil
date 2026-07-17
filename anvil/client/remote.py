@@ -146,6 +146,14 @@ class RemoteBackend:
         )
         return checkpoint_ref_from_wire(out)
 
+    def load_snapshot(self, adapter_id: AdapterId, path: str) -> None:
+        """Hot-load a PEFT snapshot into a sample worker (SnapshotLoader route)."""
+        self._t(
+            "POST",
+            f"{API}/adapters/{adapter_id}/load_snapshot",
+            {"path": path},
+        )
+
     def sample(
         self,
         *,

@@ -96,15 +96,17 @@ class TrainingClient:
             return self._queue.run(self._backend.load_state, self.adapter_id, ref)
         self._backend.load_state(self.adapter_id, ref)
 
+    def snapshot_for_sample(self, name: str = "latest") -> CheckpointRef:
+        """Write a sampler snapshot (PEFT dir / fake weights) and return its ref."""
+        if self._queue is not None:
+            return self._queue.run(self._backend.snapshot_for_sample, self.adapter_id, name)
+        return self._backend.snapshot_for_sample(self.adapter_id, name)
+
     def save_weights_and_get_sampling_client(self, name: str = "latest") -> SamplingClient:
-        """Snapshot adapter for on-policy sample (RL) or eval."""
+        """Snapshot adapter for on-policy sample (RL) or eval (same backend)."""
         from anvil.client.sampling import SamplingClient
 
-        ref = (
-            self._queue.run(self._backend.snapshot_for_sample, self.adapter_id, name)
-            if self._queue is not None
-            else self._backend.snapshot_for_sample(self.adapter_id, name)
-        )
+        ref = self.snapshot_for_sample(name)
         return SamplingClient(
             backend=self._backend,
             base_model=self.base_model,

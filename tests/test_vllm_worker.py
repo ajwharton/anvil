@@ -215,10 +215,44 @@ def test_load_snapshot_route_registered_for_workers(tmp_path, fake_vllm):
 
 
 def test_load_snapshot_route_absent_for_plain_backends():
-    from anvil.backends.fake import FakeBackend
+    """Backends without SnapshotLoader must not register the hot-swap route.
+
+    FakeBackend *does* implement load_snapshot (Tier-1 test double); use a
+    minimal train-only stub here.
+    """
     from anvil.serve.app import create_app
 
-    client = TestClient(create_app(FakeBackend()))
+    class _NoSnapshot:
+        name = "no-snap"
+
+        def create_lora_session(self, config):  # noqa: ANN001
+            raise NotImplementedError
+
+        def forward_backward(self, *a, **k):  # noqa: ANN001
+            raise NotImplementedError
+
+        def optim_step(self, *a, **k):  # noqa: ANN001
+            raise NotImplementedError
+
+        def save_state(self, *a, **k):  # noqa: ANN001
+            raise NotImplementedError
+
+        def load_state(self, *a, **k):  # noqa: ANN001
+            raise NotImplementedError
+
+        def snapshot_for_sample(self, *a, **k):  # noqa: ANN001
+            raise NotImplementedError
+
+        def sample(self, *a, **k):  # noqa: ANN001
+            raise NotImplementedError
+
+        def compute_logprobs(self, *a, **k):  # noqa: ANN001
+            raise NotImplementedError
+
+        def export_adapter(self, *a, **k):  # noqa: ANN001
+            raise NotImplementedError
+
+    client = TestClient(create_app(_NoSnapshot()))  # type: ignore[arg-type]
     r = client.post("/v1/adapters/default/load_snapshot", json={"path": "/tmp/x"})
     assert r.status_code == 404
 

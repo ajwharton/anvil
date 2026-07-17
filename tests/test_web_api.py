@@ -33,6 +33,42 @@ def test_health_and_defaults(client):
     d = client.get("/api/defaults").json()
     assert "cross_entropy" in d["loss_choices"]
     assert d["knobs"]["rank"] == 32
+    assert d["knobs"]["probe_every"] == 1
+    assert d["knobs"]["sync_every"] == 1
+    assert d["knobs"]["sample_endpoint"] == ""
+    assert d["knobs"]["write_metrics"] is True
+    assert "sync_every" in d["rl_knobs"]
+    assert "probe_every" in d["rl_knobs"]
+
+
+def test_create_run_stores_rl_knobs(client):
+    r = client.post(
+        "/api/runs",
+        json={
+            "name": "rl-knobs",
+            "knobs": {
+                "base_model": "Qwen/Qwen2.5-VL-3B-Instruct",
+                "loss_fn": "importance_sampling",
+                "probe_every": 5,
+                "sync_every": 3,
+                "sample_endpoint": "http://forge:8741",
+                "sample_adapter_id": "live",
+                "write_metrics": True,
+            },
+            "pattern": "rl_verifiable",
+        },
+    )
+    assert r.status_code == 200
+    run = r.json()
+    k = run["knobs"]
+    assert k["probe_every"] == 5
+    assert k["sync_every"] == 3
+    assert k["sample_endpoint"] == "http://forge:8741"
+    assert k["sample_adapter_id"] == "live"
+    assert k["write_metrics"] is True
+    log = "\n".join(run["logs"])
+    assert "sample_endpoint=http://forge:8741" in log
+    assert f"/observe/{run['run_id']}" in log
 
 
 def test_audit_trail_records_forced_gate(client):

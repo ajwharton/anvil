@@ -20,6 +20,11 @@ advantage-collapse tripwire — loss, fb metrics pass-through) to
 ``<run_dir>/metrics.jsonl``; pass ``probes`` and the live policy is
 re-sampled greedily on those fixed prompts every ``probe_every`` steps into
 ``<run_dir>/probes.jsonl``. anvil-web tails both (see /api/observe/*).
+
+**Adapter sync** (Phase 2.5 Tier 1): pass ``sample_endpoint`` (or inject
+``sample_backend``) and every ``sync_every`` steps the loop writes a train
+snapshot then ``load_snapshot`` on the sample worker so rollouts/probes hit
+the hot-swapped LoRA without reloading the base.
 """
 
 from __future__ import annotations
@@ -29,9 +34,19 @@ import time
 from dataclasses import dataclass
 from typing import Any, Callable, Sequence
 
+from anvil.backends.base import Backend, SnapshotLoader
+from anvil.client.sampling import SamplingClient
 from anvil.client.service import ServiceClient
 from anvil.observe.metrics import RunMetricsWriter
-from anvil.protocol.types import AdamParams, Datum, LoraTargets, ModelInput, SamplingParams
+from anvil.protocol.types import (
+    AdamParams,
+    AdapterId,
+    CheckpointRef,
+    Datum,
+    LoraTargets,
+    ModelInput,
+    SamplingParams,
+)
 from anvil.recipes.profiles import JobPattern, RecipePlan, plan_recipe
 
 RewardFn = Callable[[str, Sequence[int]], float]
@@ -78,6 +93,7 @@ class GRPOResult:
     mean_reward: list[float]
     losses: list[float]
     adapter_id: str
+    sync_count: int = 0
 
 
 def build_plan(base_model: str, **overrides: Any) -> RecipePlan:
@@ -96,6 +112,30 @@ def group_advantages(rewards: Sequence[float]) -> list[float]:
     return [float(r) - mean for r in rewards]
 
 
+def push_adapter_snapshot(
+    train_client: Any,
+    sample_backend: Backend,
+    *,
+    name: str,
+    sample_adapter_id: AdapterId | None = None,
+) -> CheckpointRef:
+    """Tier-1 weight sync: train snapshot → sample worker ``load_snapshot``.
+
+    ``sample_backend`` must implement :class:`SnapshotLoader` (vLLM sample
+    worker, FakeBackend in tests, RemoteBackend over ``anvil serve``).
+    Paths must be readable on the sample host (shared FS / same box).
+    """
+    if not isinstance(sample_backend, SnapshotLoader):
+        raise TypeError(
+            f"sample backend {type(sample_backend).__name__!r} does not support "
+            f"load_snapshot (SnapshotLoader) — use a vLLM sample worker or FakeBackend"
+        )
+    ref = train_client.snapshot_for_sample(name)
+    aid = sample_adapter_id if sample_adapter_id is not None else train_client.adapter_id
+    sample_backend.load_snapshot(aid, ref.path)
+    return ref
+
+
 def run_grpo(
     *,
     base_model: str = "Qwen/Qwen3.5-4B",
@@ -110,17 +150,28 @@ def run_grpo(
     probes: Sequence[Sequence[int]] | None = None,
     probe_every: int = 1,
     detokenize: Callable[[Sequence[int]], str] | None = None,
+    sample_endpoint: str | None = None,
+    sample_backend: Backend | None = None,
+    sync_every: int = 1,
+    sample_adapter_id: str | None = None,
 ) -> GRPOResult:
     """Run the GRPO/IS loop.
 
     Phase 2.5 observability: pass ``run_dir`` to append per-step records to
-    ``<run_dir>/metrics.jsonl`` (reward mean/std, within-group reward std —
-    the advantage-collapse tripwire, loss, IS mean_ratio passthrough) and,
-    when ``probes`` are given, greedy probe completions of the LIVE policy to
-    ``probes.jsonl`` every ``probe_every`` steps. ``detokenize`` maps probe
-    tokens to text for the UI (reward-hacking has no scalar signature — eyes
-    do).
+    ``<run_dir>/metrics.jsonl`` and, when ``probes`` are given, greedy probe
+    completions every ``probe_every`` steps to ``probes.jsonl``.
+
+    Phase 2.5 Tier-1 adapter sync: pass ``sample_endpoint`` (e.g.
+    ``http://forge:8741`` for a vLLM sample worker) or inject
+    ``sample_backend``. Every ``sync_every`` steps the live LoRA is written
+    via ``snapshot_for_sample`` and pushed with ``load_snapshot``. Leave both
+    unset for Tier-0 in-process sampling from the train backend.
     """
+    if sync_every < 1:
+        raise ValueError(f"sync_every must be >= 1, got {sync_every}")
+    if probe_every < 1:
+        raise ValueError(f"probe_every must be >= 1, got {probe_every}")
+
     plan = plan or build_plan(base_model, **(overrides or {}))
     k = plan.as_knobs()
     svc = ServiceClient(endpoint=endpoint)
@@ -138,87 +189,138 @@ def run_grpo(
     prompts = list(prompts) if prompts else [list(range(10, 26))]
     writer = RunMetricsWriter(run_dir) if run_dir else None
 
+    sample_svc: ServiceClient | None = None
+    resolved_sample: Backend | None = sample_backend
+    if resolved_sample is None and sample_endpoint:
+        sample_svc = ServiceClient(endpoint=sample_endpoint, queue=False)
+        resolved_sample = sample_svc.backend
+    sample_aid = (
+        AdapterId(sample_adapter_id) if sample_adapter_id is not None else tc.adapter_id
+    )
+    sample_ep_label = sample_endpoint or (
+        f"injected:{type(resolved_sample).__name__}" if resolved_sample is not None else None
+    )
+
     losses: list[float] = []
     mean_rewards: list[float] = []
+    sync_count = 0
+    last_ref: CheckpointRef | None = None
 
-    for step_ix in range(steps):
-        t0 = time.monotonic()
-        sc = tc.save_weights_and_get_sampling_client(name=f"grpo-{step_ix}")
-        batch: list[Datum] = []
-        step_rewards: list[float] = []
-        group_stds: list[float] = []
+    try:
+        for step_ix in range(steps):
+            t0 = time.monotonic()
+            adapter_synced = False
+            snap_path: str | None = None
 
-        for prompt_tokens in prompts:
-            prompt = ModelInput.from_ints(prompt_tokens)
-            sample = sc.sample(
-                prompt,
-                SamplingParams(
-                    max_tokens=plan.max_tokens,
-                    temperature=plan.temperature,
-                    seed=None,
-                ),
-                num_samples=group_size,
-            ).result()
-            rewards = []
-            for seq in sample.sequences:
-                r = reward_fn("", seq.tokens)
-                rewards.append(r)
-                step_rewards.append(r)
-            group_stds.append(statistics.pstdev(rewards) if len(rewards) > 1 else 0.0)
-            adv = group_advantages(rewards)
-            for seq, a in zip(sample.sequences, adv, strict=True):
-                if not seq.tokens:
-                    continue
-                if seq.logprobs is None:
-                    raise ValueError(
-                        "sampler returned no per-token logprobs — old-policy "
-                        "logprobs are required for the IS/PPO family"
+            if resolved_sample is None:
+                # Tier 0 — sample from the train backend's live adapter
+                sc = tc.save_weights_and_get_sampling_client(name=f"grpo-{step_ix}")
+                last_ref = sc.checkpoint
+            else:
+                # Tier 1 — push on cadence, sample from the sample worker
+                if step_ix % sync_every == 0:
+                    last_ref = push_adapter_snapshot(
+                        tc,
+                        resolved_sample,
+                        name=f"grpo-{step_ix}",
+                        sample_adapter_id=sample_aid,
                     )
-                batch.append(
-                    datum_from_rollout(prompt_tokens, seq.tokens, seq.logprobs, a)
+                    adapter_synced = True
+                    sync_count += 1
+                    snap_path = last_ref.path
+                elif last_ref is None:
+                    raise RuntimeError(
+                        "sample worker has no adapter yet — first step must sync "
+                        "(sync_every>=1 always covers step 0)"
+                    )
+                sc = SamplingClient(
+                    backend=resolved_sample,
+                    base_model=plan.base_model,
+                    adapter_id=sample_aid,
+                    checkpoint=last_ref,
                 )
 
-        if not batch:
-            break
+            batch: list[Datum] = []
+            step_rewards: list[float] = []
+            group_stds: list[float] = []
 
-        # Probe the LIVE policy (same weights that generated this batch) —
-        # greedy + fixed seed so completions are comparable across steps.
-        if writer is not None and probes and step_ix % probe_every == 0:
-            for probe_ix, probe_tokens in enumerate(probes):
-                out = sc.sample(
-                    ModelInput.from_ints(probe_tokens),
-                    SamplingParams(max_tokens=plan.max_tokens, temperature=0.0, seed=0),
-                    num_samples=1,
+            for prompt_tokens in prompts:
+                prompt = ModelInput.from_ints(prompt_tokens)
+                sample = sc.sample(
+                    prompt,
+                    SamplingParams(
+                        max_tokens=plan.max_tokens,
+                        temperature=plan.temperature,
+                        seed=None,
+                    ),
+                    num_samples=group_size,
                 ).result()
-                seq = out.sequences[0] if out.sequences else None
-                toks = tuple(seq.tokens) if seq is not None else ()
-                writer.log_probe(
-                    step=step_ix,
-                    probe_idx=probe_ix,
-                    tokens=toks,
-                    text=detokenize(toks) if detokenize else None,
-                    reward=reward_fn("", toks),
-                )
+                rewards = []
+                for seq in sample.sequences:
+                    r = reward_fn("", seq.tokens)
+                    rewards.append(r)
+                    step_rewards.append(r)
+                group_stds.append(statistics.pstdev(rewards) if len(rewards) > 1 else 0.0)
+                adv = group_advantages(rewards)
+                for seq, a in zip(sample.sequences, adv, strict=True):
+                    if not seq.tokens:
+                        continue
+                    if seq.logprobs is None:
+                        raise ValueError(
+                            "sampler returned no per-token logprobs — old-policy "
+                            "logprobs are required for the IS/PPO family"
+                        )
+                    batch.append(
+                        datum_from_rollout(prompt_tokens, seq.tokens, seq.logprobs, a)
+                    )
 
-        fb = tc.forward_backward(batch, loss_fn=plan.loss_fn).result()
-        tc.optim_step(AdamParams(learning_rate=plan.learning_rate)).result()
-        losses.append(fb.loss)
-        mean_rewards.append(sum(step_rewards) / max(len(step_rewards), 1))
-        if writer is not None:
-            writer.log_step(
-                step=step_ix,
-                reward_mean=mean_rewards[-1],
-                reward_std=(
-                    statistics.pstdev(step_rewards) if len(step_rewards) > 1 else 0.0
-                ),
-                group_reward_std_mean=(
-                    sum(group_stds) / len(group_stds) if group_stds else 0.0
-                ),
-                loss=fb.loss,
-                n_datums=len(batch),
-                fb_metrics=dict(fb.metrics),
-                wall_time_s=time.monotonic() - t0,
-            )
+            if not batch:
+                break
+
+            # Probe the LIVE policy (weights used for this step's rollouts)
+            if writer is not None and probes and step_ix % probe_every == 0:
+                for probe_ix, probe_tokens in enumerate(probes):
+                    out = sc.sample(
+                        ModelInput.from_ints(probe_tokens),
+                        SamplingParams(max_tokens=plan.max_tokens, temperature=0.0, seed=0),
+                        num_samples=1,
+                    ).result()
+                    seq = out.sequences[0] if out.sequences else None
+                    toks = tuple(seq.tokens) if seq is not None else ()
+                    writer.log_probe(
+                        step=step_ix,
+                        probe_idx=probe_ix,
+                        tokens=toks,
+                        text=detokenize(toks) if detokenize else None,
+                        reward=reward_fn("", toks),
+                    )
+
+            fb = tc.forward_backward(batch, loss_fn=plan.loss_fn).result()
+            tc.optim_step(AdamParams(learning_rate=plan.learning_rate)).result()
+            losses.append(fb.loss)
+            mean_rewards.append(sum(step_rewards) / max(len(step_rewards), 1))
+            if writer is not None:
+                writer.log_step(
+                    step=step_ix,
+                    reward_mean=mean_rewards[-1],
+                    reward_std=(
+                        statistics.pstdev(step_rewards) if len(step_rewards) > 1 else 0.0
+                    ),
+                    group_reward_std_mean=(
+                        sum(group_stds) / len(group_stds) if group_stds else 0.0
+                    ),
+                    loss=fb.loss,
+                    n_datums=len(batch),
+                    fb_metrics=dict(fb.metrics),
+                    wall_time_s=time.monotonic() - t0,
+                    adapter_synced=adapter_synced if resolved_sample is not None else None,
+                    snapshot_path=snap_path,
+                    sample_endpoint=sample_ep_label if resolved_sample is not None else None,
+                )
+    finally:
+        if sample_svc is not None:
+            sample_svc.close()
+        svc.close()
 
     return GRPOResult(
         plan=plan,
@@ -226,6 +328,7 @@ def run_grpo(
         mean_reward=mean_rewards,
         losses=losses,
         adapter_id=str(tc.adapter_id),
+        sync_count=sync_count,
     )
 
 
