@@ -87,9 +87,17 @@ If 1.5B is NO-GO: re-run with a 3–4B dense instruct on the same script (`--mod
 - [ ] GO — proceed to J1 (`anvil/observe/jlens.py` schema + tests)  
 - [ ] NO-GO — larger model / more fit data / abandon panel for now  
 
-## Product next steps (only if GO)
+## Product next steps
 
-See session plan (J1–J5): artifact `jlens.jsonl` → `run_grpo(jlens_every=…)` → optional worker → observe panel → tripwires. Still **debugger cadence**, never hot-path rollouts.
+| Step | Status |
+|------|--------|
+| **J1** artifact schema (`jlens.jsonl`, `log_jlens`, API tail) | **landed** — no real lens required |
+| **J2** `run_grpo(jlens_every=…)` apply hook | after forge **GO** (or stub with fake slice for CI) |
+| **J3** optional J-Lens worker | optional |
+| **J4** permanent `/observe` panel | **spike GO only** |
+| **J5** tripwires in UI | after J4 |
+
+Still **debugger cadence**, never hot-path rollouts.
 
 ## Copy into roadmap
 

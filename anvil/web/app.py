@@ -20,7 +20,12 @@ from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
-from anvil.observe.metrics import METRICS_FILENAME, PROBES_FILENAME, read_jsonl
+from anvil.observe.metrics import (
+    JLENS_FILENAME,
+    METRICS_FILENAME,
+    PROBES_FILENAME,
+    read_jsonl,
+)
 
 from anvil.recipes import (
     gate_recipe,
@@ -397,6 +402,12 @@ def create_app() -> FastAPI:
     def observe_probes(run_id: str, tail: int = 200) -> dict[str, Any]:
         d = _observe_run_dir(run_id)
         return {"run_id": run_id, "probes": read_jsonl(d / PROBES_FILENAME, tail=tail)}
+
+    @app.get("/api/observe/{run_id}/jlens")
+    def observe_jlens(run_id: str, tail: int = 100) -> dict[str, Any]:
+        """Tail jlens.jsonl residual-readout records (J1 artifact path; panel later)."""
+        d = _observe_run_dir(run_id)
+        return {"run_id": run_id, "jlens": read_jsonl(d / JLENS_FILENAME, tail=tail)}
 
     @app.get("/api/observe/{run_id}/metrics/stream")
     async def observe_metrics_stream(
