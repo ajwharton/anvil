@@ -68,7 +68,10 @@ Success looks like: a researcher or roboticist can SFT/RL a small LLM/VLM from a
       logged with recipe, shape, and reasons — `anvil/control/audit.py` +
       `/api/audit` (start of the control-plane audit trail)  
 
-## Phase 3 — Vision first-class
+## Phase 2.5 — RL observability (the RL debugger)
+
+**Why:** RL runs fail quietly. Reward climbs while the policy degrades, group
+rewards homogenize and advantages collapse to zero, entropy crashes — a...[truncated]
 
 **Exit criteria**
 
@@ -131,3 +134,4 @@ For a spin-off agent session:
 | 2026-07-17 | IS/PPO loss family lands in LocalBackend over GRPO-shaped datums (`grpo.datum_from_rollout`: model_input = prompt+completion[:-1], old-policy logprobs aligned to completion targets). Golden tests caught two real bugs: sampler logprobs came from warped HF *scores* (post top-p/temp) instead of raw logits — old-policy logprobs must be the true policy distribution; and the completion-position slice gathered along the vocab dim instead of the sequence dim. Both fixed; `mean_ratio≈1.0` on-policy and +advantage raises completion logprobs |
 | 2026-07-17 | GRPO loop runs end-to-end on LocalBackend — `run_grpo(endpoint="local://")` with real logprobs and grads (sample → reward → group advantages → IS fwd/bwd → optim); covered by `test_grpo_loop_local_backend` |
 | 2026-07-17 | Async futures / queue (design §4.3): `VerbQueue` single-worker FIFO behind `ServiceClient(queue=True)`; `forward_backward`/`optim_step`/`sample`/`compute_logprobs` return non-blocking `AnvilFuture`s, sync verbs route through the queue for serialization; `queue=False` keeps the inline path. 95/95 tests, ruff clean |
+| 2026-07-17 | Phase 2.5 scoped — RL observability (the RL debugger): per-run `metrics.jsonl` + SSE live charts, fixed-probe inference tester on the live policy every K steps, adapter-sync cadence knob; J-lens spike LAST, gated on reproducing "intermediate steps light up in order" (Anthropic global-workspace paper, 2026-07-06, `anthropics/jacobian-lens`). Agreed ordering: vLLM worker → metrics → probe tester → J-lens |
