@@ -121,72 +121,69 @@ DEFAULT_TOP_K = 8
 
 
 # ---------------------------------------------------------------------------
-# Scoring
+# Scoring — prefer package SSOT (J1); local fallback if anvil not on path
 # ---------------------------------------------------------------------------
 
+try:
+    from anvil.observe.jlens import (  # type: ignore
+        answer_min_rank,
+        earliest_stage_layers,
+        intermediate_order_score,
+        top_tokens_contain,
+    )
+except ImportError:  # pragma: no cover — bare script on forge without install
 
-def _norm_tok(s: str) -> str:
-    return re.sub(r"\s+", "", s.strip().lower())
+    def _norm_tok(s: str) -> str:
+        return re.sub(r"\s+", "", s.strip().lower())
 
+    def top_tokens_contain(top_strings: Sequence[str], candidates: Sequence[str]) -> bool:
+        tops = {_norm_tok(t) for t in top_strings}
+        for c in candidates:
+            nc = _norm_tok(c)
+            if not nc:
+                continue
+            if nc in tops:
+                return True
+            if any(nc in t or t in nc for t in tops if t):
+                return True
+        return False
 
-def top_tokens_contain(top_strings: Sequence[str], candidates: Sequence[str]) -> bool:
-    tops = {_norm_tok(t) for t in top_strings}
-    for c in candidates:
-        nc = _norm_tok(c)
-        if not nc:
-            continue
-        if nc in tops:
-            return True
-        # substring match for BPE pieces ("14" in "14\n")
-        if any(nc in t or t in nc for t in tops if t):
-            return True
-    return False
+    def earliest_stage_layers(
+        layer_tops: dict[int, list[str]],
+        stages: Sequence[Sequence[str]],
+    ) -> list[int | None]:
+        layers_sorted = sorted(layer_tops.keys())
+        out: list[int | None] = []
+        for stage in stages:
+            hit: int | None = None
+            for L in layers_sorted:
+                if top_tokens_contain(layer_tops[L], stage):
+                    hit = L
+                    break
+            out.append(hit)
+        return out
 
+    def intermediate_order_score(stage_layers: Sequence[int | None]) -> float | None:
+        known = [(i, L) for i, L in enumerate(stage_layers) if L is not None]
+        if len(known) < 2:
+            return None
+        ok = 0
+        total = 0
+        for (_, la), (_, lb) in zip(known, known[1:]):
+            total += 1
+            if lb >= la:
+                ok += 1
+        return ok / total if total else None
 
-def earliest_stage_layers(
-    layer_tops: dict[int, list[str]],
-    stages: Sequence[Sequence[str]],
-) -> list[int | None]:
-    """For each stage, earliest layer (numeric) where any candidate appears in top-k."""
-    layers_sorted = sorted(layer_tops.keys())
-    out: list[int | None] = []
-    for stage in stages:
-        hit: int | None = None
-        for L in layers_sorted:
-            if top_tokens_contain(layer_tops[L], stage):
-                hit = L
-                break
-        out.append(hit)
-    return out
-
-
-def intermediate_order_score(stage_layers: Sequence[int | None]) -> float | None:
-    """Fraction of consecutive stage pairs that are non-decreasing in layer index.
-
-    None if fewer than 2 stages have hits (cannot score order).
-    """
-    known = [(i, L) for i, L in enumerate(stage_layers) if L is not None]
-    if len(known) < 2:
-        return None
-    ok = 0
-    total = 0
-    for (_, la), (_, lb) in zip(known, known[1:]):
-        total += 1
-        if lb >= la:
-            ok += 1
-    return ok / total if total else None
-
-
-def answer_min_rank(layer_tops: dict[int, list[str]], answer: str) -> int | None:
-    """Best (lowest) 1-based rank of answer string across layers; None if never in top-k."""
-    best: int | None = None
-    for tops in layer_tops.values():
-        for i, t in enumerate(tops):
-            if _norm_tok(answer) in _norm_tok(t) or _norm_tok(t) in _norm_tok(answer):
-                rank = i + 1
-                best = rank if best is None else min(best, rank)
-                break
-    return best
+    def answer_min_rank(layer_tops: dict[int, list[str]], answer: str) -> int | None:
+        best: int | None = None
+        for tops in layer_tops.values():
+            for i, t in enumerate(tops):
+                if _norm_tok(answer) in _norm_tok(t) or _norm_tok(t) in _norm_tok(answer):
+                    rank = i + 1
+                    best = rank if best is None else min(best, rank)
+                    break
+        return best
 
 
 # ---------------------------------------------------------------------------

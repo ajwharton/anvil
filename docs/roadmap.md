@@ -120,6 +120,9 @@ the base never changes, only the LoRA adapter does, and that is megabytes):
       on multi-step math; only then a permanent run-detail panel.
       **Runbook:** `scripts/jlens_spike.py` + fill-in
       [`docs/spikes/jlens-math.md`](spikes/jlens-math.md).
+      **J1 artifact path (schema):** `anvil/observe/jlens.py` +
+      `RunMetricsWriter.log_jlens` → `jlens.jsonl`;
+      `GET /api/observe/{run_id}/jlens` (panel still gated on spike GO).
       Grounding: Gurnee, Sofroniew, Lindsey et al., "Verbalizable
       Representations Form a Global Workspace in Language Models" (Anthropic,
       2026-07-06) — the J-space is a readout of the model's *unverbalized*
@@ -198,3 +201,5 @@ For a spin-off agent session:
 | 2026-07-17 | vLLM worker verified cross-node: mac → `forge:8741` (vllm 0.25.1, Qwen2.5-1.5B) — greedy base sample, 404 on unknown adapter, Phase 1 adapter hot-swap shifts output (`' Paris. The capital of France'` → `' Paris. the capital of Paris'`) with deterministic re-push on a fresh LoRA id, `compute_logprobs` prompt-aligned, 501 on training verbs. Forge env: bench-venv needed `ninja` + its bin on PATH for vLLM's JIT; `LoRARequest` deep-imported (not top-level in 0.25) |
 | 2026-07-17 | P2.5 metrics scaffolding lands: `anvil/observe/metrics.py` (`RunMetricsWriter` → `metrics.jsonl`/`probes.jsonl`, `advantage_collapsed` tripwire, `schema_version` on every record); `run_grpo(run_dir=..., probes=..., probe_every=K, detokenize=...)` emits per-step reward mean/std + within-group reward std + IS mean_ratio passthrough + loss + wall time, and greedy probes of the LIVE policy scored with the reward fn; anvil-web serves `/api/observe/*` (tail + SSE stream) and a standalone `/observe/{run_id}` page with live reward/group-std chart, collapse banner, and probe panel. 7 new tests, 113/113, ruff clean |
 | 2026-07-17 | P2.5 adapter-sync cadence: `run_grpo(sample_endpoint=|sample_backend=, sync_every=K)` pushes `snapshot_for_sample` → `load_snapshot` on the sample worker; FakeBackend + RemoteBackend implement `load_snapshot`; metrics carry `adapter_synced`/`snapshot_path`/`sample_endpoint`; anvil-web RL debugger section exposes probe_every, sync_every, sample_endpoint, sample_adapter_id, write_metrics (+ defaults.rl_knobs). J-lens remains the last open 2.5 gate |
+| 2026-07-17 | J0 spike runbook: `scripts/jlens_spike.py` + `docs/spikes/jlens-math.md` (forge GO/NO-GO) |
+| 2026-07-17 | J1 J-Lens artifact path: `anvil/observe/jlens.py` schema v1, `log_jlens` → `jlens.jsonl`, order-score helpers + `jlens_order_collapsed`, `GET /api/observe/{id}/jlens` — no real lens dep; permanent panel still spike-gated |

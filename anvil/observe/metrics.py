@@ -24,6 +24,8 @@ SCHEMA_VERSION = 1
 
 METRICS_FILENAME = "metrics.jsonl"
 PROBES_FILENAME = "probes.jsonl"
+# J1: J-Lens residual readouts (see anvil.observe.jlens)
+JLENS_FILENAME = "jlens.jsonl"
 
 
 def _append_jsonl(path: Path, record: dict[str, Any]) -> None:
@@ -64,6 +66,7 @@ class RunMetricsWriter:
         self.run_dir = Path(run_dir)
         self.metrics_path = self.run_dir / METRICS_FILENAME
         self.probes_path = self.run_dir / PROBES_FILENAME
+        self.jlens_path = self.run_dir / JLENS_FILENAME
 
     def log_step(
         self,
@@ -121,4 +124,61 @@ class RunMetricsWriter:
             "reward": None if reward is None else float(reward),
         }
         _append_jsonl(self.probes_path, record)
+        return record
+
+    def log_jlens(
+        self,
+        *,
+        step: int,
+        probe_idx: int | None = None,
+        prompt_preview: str | None = None,
+        completion_preview: str | None = None,
+        layers: Iterable[int] | None = None,
+        positions: str | Iterable[int] = "last_prompt",
+        top_k: int = 5,
+        slice_: dict[str, Any] | None = None,
+        signals: dict[str, Any] | None = None,
+        stages: Iterable[Iterable[str]] | None = None,
+        answer: str | None = None,
+        lens_id: str | None = None,
+        adapter_id: str | None = None,
+        wall_time_s: float | None = None,
+        extra: dict[str, Any] | None = None,
+    ) -> dict[str, Any]:
+        """Append one J-Lens debugger record to ``jlens.jsonl`` (schema v1).
+
+        Does not run the lens — callers pass a compact ``slice_`` (or precomputed
+        ``signals``). Prefer building via :func:`anvil.observe.jlens.build_jlens_record`.
+        """
+        from anvil.observe.jlens import build_jlens_record
+
+        pos: str | list[int]
+        if isinstance(positions, str):
+            pos = positions
+        else:
+            pos = [int(p) for p in positions]
+        st: list[list[str]] | None = None
+        if stages is not None:
+            st = [[str(x) for x in stage] for stage in stages]
+        record = build_jlens_record(
+            step=step,
+            probe_idx=probe_idx,
+            prompt_preview=prompt_preview,
+            completion_preview=completion_preview,
+            layers=list(layers) if layers is not None else None,
+            positions=pos,
+            top_k=top_k,
+            slice_=slice_,
+            signals=signals,
+            stages=st,
+            answer=answer,
+            lens_id=lens_id,
+            adapter_id=adapter_id,
+            wall_time_s=wall_time_s,
+            extra=extra,
+        )
+        # keep package SCHEMA_VERSION on envelope for observe readers that
+        # only know metrics.SCHEMA_VERSION; jlens has its own field too
+        record["schema_version"] = max(int(record.get("schema_version", 1)), SCHEMA_VERSION)
+        _append_jsonl(self.jlens_path, record)
         return record
