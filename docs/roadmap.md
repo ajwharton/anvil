@@ -140,7 +140,8 @@ autointerp beyond the J-lens readout.
 - [x] Media store (content-addressed refs) — `LocalMediaStore` + `put_path` / path resolve  
 - [x] Multimodal message schema + serde — `Example`/`Message` public JSON; **Trajectory** for robot demos  
 - [x] JSONL / path ingest — `anvil.data.ingest` (Bridge/OXE convert *into* this shape)  
-- [ ] Multimodal **renderer** (processor-backed, e.g. Qwen2.5-VL) + train/sample prefix tests  
+- [x] Multimodal **renderer** (processor-backed `HFVLMRenderer`) + train/sample prefix tests  
+
 - [ ] VLM SFT recipe on real frames (forge) + optional classifier-style recipe  
 - [x] Freeze/LoRA knobs for encoder vs projector vs LM — already in recipe plans (`vision_encoder` default off)  
 
@@ -211,3 +212,4 @@ For a spin-off agent session:
 | 2026-07-17 | J0 forge run **NO-GO**: Qwen2.5-1.5B + fit_n=32 (~18 min), lens at `/mnt/data/models/lenses/qwen2.5-1.5b-instruct/`; apply on 3 math probes at last prompt token → 0 stage hits / 0 answer hits (late tops = Sure/First/Okay). Artifacts `/mnt/data/anvil-runs/jlens-spike-20260717-191152/`. Writeup filled; permanent panel remains blocked |
 | 2026-07-17 | J0 protocol **v2** re-spike **NO-GO**: cot_in_prompt / generate / last_prompt + digit-safe match; generate best mean order 0.75 but 0/3 answer top-k. **Product call: shelve permanent J-Lens panel** (keep J1 schema + CLI). Artifacts `/mnt/data/anvil-runs/jlens-spike-v2-20260717-194416/` |
 | 2026-07-17 | **Phase 3 opened (P3.0):** media store `put_path`/path resolve; Example/Message public serde; `Trajectory` → VLM SFT examples; `anvil.data.ingest` JSONL path ingest; docs `phase3-vision.md` + `datasets-robotics.md` (OXE, Bridge, OpenVLA, LeRobot, Robo2VLM). Next: processor-backed VLM renderer |
+| 2026-07-17 | **P3.1** `HFVLMRenderer`: processor-backed multimodal render; media-store image load; train/sample prefix invariant; image_refs on SFT Datum; fake-processor unit tests (no multi-GB download) |

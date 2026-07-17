@@ -5,9 +5,8 @@ worker and the sample worker: that is the train/sample consistency invariant
 (docs/design.md §3). ``ToyTextRenderer`` proves control flow against the fake
 backend; this renderer produces the tokens a real model actually sees.
 
-Text-only in Phase 1. Image parts raise ``NotImplementedError`` — the VLM
-renderer (processor-backed, expands media refs to image tokens) lands in
-Phase 3 with the media store.
+Text-only. For images use :class:`~anvil.render.vlm.HFVLMRenderer` (Phase 3.1)
+with a media store and multimodal processor.
 
 Optional dependency: ``pip install anvil-train[hf]`` (transformers).
 """
@@ -113,8 +112,8 @@ class HFChatRenderer:
             for part in m.parts():
                 if isinstance(part, (ImagePart, ImageUrlPart)):
                     raise NotImplementedError(
-                        "HFChatRenderer is text-only (Phase 1); the "
-                        "processor-backed VLM renderer lands in Phase 3"
+                        "HFChatRenderer is text-only; use HFVLMRenderer "
+                        "(anvil.render.vlm) with a MediaStore for image parts"
                     )
                 text_parts.append(part.text)
             out.append({"role": m.role, "content": "".join(text_parts)})
