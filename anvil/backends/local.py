@@ -42,6 +42,8 @@ from anvil.protocol.types import (
 )
 
 _SUPPORTED_LOSSES = {LossFn.CROSS_ENTROPY.value}
+_RL_LOSSES = {LossFn.IMPORTANCE_SAMPLING.value, LossFn.PPO.value}
+_PPO_EPS = 0.2  # named losses + tensors only (design §4.2); no client clip config
 
 # Opinionated capacity gates (learned the hard way): a LoRA adapter can only
 # steer a model through its hidden width. sshleifer/tiny-gpt2 (hidden_size=2,
@@ -72,6 +74,47 @@ def _normalize_loss(loss_fn: LossFn | str) -> str:
     if isinstance(loss_fn, LossFn):
         return loss_fn.value
     return str(loss_fn)
+
+
+def _stop_string_criteria(
+    transformers: Any, tokenizer: Any, prompt_len: int, stop_strings: tuple[str, ...]
+) -> Any:
+    """Early-exit criteria: True once EVERY row's decoded suffix holds a stop string.
+
+    HF StoppingCriteria halts the whole batch jointly (no per-row exit), so
+    per-row correctness is handled by ``_truncate_at_stop``; this just ends
+    generation early once all rows are done instead of burning max_tokens.
+    """
+
+    class _StopStrings(transformers.StoppingCriteria):
+        def __call__(self, input_ids: Any, scores: Any, **kwargs: Any) -> bool:
+            for row in input_ids:
+                text = tokenizer.decode(
+                    row[prompt_len:].tolist(), skip_special_tokens=False
+                )
+                if not any(s in text for s in stop_strings):
+                    return False
+            return True
+
+    return transformers.StoppingCriteriaList([_StopStrings()])
+
+
+def _truncate_at_stop(
+    tokenizer: Any, toks: list[int], stop_strings: tuple[str, ...]
+) -> tuple[list[int], bool]:
+    """Cut tokens at the earliest stop-string occurrence; whole-token granularity.
+
+    Stop strings match on decoded text; a stop string that starts mid-token
+    drops that whole token (vLLM convention). Returns (tokens, hit).
+    """
+    text = tokenizer.decode(toks, skip_special_tokens=False)
+    hits = [p for p in (text.find(s) for s in stop_strings) if p >= 0]
+    if not hits:
+        return toks, False
+    cut = min(hits)
+    while toks and len(tokenizer.decode(toks, skip_special_tokens=False)) > cut:
+        toks.pop()
+    return toks, True
 
 
 @dataclass
@@ -200,10 +243,12 @@ class LocalBackend:
         torch, _, _ = _deps()
         sess = self._get(adapter_id)
         name = _normalize_loss(loss_fn)
+        if name in _RL_LOSSES:
+            return self._forward_backward_rl(sess, data, name)
         if name not in _SUPPORTED_LOSSES:
             raise NotImplementedError(
-                f"loss {name!r} not supported by LocalBackend v0 — the IS/PPO/DPO "
-                f"family lands with the Phase 2 RL workers"
+                f"loss {name!r} not supported by LocalBackend — cross_entropy and "
+                f"the IS/PPO family are implemented; CISPO/DRO/DPO still pending"
             )
         if not data:
             raise ValueError("forward_backward requires non-empty data")
@@ -258,6 +303,115 @@ class LocalBackend:
             metrics={
                 "n_tokens": float(w.sum().item()),
                 "n_examples": float(len(rows)),
+            },
+        )
+
+    def _forward_backward_rl(
+        self,
+        sess: _LocalSession,
+        data: Sequence[Datum],
+        loss_name: str,
+    ) -> ForwardBackwardOutput:
+        """On-policy losses (importance_sampling / ppo) over GRPO-shaped datums.
+
+        Datum convention (built by ``anvil.recipes.grpo.datum_from_rollout``):
+
+        - ``model_input``   = prompt_tokens + completion_tokens[:-1]
+        - ``target_tokens`` = completion tokens (length C)
+        - ``logprobs``      = old-policy logprob per completion token (length C)
+        - ``advantages``    = per-token advantage (length C)
+        - ``weights``       = optional per-token multiplier (length C, default 1)
+
+        The last C positions of model_input predict the completion, so the
+        forward pass slices exactly those positions' logits — old-policy
+        logprobs stay aligned to target positions by construction.
+        """
+        torch, _, _ = _deps()
+        if not data:
+            raise ValueError("forward_backward requires non-empty data")
+        pad_id = sess.tokenizer.pad_token_id
+        rows: list[tuple[list[int], list[int], list[float], list[float], list[float]]] = []
+        for datum in data:
+            ids = datum.model_input.token_ids()
+            targets = [int(t) for t in datum.loss_fn_inputs.get("target_tokens", [])]
+            old_lp = [float(x) for x in datum.loss_fn_inputs.get("logprobs", [])]
+            adv = [float(x) for x in datum.loss_fn_inputs.get("advantages", [])]
+            w = [float(x) for x in datum.loss_fn_inputs.get("weights", [1.0] * len(targets))]
+            if not targets:
+                raise ValueError(
+                    "RL datum requires non-empty target_tokens (the completion)"
+                )
+            if not (len(targets) == len(old_lp) == len(adv)):
+                raise ValueError(
+                    f"target_tokens/logprobs/advantages length mismatch: "
+                    f"{len(targets)}/{len(old_lp)}/{len(adv)} — build RL data via "
+                    f"anvil.recipes.grpo.datum_from_rollout so old-policy logprobs "
+                    f"align to target positions"
+                )
+            if len(ids) < len(targets):
+                raise ValueError(
+                    f"model_input ({len(ids)} tokens) must be prompt+completion[:-1] "
+                    f"— at least as long as target_tokens ({len(targets)})"
+                )
+            if len(w) < len(targets):
+                w = w + [1.0] * (len(targets) - len(w))
+            rows.append((ids, targets, old_lp, adv, w))
+
+        n = len(rows)
+        width = max(len(r[0]) for r in rows)
+        max_c = max(len(r[1]) for r in rows)
+        input_ids = torch.full((n, width), pad_id, dtype=torch.long)
+        attn = torch.zeros((n, width), dtype=torch.long)
+        targets_t = torch.zeros((n, max_c), dtype=torch.long)
+        old_lp_t = torch.zeros((n, max_c), dtype=torch.float32)
+        adv_t = torch.zeros((n, max_c), dtype=torch.float32)
+        mask_t = torch.zeros((n, max_c), dtype=torch.float32)
+        comp_idx = torch.zeros((n, max_c), dtype=torch.long)
+        for i, (ids, targets, old_lp, adv, w) in enumerate(rows):
+            L, C = len(ids), len(targets)
+            input_ids[i, :L] = torch.tensor(ids, dtype=torch.long)
+            attn[i, :L] = 1
+            targets_t[i, :C] = torch.tensor(targets, dtype=torch.long)
+            old_lp_t[i, :C] = torch.tensor(old_lp, dtype=torch.float32)
+            adv_t[i, :C] = torch.tensor(adv, dtype=torch.float32)
+            mask_t[i, :C] = torch.tensor(w, dtype=torch.float32)
+            comp_idx[i, :C] = torch.arange(L - C, L, dtype=torch.long)
+            comp_idx[i, C:] = L - 1  # dummy slots; masked out below
+        input_ids = input_ids.to(self.device)
+        attn = attn.to(self.device)
+        targets_t = targets_t.to(self.device)
+        old_lp_t = old_lp_t.to(self.device)
+        adv_t = adv_t.to(self.device)
+        mask_t = mask_t.to(self.device)
+        comp_idx = comp_idx.to(self.device)
+
+        logits = sess.model(input_ids=input_ids, attention_mask=attn).logits
+        row_ix = torch.arange(n, device=logits.device).unsqueeze(1)
+        comp_logits = logits[row_ix, comp_idx]  # (n, max_c, V) — completion positions
+        logp = torch.log_softmax(comp_logits.float(), dim=-1)
+        cur_lp = logp.gather(-1, targets_t.unsqueeze(-1)).squeeze(-1)
+
+        ratio = torch.exp(cur_lp - old_lp_t)
+        if loss_name == LossFn.PPO.value:
+            unclipped = ratio * adv_t
+            clipped = torch.clamp(ratio, 1.0 - _PPO_EPS, 1.0 + _PPO_EPS) * adv_t
+            obj = torch.minimum(unclipped, clipped)
+        else:  # importance_sampling
+            obj = ratio * adv_t
+        w_sum = mask_t.sum().clamp_min(1e-8)
+        loss = -(obj * mask_t).sum() / w_sum
+        loss.backward()
+        sess.pending_grad = True
+
+        return ForwardBackwardOutput(
+            loss=float(loss.detach().cpu()),
+            metrics={
+                "n_completion_tokens": float(mask_t.sum().item()),
+                "n_examples": float(n),
+                "mean_ratio": float(((ratio * mask_t).sum() / w_sum).item()),
+                "mean_log_ratio": float(
+                    (((cur_lp - old_lp_t) * mask_t).sum() / w_sum).item()
+                ),
             },
         )
 
@@ -377,12 +531,8 @@ class LocalBackend:
         num_samples: int = 1,
         include_prompt_logprobs: bool = False,
     ) -> SampleResult:
-        torch, _, _ = _deps()
-        if sampling_params.stop:
-            raise NotImplementedError(
-                "stop strings are not supported by LocalBackend v0 (needs "
-                "token-level stopping criteria); use max_tokens/eos for now"
-            )
+        torch, transformers, _ = _deps()
+        stop_strings = tuple(s for s in (sampling_params.stop or ()) if s)
         model, tokenizer = self._model_for_sample(base_model, adapter_id)
 
         prompt_ids = prompt.token_ids()
@@ -404,7 +554,7 @@ class LocalBackend:
             "max_new_tokens": sampling_params.max_tokens,
             "do_sample": do_sample,
             "num_return_sequences": num_samples,
-            "output_scores": True,
+            "output_logits": True,
             "return_dict_in_generate": True,
             "pad_token_id": tokenizer.pad_token_id,
         }
@@ -414,6 +564,10 @@ class LocalBackend:
                 gen_kwargs["top_p"] = sampling_params.top_p
             if sampling_params.top_k is not None:
                 gen_kwargs["top_k"] = sampling_params.top_k
+        if stop_strings:
+            gen_kwargs["stopping_criteria"] = _stop_string_criteria(
+                transformers, tokenizer, prompt_len, stop_strings
+            )
 
         was_training = model.training
         model.eval()
@@ -431,13 +585,29 @@ class LocalBackend:
             new_tokens = out.sequences[i][prompt_len:]
             toks = [int(t) for t in new_tokens]
             lps: list[float] = []
-            if out.scores:
-                for t, score in enumerate(out.scores):
+            if out.logits:
+                # RAW logits (pre-temperature/top-p/top-k), not scores: the
+                # per-token logprob must be the model's true policy probability
+                # — the IS/PPO ratio compares it against a plain full-softmax
+                # forward. scores would be the warped sampling distribution.
+                for t, lg in enumerate(out.logits):
                     if t >= len(toks):
                         break
-                    lp = torch.log_softmax(score[i].float(), dim=-1)
+                    lp = torch.log_softmax(lg[i].float(), dim=-1)
                     lps.append(float(lp[toks[t]]))
-            stop_reason = "eos" if (eos_id is not None and toks and toks[-1] == eos_id) else "length"
+            stop_reason = "length"
+            if stop_strings:
+                toks, hit_stop = _truncate_at_stop(tokenizer, toks, stop_strings)
+                lps = lps[: len(toks)]
+                if hit_stop:
+                    stop_reason = "stop"
+            if (
+                stop_reason == "length"
+                and eos_id is not None
+                and toks
+                and toks[-1] == eos_id
+            ):
+                stop_reason = "eos"
             sequences.append(
                 SampledSequence(
                     tokens=tuple(toks), logprobs=tuple(lps), stop_reason=stop_reason

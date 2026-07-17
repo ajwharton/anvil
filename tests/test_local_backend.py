@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import json
 from pathlib import Path
+from typing import Sequence
 
 import pytest
 
@@ -23,6 +24,7 @@ from anvil.client.service import ServiceClient
 from anvil.protocol.messages import Example, Message, TextPart
 from anvil.protocol.types import (
     AdamParams,
+    Datum,
     ExportFormat,
     LossFn,
     ModelInput,
@@ -157,19 +159,179 @@ def test_export_peft_real_dir(backend: LocalBackend, adapter_id, tmp_path) -> No
     assert (tmp_path / "peft-out" / "adapter_model.safetensors").is_file()
 
 
-def test_rl_losses_raise_for_now(backend: LocalBackend, adapter_id) -> None:
-    with pytest.raises(NotImplementedError, match="Phase 2"):
-        backend.forward_backward(adapter_id, _sft_data(), LossFn.PPO)
+def test_unsupported_rl_losses_raise(backend: LocalBackend, adapter_id) -> None:
+    for loss in (LossFn.CISPO, LossFn.DRO, LossFn.DPO):
+        with pytest.raises(NotImplementedError, match="not supported"):
+            backend.forward_backward(adapter_id, _sft_data(), loss)
 
 
-def test_stop_strings_raise(backend: LocalBackend, adapter_id) -> None:
-    with pytest.raises(NotImplementedError, match="stop strings"):
-        backend.sample(
-            base_model=TINY,
-            adapter_id=adapter_id,
-            prompt=ModelInput.from_ints([1, 2, 3]),
-            sampling_params=SamplingParams(max_tokens=2, stop=("</s>",)),
-        )
+# --- Phase 2: IS/PPO loss family over GRPO-shaped datums ----------------------
+
+
+def _rl_rollout(backend: LocalBackend, adapter_id, prompt_tokens: list[int], n: int = 2):
+    sample = backend.sample(
+        base_model=TINY,
+        adapter_id=adapter_id,
+        prompt=ModelInput.from_ints(prompt_tokens),
+        sampling_params=SamplingParams(max_tokens=6, temperature=1.0, seed=99),
+        num_samples=n,
+    )
+    assert all(seq.logprobs is not None for seq in sample.sequences)
+    return sample
+
+
+def _mean_completion_logprob(
+    backend: LocalBackend, adapter_id, prompt_tokens: list[int], completion: Sequence[int]
+) -> float:
+    lps = backend.compute_logprobs(
+        base_model=TINY,
+        adapter_id=adapter_id,
+        prompt=ModelInput.from_ints(prompt_tokens + list(completion)),
+    )
+    comp = [x for x in lps[-len(completion):] if x is not None]
+    return sum(comp) / len(comp)
+
+
+def test_importance_sampling_learns(backend: LocalBackend, adapter_id) -> None:
+    """The RL gate in miniature: +advantage raises logprob of sampled completions."""
+    from anvil.recipes.grpo import datum_from_rollout
+
+    torch.manual_seed(0)
+    prompt_tokens = ToyTextRenderer().encode("<|user|>\n2+2?\n")
+    sample = _rl_rollout(backend, adapter_id, prompt_tokens)
+    seqs = [s for s in sample.sequences if len(s.tokens) >= 2]
+    assert seqs, "degenerate rollout"
+
+    before = [
+        _mean_completion_logprob(backend, adapter_id, prompt_tokens, s.tokens)
+        for s in seqs
+    ]
+    data = [
+        datum_from_rollout(prompt_tokens, s.tokens, s.logprobs or (), advantage=1.0)
+        for s in seqs
+    ]
+    for _ in range(5):
+        backend.forward_backward(adapter_id, data, LossFn.IMPORTANCE_SAMPLING)
+        backend.optim_step(adapter_id, AdamParams(learning_rate=1e-2))
+    fb = backend.forward_backward(adapter_id, data, LossFn.IMPORTANCE_SAMPLING)
+    backend.optim_step(adapter_id, AdamParams(learning_rate=1e-2))
+    assert fb.metrics["n_completion_tokens"] == float(sum(len(s.tokens) for s in seqs))
+
+    after = [
+        _mean_completion_logprob(backend, adapter_id, prompt_tokens, s.tokens)
+        for s in seqs
+    ]
+    assert sum(after) / len(after) > sum(before) / len(before), (
+        f"IS did not increase completion logprobs: {before} -> {after}"
+    )
+
+
+def test_ppo_runs_and_reports_ratio(backend: LocalBackend, adapter_id) -> None:
+    from anvil.recipes.grpo import datum_from_rollout
+
+    prompt_tokens = ToyTextRenderer().encode("<|user|>\n2+2?\n")
+    sample = _rl_rollout(backend, adapter_id, prompt_tokens)
+    data = [
+        datum_from_rollout(prompt_tokens, s.tokens, s.logprobs or (), advantage=0.5)
+        for s in sample.sequences
+        if len(s.tokens) >= 2
+    ]
+    fb = backend.forward_backward(adapter_id, data, LossFn.PPO)
+    assert fb.loss == fb.loss  # finite
+    assert fb.metrics["mean_ratio"] == pytest.approx(1.0, abs=0.1)  # on-policy start
+    assert fb.metrics["mean_log_ratio"] == pytest.approx(0.0, abs=0.1)
+
+
+def test_rl_datum_validation(backend: LocalBackend, adapter_id) -> None:
+    from anvil.recipes.grpo import datum_from_rollout
+
+    prompt_tokens = [10, 11]
+    with pytest.raises(ValueError, match="align"):
+        datum_from_rollout(prompt_tokens, [1, 2, 3], [-0.5], 1.0)
+    with pytest.raises(ValueError, match="empty completion"):
+        datum_from_rollout(prompt_tokens, [], [], 1.0)
+
+    # model_input shorter than targets must not reach the loss
+    bad = Datum(
+        model_input=ModelInput.from_ints([7]),
+        loss_fn_inputs={
+            "target_tokens": [1, 2, 3],
+            "logprobs": [-1.0, -1.0, -1.0],
+            "advantages": [1.0, 1.0, 1.0],
+        },
+    )
+    with pytest.raises(ValueError, match="prompt\\+completion"):
+        backend.forward_backward(adapter_id, [bad], LossFn.IMPORTANCE_SAMPLING)
+
+
+def test_datum_from_rollout_shape() -> None:
+    from anvil.recipes.grpo import datum_from_rollout
+
+    d = datum_from_rollout([10, 11, 12], [20, 21, 22], [-0.1, -0.2, -0.3], 2.0)
+    assert d.model_input.token_ids() == [10, 11, 12, 20, 21]  # prompt + completion[:-1]
+    assert d.loss_fn_inputs["target_tokens"] == [20, 21, 22]
+    assert d.loss_fn_inputs["logprobs"] == [-0.1, -0.2, -0.3]
+    assert d.loss_fn_inputs["advantages"] == [2.0, 2.0, 2.0]
+    assert d.loss_fn_inputs["weights"] == [1.0, 1.0, 1.0]
+
+
+def test_stop_strings_truncate_greedy(backend: LocalBackend, adapter_id) -> None:
+    """Greedy is deterministic: learn what it says, then stop inside it."""
+    tok = backend._get(adapter_id).tokenizer
+    prompt = ModelInput.from_ints(ToyTextRenderer().encode("<|user|>\n2+2?\n"))
+    full = backend.sample(
+        base_model=TINY,
+        adapter_id=adapter_id,
+        prompt=prompt,
+        sampling_params=SamplingParams(max_tokens=16, temperature=0.0),
+    )
+    toks = list(full.sequences[0].tokens)
+    if len(toks) < 6:
+        pytest.skip(f"greedy output too short to sub-slice: {toks}")
+    stop_str = tok.decode(toks[2:4], skip_special_tokens=False)
+    assert stop_str
+
+    out = backend.sample(
+        base_model=TINY,
+        adapter_id=adapter_id,
+        prompt=prompt,
+        sampling_params=SamplingParams(max_tokens=16, temperature=0.0, stop=(stop_str,)),
+    )
+    seq = out.sequences[0]
+    assert seq.stop_reason == "stop"
+    assert 0 < len(seq.tokens) < len(toks)
+    assert stop_str not in tok.decode(list(seq.tokens), skip_special_tokens=False)
+    assert seq.logprobs is not None and len(seq.logprobs) == len(seq.tokens)
+
+
+def test_stop_strings_per_row(backend: LocalBackend, adapter_id) -> None:
+    """num_samples>1: rows truncate independently at the stop string."""
+    tok = backend._get(adapter_id).tokenizer
+    prompt = ModelInput.from_ints(ToyTextRenderer().encode("<|user|>\nhello\n"))
+    base = backend.sample(
+        base_model=TINY,
+        adapter_id=adapter_id,
+        prompt=prompt,
+        sampling_params=SamplingParams(max_tokens=12, temperature=1.0, seed=7),
+        num_samples=2,
+    )
+    text0 = tok.decode(list(base.sequences[0].tokens), skip_special_tokens=False)
+    if len(text0) < 4:
+        pytest.skip(f"row-0 text too short to sub-slice: {text0!r}")
+    stop_str = text0[-3:]
+    assert stop_str in text0
+
+    out = backend.sample(
+        base_model=TINY,
+        adapter_id=adapter_id,
+        prompt=prompt,
+        sampling_params=SamplingParams(max_tokens=12, temperature=1.0, seed=7, stop=(stop_str,)),
+        num_samples=2,
+    )
+    seq0 = out.sequences[0]
+    assert seq0.stop_reason == "stop"
+    assert len(seq0.tokens) < len(base.sequences[0].tokens)
+    assert stop_str not in tok.decode(list(seq0.tokens), skip_special_tokens=False)
 
 
 def test_non_text_modality_rejected(backend: LocalBackend) -> None:

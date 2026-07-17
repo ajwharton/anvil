@@ -40,6 +40,16 @@ class CreateRunIn(BaseModel):
     force: bool = False
 
 
+class PlanIn(BaseModel):
+    base_model: str
+    pattern: str | None = None
+    recipe_id: str | None = None
+    shape: str | None = None
+    overrides: dict[str, Any] = Field(default_factory=dict)
+    fetch_remote: bool = False
+    force: bool = False
+
+
 class TrainIn(BaseModel):
     steps: int = 1
 
@@ -130,15 +140,6 @@ def create_app() -> FastAPI:
         except Exception as e:
             raise HTTPException(400, str(e)) from e
 
-    class PlanIn(BaseModel):
-        base_model: str
-        pattern: str | None = None
-        recipe_id: str | None = None
-        shape: str | None = None
-        overrides: dict[str, Any] = Field(default_factory=dict)
-        fetch_remote: bool = False
-        force: bool = False
-
     @app.post("/api/plan")
     def plan(payload: PlanIn) -> dict[str, Any]:
         try:
@@ -159,6 +160,13 @@ def create_app() -> FastAPI:
     @app.get("/api/overview")
     def overview() -> dict[str, Any]:
         return store.overview()
+
+    @app.get("/api/audit")
+    def audit(kind: str | None = None) -> list[dict[str, Any]]:
+        """Control-plane audit trail (gate overrides now; multi-user in Phase 5)."""
+        from anvil.control.audit import default_log
+
+        return [e.to_public() for e in default_log().events(kind=kind)]
 
     @app.get("/api/models")
     def models() -> list[dict[str, Any]]:

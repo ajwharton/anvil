@@ -228,11 +228,15 @@ def plan_recipe(
     use_card: bool = True,
     fetch_remote: bool = False,
     force: bool = False,
+    record_override: bool = True,
 ) -> RecipePlan:
     """Derive a sensible plan from catalog recipe and/or job pattern.
 
     Prefer ``recipe_id`` from the bounded catalog (gates applied). Pattern-only
-    remains supported for low-level use. ``force=True`` allows blocked gates.
+    remains supported for low-level use. ``force=True`` allows blocked gates;
+    every forced pass through a *blocked* gate is written to the control-plane
+    audit trail (anvil.control.audit) unless ``record_override=False`` — used
+    by preview/enumeration paths that force gates only to display them.
     """
     from anvil.recipes.catalog import (
         GateLevel,
@@ -308,12 +312,25 @@ def plan_recipe(
             vision_encoder_lora=pre_overrides.get("vision_encoder_lora"),
         )
         gate_pub = g.to_public()
-        if g.level == GateLevel.BLOCKED and not force:
-            raise ValueError(
-                f"recipe {recipe_spec.id!r} blocked for shape={shape.value}: "
-                + "; ".join(g.blocked_reasons)
-                + " (pass force=True to stretch past the gate)"
-            )
+        if g.level == GateLevel.BLOCKED:
+            if not force:
+                raise ValueError(
+                    f"recipe {recipe_spec.id!r} blocked for shape={shape.value}: "
+                    + "; ".join(g.blocked_reasons)
+                    + " (pass force=True to stretch past the gate)"
+                )
+            if record_override:
+                from anvil.control.audit import default_log, gate_override_event
+
+                default_log().record(
+                    gate_override_event(
+                        recipe_id=recipe_spec.id,
+                        base_model=resolved_base,
+                        shape=shape.value,
+                        blocked_reasons=g.blocked_reasons,
+                        stretch_reasons=g.stretch_reasons,
+                    )
+                )
 
     if not peft_targets:
         peft_targets = (
@@ -638,6 +655,7 @@ def suggest_for_model(
                 card=card,
                 use_card=False,
                 force=row["gate"]["level"] == "blocked",
+                record_override=False,  # preview enumeration, not a real override
             )
             cards.append(
                 {

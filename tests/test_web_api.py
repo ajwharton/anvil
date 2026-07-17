@@ -35,6 +35,41 @@ def test_health_and_defaults(client):
     assert d["knobs"]["rank"] == 32
 
 
+def test_audit_trail_records_forced_gate(client):
+    from anvil.control.audit import default_log
+
+    default_log().clear()
+    try:
+        # recommended plan: no event
+        r = client.post(
+            "/api/plan",
+            json={"base_model": "Qwen/Qwen2.5-VL-3B-Instruct", "recipe_id": "vlm_sft_edge"},
+        )
+        assert r.status_code == 200
+        assert client.get("/api/audit").json() == []
+
+        # forced past a blocked gate: one event with reasons
+        r = client.post(
+            "/api/plan",
+            json={
+                "base_model": "Qwen/Qwen2.5-VL-3B-Instruct",
+                "recipe_id": "sft_chat_moe",
+                "force": True,
+            },
+        )
+        assert r.status_code == 200
+        events = client.get("/api/audit").json()
+        assert len(events) == 1
+        assert events[0]["kind"] == "gate_override"
+        assert events[0]["recipe_id"] == "sft_chat_moe"
+        assert events[0]["blocked_reasons"]
+
+        # kind filter
+        assert client.get("/api/audit", params={"kind": "nope"}).json() == []
+    finally:
+        default_log().clear()
+
+
 def test_create_train_export_flow(client):
     r = client.post(
         "/api/runs",
