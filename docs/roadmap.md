@@ -71,7 +71,52 @@ Success looks like: a researcher or roboticist can SFT/RL a small LLM/VLM from a
 ## Phase 2.5 — RL observability (the RL debugger)
 
 **Why:** RL runs fail quietly. Reward climbs while the policy degrades, group
-rewards homogenize and advantages collapse to zero, entropy crashes — a...[truncated]
+rewards homogenize and advantages collapse to zero, entropy crashes — and the
+final eval is the last place any of it shows up. The product answer is a
+debugger for RL: while training runs, continuously probe the live policy,
+graph the signals that precede the downturn, and watch the rollover into
+negative marginal gains as it happens instead of after.
+
+**Ordering (agreed 2026-07-17):** finish the Phase 2 vLLM sample worker first
+(it is the sync substrate), then metrics scaffolding, then the live inference
+tester, then the J-lens bolt-on last.
+
+**Weight-sync tiers** (inference on a model that is simultaneously training —
+the base never changes, only the LoRA adapter does, and that is megabytes):
+
+- Tier 0 (exists): `LocalBackend` samples from the live adapter in-process —
+  free, slow (HF generate), fine for probes
+- Tier 1 (P2 worker): write adapter to tmpfs, `load_snapshot` hot-swap into
+  the running vLLM engine on a K-step cadence; sub-second, no base reload
+- Tier 2 (optional, later): in-memory weight push via vLLM worker RPC
+  (`apply_model`/`collective_rpc`, the TRL-colocate / veRL / NeMo-RL pattern)
+  + `sleep`/`wake_up` for single-box colocation — no memory-editor hacks
+
+**Exit criteria**
+
+- [ ] Metrics scaffolding: per-run `metrics.jsonl` appended every RL step —
+      reward mean/std, within-group reward std (advantage-collapse tripwire),
+      IS `mean_ratio` drift, entropy, loss; SSE endpoint + live charts in
+      anvil-web
+- [ ] Live inference tester: fixed probe set sampled from the *current*
+      policy every K steps during a run (Tier 0 first, Tier 1 once the vLLM
+      worker lands); probe completions rendered inline next to the curves —
+      eyes catch reward hacking before scalars do
+- [ ] Adapter-sync cadence knob in `run_grpo` (every K steps push
+      `snapshot_for_sample` → sample worker `load_snapshot`)
+- [ ] J-lens spike (LAST, spike-gated): port `anthropics/jacobian-lens` to a
+      small model on forge; reproduce "intermediate steps light up in order"
+      on the GRPO math task; only then a permanent run-detail panel.
+      Grounding: Gurnee, Sofroniew, Lindsey et al., "Verbalizable
+      Representations Form a Global Workspace in Language Models" (Anthropic,
+      2026-07-06) — the J-space is a readout of the model's *unverbalized*
+      reasoning trace, which doubles as evidence for the Mia
+      DPO-needs-reasoning-traces thesis
+
+**Non-goals:** per-token J-lens on rollouts (debugger view, not hot path);
+autointerp beyond the J-lens readout.
+
+## Phase 3 — Vision first-class
 
 **Exit criteria**
 
