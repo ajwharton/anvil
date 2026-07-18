@@ -747,6 +747,7 @@ def apply_solve(
     top_k: int,
     device: str,
     max_new: int,
+    inter_score_mode: str = "boundary",
 ) -> dict[str, Any]:
     """Protocol v3 — few-shot terse solve + digit-aware scoring.
 
@@ -755,6 +756,12 @@ def apply_solve(
     Multi-digit values are scored as digit *sequences* at consecutive
     prediction positions (Qwen2.5 splits numbers into single-digit tokens),
     which is the only form in which they can ever appear in top-k.
+
+    ``inter_score_mode``:
+      - ``boundary`` (default): residual at the token *before* the intermediate
+        value — next-token prediction of the first intermediate digit (v3/v5).
+      - ``value``: residual at the intermediate digit token(s) themselves (v6
+        position-fix experiment; failed — no strong inter hits on 1.5B).
     """
     t0 = time.monotonic()
     prompt = SOLVE_FEWSHOT + "Problem: " + (probe.solve_problem or probe.prompt) + "\n"
@@ -806,21 +813,25 @@ def apply_solve(
     def _in_span(p: int | None) -> bool:
         return p is not None and span[0] <= p <= span[-1]
 
-    # Answer: score at the *boundary before* the value (next-token prediction of
-    # the first digit after "Answer: "). That is the natural "can we predict the
-    # answer?" readout and is what v3/v5 used.
+    # Answer: always score at the *boundary before* the value (next-token
+    # prediction of the first digit after "Answer: ").
     ans_pos0 = a0 - 1 - span[0] if a0 is not None and _in_span(a0 - 1) else None
     ans_hits = (
         digitseq_hit_layers(layer_pos_tops, ans_pos0, probe.answer)
         if ans_pos0 is not None
         else []
     )
-    # Intermediate: score at the value's *own* token positions (v6 position fix),
-    # not the boundary before. v5 found intermediates only readable at L23+ when
-    # probed at the preceding boundary — either 1.5B never serializes a
-    # lens-readable intermediate there, or that position choice is wrong.
-    # Reuses the same v2 lens; no re-fit.
-    inter_pos0 = ip - span[0] if ip is not None and _in_span(ip) else None
+    # Intermediate position mode (see docstring). Default boundary matches v5.
+    mode = (inter_score_mode or "boundary").strip().lower()
+    if mode not in ("boundary", "value"):
+        raise ValueError(f"inter_score_mode must be 'boundary' or 'value', got {mode!r}")
+    if mode == "value":
+        inter_abs = ip
+    else:
+        inter_abs = (ip - 1) if ip is not None else None
+    inter_pos0 = (
+        inter_abs - span[0] if inter_abs is not None and _in_span(inter_abs) else None
+    )
     inter_hits = (
         digitseq_hit_layers(layer_pos_tops, inter_pos0, probe.inter)
         if probe.inter and inter_pos0 is not None
@@ -889,8 +900,8 @@ def apply_solve(
         "answer_correct": correct,
         "answer_token_index": a0,
         "inter_token_index": ip,
-        "ans_score_mode": "boundary",  # residual at token before first answer digit
-        "inter_score_mode": "value",  # residual at intermediate digit token(s) themselves
+        "ans_score_mode": "boundary",
+        "inter_score_mode": mode,
         "positions": span,
         "ans_hit_layers": ans_hits,
         "inter_hit_layers": inter_hits,
@@ -936,10 +947,19 @@ def apply_probe(
     device: str,
     max_new: int,
     explicit_positions: Sequence[int] | None,
+    inter_score_mode: str = "boundary",
 ) -> dict[str, Any]:
     if protocol == "solve":
         return apply_solve(
-            lens, model, tok, hf, probe, top_k=top_k, device=device, max_new=max_new
+            lens,
+            model,
+            tok,
+            hf,
+            probe,
+            top_k=top_k,
+            device=device,
+            max_new=max_new,
+            inter_score_mode=inter_score_mode,
         )
     if protocol == "last_prompt":
         text = probe.prompt
@@ -1057,6 +1077,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
                     device=args.device,
                     max_new=args.max_new_tokens,
                     explicit_positions=explicit,
+                    inter_score_mode=getattr(args, "inter_score_mode", "boundary"),
                 )
                 rec["primary_order_score"] = _primary_order(rec)
                 if protocol == "solve":
@@ -1313,6 +1334,16 @@ def build_parser() -> argparse.ArgumentParser:
         help="'auto' or comma-separated positions (e.g. -1 or -8,-7,...,-1)",
     )
     p.add_argument("--max-new-tokens", type=int, default=48, help="for protocol=generate")
+    p.add_argument(
+        "--inter-score-mode",
+        default="boundary",
+        choices=("boundary", "value"),
+        help=(
+            "solve protocol: where to score intermediate digits — "
+            "'boundary' = token before value (default, v5); "
+            "'value' = at the intermediate digit tokens (v6 negative control)"
+        ),
+    )
     p.add_argument("--out", default="/mnt/data/anvil-runs/jlens-spike-v2")
     return p
 

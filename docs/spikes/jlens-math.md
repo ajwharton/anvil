@@ -1,7 +1,7 @@
 # Spike: J-Lens on multi-step math (J0)
 
-**Status:** **GO on protocol v3 `solve`** (2026-07-18, second-opinion re-review; v1/v2 NO-GO stands as-measured but was driven by scoring artifacts — see §Second opinion). **Refined by third pass:** proper fit + rank-resolved scoring keeps the answer-readout GO but **fails the J2 order/earliest-layer criteria** (see §Third pass).  
-**Product call:** **J-Lens is a first-class debugger-plane feature (research preview).** J1 artifact path live; spike emits `jlens.jsonl`; J2 train-loop apply is the next gate (needs a proper lens fit, not the smoke fit).  
+**Status:** **GO on protocol v3 `solve`** (2026-07-18, second-opinion re-review; v1/v2 NO-GO stands as-measured but was driven by scoring artifacts — see §Second opinion). **Third pass:** proper fit + rank-resolved scoring keeps the answer-readout GO but **fails the J2 order/earliest-layer criteria** (see §Third pass). **Fourth pass (v6 position fix):** scoring intermediates at their own token positions **kills** intermediate strong hits (0/6) — boundary-before-value remains the right readout for this next-token lens (see §Fourth pass).  
+**Product call:** **J-Lens is a first-class debugger-plane feature (research preview).** J1 artifact path live; spike emits `jlens.jsonl`; J2 train-loop apply stays gated (order criterion).  
 **Roadmap:** Phase 2.5 J0 gate passed under v3 measurement  
 **Script:** [`scripts/jlens_spike.py`](../../scripts/jlens_spike.py) (`--protocol solve,last_prompt,cot_in_prompt,generate`)  
 **Paper:** Gurnee, Sofroniew, Lindsey et al., *Verbalizable Representations Form a Global Workspace in Language Models* (Anthropic / Transformer Circuits, 2026-07-06)  
@@ -182,8 +182,9 @@ Best protocol by order: **`generate`** (mean 0.75) — still fails the dual gate
 | **J0 v3** few-shot solve + digit-aware + sanity | **done — GO** (see §Second opinion) |
 | **J0 v4** rank-resolved scoring + foil control | **done** — artifact 4 found & fixed (weak top-k is digit-prior-prone) |
 | **J0 v5** proper fit (v2 lens) + J2 entry scoring | **done — J2 entry NOT met (1/3)** (see §Third pass) |
+| **J0 v6** intermediate at own-token positions | **done — fails harder** (0/6 inter strong; order null) — see §Fourth pass |
 | **J1** artifact schema + API + spike bridge | **landed** (`anvil/observe/jlens.py`, `log_jlens`, `GET /api/observe/{id}/jlens`; spike emits `jlens.jsonl`) |
-| **J2** real apply hook in `run_grpo` | **gated** — order criterion fails on rank-resolved metric; cheapest unblock = intermediate-position fix (§Third pass) |
+| **J2** real apply hook in `run_grpo` | **gated** — order criterion fails; position fix closed; next = 7B or per-position rank curves |
 | **J3** J-Lens worker | queued behind J2 |
 | **J4** permanent `/observe` panel | queued behind J2/J3 evidence |
 | **J5** J-Lens UI tripwires | queued behind J4 |
@@ -347,13 +348,73 @@ the position choice itself is wrong.
 
 ### Next experiment (cheapest first)
 
-1. **Position fix**: score the intermediate at its own token positions, not
-   the preceding boundary — one-line change, reuses the v2 lens.
-2. Only if (1) still fails: bigger base (7B) or deeper probe of per-position
-   rank curves.
+1. ~~**Position fix**: score the intermediate at its own token positions~~ →
+   **done, negative** (see §Fourth pass).
+2. Bigger base (7B) **or** deeper probe of per-position rank curves (still
+   at boundary-before-value for both stages).
 
 **J2 remains gated** until the order criterion passes on the rank-resolved
 metric. J1 artifact path stays live; the spike now emits weak + strong hits,
 per-digit rank maps, and foil controls in both the JSON and `jlens.jsonl`.
+
+---
+
+## Fourth pass (2026-07-18): intermediate at own-token positions (v6)
+
+Cheapest experiment after v5: keep the v2 proper lens, change only where
+intermediates are scored.
+
+| Mode | Position |
+|------|----------|
+| Answer (unchanged) | residual at token *before* first answer digit (`ans_score_mode=boundary`) |
+| Intermediate (v6) | residual at the intermediate digit token(s) themselves (`inter_score_mode=value`) |
+
+### v6 run (forge GPU, same v2 lens)
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-18 |
+| Branch / commit | `spike/jlens-v6-posfix` @ `760c0f4` |
+| Lens | v2 proper (`…/qwen2.5-1.5b-instruct-v2/jacobian_lens.pt`) |
+| Artifact dir | `/mnt/data/anvil/results/jlens-solve-v6-posfix/` |
+| `answer_correct` | **6/6** |
+| Answer **strong** hits | **6/6** (same late band as v5) |
+| Intermediate **strong** hits | **0/6** (v5 had late-layer strong hits on all 6) |
+| Intermediate **weak** top-k | 0/6 except `dbl_22` L3 only |
+| Mean order | **null** (0 order-scored; need ≥1 inter strong layer) |
+| Sanity | 0.81–0.94 |
+
+### Interpretation
+
+At the intermediate's *own* token, the lens does **not** verbalize that
+value: sole-digit intermediates sit at rank hundreds–thousands even at L26
+(e.g. `add_then_mul` inter `7` → rank 669 at L26). Multi-digit intermediates
+show a sharp first-digit / weak second-digit pattern early, then collapse —
+never all digits rank ≤ 3.
+
+That matches a **next-token** lens: residual *before* writing the
+intermediate predicts it (v5 boundary hits); residual *at* the written
+digit predicts the *following* token (newline / `Step 2`), not the digit
+itself. Own-token scoring is the wrong window for this apply API.
+
+### J2 entry scorecard (v6)
+
+| Criterion | Result | Verdict |
+|-----------|--------|---------|
+| 6/6 answer hits | 6/6 strong | **PASS** |
+| mean order ≥ 0.6 | null | **FAIL** |
+| earliest hit ≤ 20 on ≥ half | n/a (no inter strong) | **FAIL** |
+
+**J2 entry: not met (1 of 3).** Position fix closed as a dead end.
+Default scoring stays: answer + intermediate both at **boundary-before-value**
+(`--inter-score-mode boundary`, default). The v6 experiment is retained as
+`--inter-score-mode value` (negative control).
+
+### Next
+
+1. Unblock path: **7B** re-fit + solve, or per-position rank curves at
+   boundary for both stages on 1.5B.
+2. Do not schedule J2 train-loop apply until order criterion passes under
+   rank-resolved boundary scoring.
 
 ---
