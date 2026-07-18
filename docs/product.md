@@ -137,19 +137,30 @@ switch methods without rewriting infrastructure.
 
 ---
 
+## Agentic control split (summary)
+
+Anvil **owns** the control plane, **MCP tool surface**, optional harness, and
+**portable prompt pack**. You **bring the agent model** (frontier or local).
+Harness + prompt engineering is hard—so we ship generic operator prompts that
+work inside our harness *or* drop into yours.
+
+Detail: [`agentic-control.md`](agentic-control.md) · prompts: [`prompts/agent/`](../prompts/agent/).
+
 ## Implications for the roadmap (guidance, not a new phase list)
 
 Prioritize work that increases **agent operability** even while Phase 3 vision
 and edge land:
 
 1. **SSOT APIs** — every web panel has a stable JSON/SSE counterpart.  
-2. **MCP server** — thin tools over those APIs (list/run/tail/act/audit).  
-3. **Live control** — pause, patch knobs, hot-swap sample adapter, method
+2. **MCP server** — thin tools over those APIs (list/run/tail/act/audit); Anvil-owned façade.  
+3. **Optional harness** — model-agnostic loop; user plugs brain + keys.  
+4. **Prompt pack** — versioned generic operator prompts (portable to foreign harnesses).  
+5. **Live control** — pause, patch knobs, hot-swap sample adapter, method
    switch without process death where possible.  
-4. **Cliff library** — per-method tripwires + probe policies (DPO, GRPO, SFT).  
-5. **Recipe graph** — documented “if cliff X, try recipe Y” edges agents can
+6. **Cliff library** — per-method tripwires + probe policies (DPO, GRPO, SFT).  
+7. **Recipe graph** — documented “if cliff X, try recipe Y” edges agents can
    follow (human-editable, not hardcoded magic).  
-6. **Vision/robot data paths** — keep going; agents need the same observe loop
+8. **Vision/robot data paths** — keep going; agents need the same observe loop
    on VLM/robot runs.
 
 Human UI remains essential for trust and debugging. It should be a client of
@@ -174,6 +185,8 @@ the same control plane, not a separate parallel system.
 |-----|------|
 | [`design.md`](design.md) | Architecture, verbs, backends |
 | [`roadmap.md`](roadmap.md) | Phase exit criteria |
+| [`agentic-control.md`](agentic-control.md) | MCP harness vs user brain; prompt pack |
 | [`phase3-vision.md`](phase3-vision.md) | Vision slice plan |
 | [`datasets-robotics.md`](datasets-robotics.md) | Robotics / VLM data sources |
+| [`../prompts/agent/`](../prompts/agent/) | Drop-in operator prompts |
 | [`start.md`](../start.md) | Session entry for humans and agents |
