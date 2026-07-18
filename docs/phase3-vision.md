@@ -14,8 +14,8 @@ A researcher or roboticist can SFT (and later RL) a **VLM** with **image refs** 
 |-------|-------------|--------|
 | **P3.0** | Media store harden + message/trajectory serde + JSONL ingest + robotics dataset notes | **done** |
 | **P3.1** | Processor-backed VLM renderer (`HFVLMRenderer`) with train/sample prefix tests | **done** |
-| **P3.2** | `LocalBackend` image modality + freeze policy + VLM SFT renderer wiring | **this PR** |
-| **P3.3** | `run_vlm_sft` on forge with real frames (Bridge or toy CAS) + export | next |
+| **P3.2** | `LocalBackend` image modality + freeze policy + VLM SFT renderer wiring | **done** |
+| **P3.3** | `scripts/vlm_smoke.py` — CAS frame + `run_vlm_sft` (fake always; forge local://) | **this PR** |
 | **P3.4** | Classifier / rubric recipe; web knobs for vision freeze | later |
 | **P4** | Full offline robot loop (Jetson export) builds on Trajectory | later |
 

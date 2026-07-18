@@ -69,6 +69,10 @@ class ExportIn(BaseModel):
     format: str = "peft"
 
 
+class PatchKnobsIn(BaseModel):
+    knobs: dict[str, Any] = Field(default_factory=dict)
+
+
 # --- P2.5 run observability (metrics.jsonl / probes.jsonl tailing) ---------
 
 _SAFE_RUN_ID = re.compile(r"[A-Za-z0-9][A-Za-z0-9._-]*")
@@ -355,6 +359,35 @@ def create_app() -> FastAPI:
         except RuntimeError as e:
             raise HTTPException(409, str(e)) from e
         return rec.to_public()
+
+    @app.post("/api/runs/{run_id}/pause")
+    def pause(run_id: str) -> dict[str, Any]:
+        """Live control: pause a run (agent/MCP)."""
+        try:
+            return store.pause_run(run_id).to_public()
+        except KeyError as e:
+            raise HTTPException(404, str(e)) from e
+        except RuntimeError as e:
+            raise HTTPException(409, str(e)) from e
+
+    @app.post("/api/runs/{run_id}/resume")
+    def resume(run_id: str) -> dict[str, Any]:
+        try:
+            return store.resume_run(run_id).to_public()
+        except KeyError as e:
+            raise HTTPException(404, str(e)) from e
+        except RuntimeError as e:
+            raise HTTPException(409, str(e)) from e
+
+    @app.patch("/api/runs/{run_id}/knobs")
+    def patch_knobs(run_id: str, payload: PatchKnobsIn) -> dict[str, Any]:
+        """Live control: patch knobs mid-run (logged on the run)."""
+        try:
+            return store.patch_knobs(run_id, payload.knobs).to_public()
+        except KeyError as e:
+            raise HTTPException(404, str(e)) from e
+        except (RuntimeError, ValueError) as e:
+            raise HTTPException(409 if isinstance(e, RuntimeError) else 400, str(e)) from e
 
     @app.post("/api/runs/{run_id}/sample")
     def sample(run_id: str) -> dict[str, Any]:
