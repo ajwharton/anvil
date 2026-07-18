@@ -185,6 +185,40 @@ def test_new_probes_have_v3_fields(spike):
     assert any(not p.answer.startswith("1") for p in spike.DEFAULT_PROBES)
 
 
+def test_math_fit_prompts_varied_and_correct(spike):
+    prompts = spike._math_fit_prompts(40)
+    assert len(prompts) == 40
+    assert len(set(prompts)) >= 35  # combinatorial, not lorem repetition
+    # every prompt carries a worked answer; arithmetic verified for step format
+    import re
+
+    checked = 0
+    for p in prompts:
+        m = re.search(r"Step 1: (\d+) ([+*\-]) (\d+) = (\d+)", p)
+        if m:
+            x, op, y, r = int(m[1]), m[2], int(m[3]), int(m[4])
+            expect = {"*": x * y, "+": x + y, "-": x - y}[op]
+            assert r == expect, p
+            checked += 1
+        assert re.search(r"(Answer: \d+|final answer is \d+)", p), p
+    assert checked >= 10  # both formats exercised
+
+
+def test_fit_prompts_mixed_falls_back_without_jlens(spike, monkeypatch):
+    import builtins
+
+    real_import = builtins.__import__
+
+    def no_jlens(name, *a, **k):
+        if name.startswith("jlens"):
+            raise ImportError("no jlens here")
+        return real_import(name, *a, **k)
+
+    monkeypatch.setattr(builtins, "__import__", no_jlens)
+    prompts = spike._fit_prompts(10, 128, "mixed")
+    assert len(prompts) == 10  # math fallback fills the gap
+
+
 def test_write_j1_records_bridge(spike, tmp_path):
     """Solve results land in jlens.jsonl in the J1 schema (endpoint/tripwire-ready)."""
     pytest.importorskip("anvil.observe.jlens")
