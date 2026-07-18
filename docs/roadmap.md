@@ -4,9 +4,11 @@ Status legend: **todo** · **doing** · **done** · **blocked**
 
 ## North star
 
-An open post-training toolkit: four verbs, LoRA-first, train/sample consistency, vision in the data model, export to lab serve and **Jetson/edge**.
+An open post-training toolkit: four verbs, LoRA-first, train/sample consistency, vision in the data model, export to lab serve and **Jetson/edge**—**usable by individuals, optimized for agent control** (live observe + API/MCP + audited method switches when DPO/GRPO/SFT hit cliffs).
 
-Success looks like: a researcher or roboticist can SFT/RL a small LLM/VLM from a laptop client against own GPUs without rewriting distributed systems each time.
+Success looks like: a researcher, roboticist, or **their agent** can SFT/RL a small LLM/VLM on own GPUs, see negative returns as they form, and change recipe/method without rewriting infrastructure.
+
+Product thesis: [`docs/product.md`](product.md).
 
 ## Phase 0 — Spec & stubs *(complete)*
 
