@@ -806,13 +806,21 @@ def apply_solve(
     def _in_span(p: int | None) -> bool:
         return p is not None and span[0] <= p <= span[-1]
 
+    # Answer: score at the *boundary before* the value (next-token prediction of
+    # the first digit after "Answer: "). That is the natural "can we predict the
+    # answer?" readout and is what v3/v5 used.
     ans_pos0 = a0 - 1 - span[0] if a0 is not None and _in_span(a0 - 1) else None
     ans_hits = (
         digitseq_hit_layers(layer_pos_tops, ans_pos0, probe.answer)
         if ans_pos0 is not None
         else []
     )
-    inter_pos0 = ip - 1 - span[0] if ip is not None and _in_span(ip - 1) else None
+    # Intermediate: score at the value's *own* token positions (v6 position fix),
+    # not the boundary before. v5 found intermediates only readable at L23+ when
+    # probed at the preceding boundary — either 1.5B never serializes a
+    # lens-readable intermediate there, or that position choice is wrong.
+    # Reuses the same v2 lens; no re-fit.
+    inter_pos0 = ip - span[0] if ip is not None and _in_span(ip) else None
     inter_hits = (
         digitseq_hit_layers(layer_pos_tops, inter_pos0, probe.inter)
         if probe.inter and inter_pos0 is not None
@@ -881,6 +889,8 @@ def apply_solve(
         "answer_correct": correct,
         "answer_token_index": a0,
         "inter_token_index": ip,
+        "ans_score_mode": "boundary",  # residual at token before first answer digit
+        "inter_score_mode": "value",  # residual at intermediate digit token(s) themselves
         "positions": span,
         "ans_hit_layers": ans_hits,
         "inter_hit_layers": inter_hits,
