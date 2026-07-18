@@ -1,7 +1,7 @@
 [project]
 name = "anvil-train"
 version = "0.0.2"
-description = "Open-source post-training: SFT/RL, LoRA-first, live RL observability & probes, web control plane"
+description = "LoRA-first post-training (SFT/RL): four verbs, live RL debugger, agent MCP/API control — you bring the brain"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
@@ -18,9 +18,12 @@ keywords = [
   "vllm",
   "observability",
   "rl-debugger",
+  "mcp",
+  "agent",
   "fine-tuning",
   "llm",
   "vision",
+  "robotics",
   "jetson",
   "edge-ai",
 ]

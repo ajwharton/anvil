@@ -1,6 +1,6 @@
 # Governance
 
-**Anvil** is an open-source project aimed at democratizing post-training (SFT/RL) via a small, stable API. This document defines how we make decisions and accept contributions.
+**Anvil** is an open-source project aimed at democratizing post-training (SFT/RL) via a small, stable API—and at making that surface **operable by humans and by agents** (MCP/API; user-supplied agent model). See [`product.md`](product.md) and [`agentic-control.md`](agentic-control.md).
 
 ## Principles
 
@@ -8,8 +8,10 @@
 2. **LoRA-first** — default path is adapters + export, not full-weight FT of frontier MoEs.
 3. **Train/sample consistency** — same renderer and adapter identity across train and sample.
 4. **Vision and edge are in scope** — not optional forever; roadmap may sequence delivery.
-5. **No trademark confusion** — brand only as Anvil; do not imply affiliation with any commercial post-training product.
-6. **Public by default** — discussion and design in the open; secrets never in-repo.
+5. **Dual clients** — human UI and agent tools share one SSOT; agents do not scrape HTML.
+6. **Audited automation** — force-gates and method switches leave an audit trail; humans keep kill switches.
+7. **No trademark confusion** — brand only as Anvil; do not imply affiliation with any commercial post-training product.
+8. **Public by default** — discussion and design in the open; secrets never in-repo.
 
 ## Roles
 
@@ -17,7 +19,8 @@
 |------|----------------|
 | **Maintainer** | Merge rights, releases, roadmap edits, security triage |
 | **Contributor** | PRs, issues, docs, recipes under this governance |
-| **User** | Runs Anvil; files bugs/RFCs; not required to contribute code |
+| **User** | Runs Anvil (solo or with their agent); files bugs/RFCs; not required to contribute code |
+| **Operator agent** | Uses MCP/HTTP under human policy; not a privileged role in the repo |
 
 Initial maintainer: **Andrew Wharton** (`@ajwharton`). Additional maintainers are added by explicit PR to this file after sustained contribution.
 

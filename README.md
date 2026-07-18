@@ -1,14 +1,31 @@
 # Anvil
 
-**Open-source post-training toolkit** — SFT and RL with a tiny four-verb API, LoRA-first adapters, pluggable backends (lab GPU → dual DGX Spark → edge export), and a **live RL debugger** so you can see *when* training stops helping. Built for individuals; designed so **agents** can watch runs and change methods in real time.
+**Open-source LoRA-first post-training** — SFT and RL with a tiny four-verb API, honest recipes, and a **live RL debugger**.  
+
+Built for **two audiences at once**:
+
+| Mode | Who | How it feels |
+|------|-----|----------------|
+| **Individual** | Researcher / roboticist + own GPUs | Recipes, web UI, run a loop, see cliffs on curves and probes |
+| **Agentic** | Operator agent (you bring the model) | Same truth via **HTTP + MCP** — watch metrics/probes, pause, patch knobs, switch methods under audit |
+
+Anvil owns the **control plane, MCP tools, optional harness, and portable prompts**. You bring the **agent brain** (frontier or local), GPUs, and data. Prompt packs also drop into *your* harness if you do not use ours.
 
 > Originally inspired by the product shape of Thinking Machines’ Tinker API (four low-level train/sample verbs + LoRA). Anvil is independent open-source software; no affiliation, no wire compatibility.
 
-Product thesis (human + agentic control, method cliffs, API/MCP): **[docs/product.md](docs/product.md)**.
+| Doc | Role |
+|-----|------|
+| **[docs/product.md](docs/product.md)** | Product thesis (cliffs, RSI-shaped ambition, dual mode) |
+| **[docs/agentic-control.md](docs/agentic-control.md)** | MCP/harness vs user brain; adoption paths A/B/C |
+| **[prompts/agent/](prompts/agent/)** | Drop-in operator prompts |
+| **[docs/roadmap.md](docs/roadmap.md)** | Phase gates |
+| **[start.md](start.md)** | Session entry for humans and coding agents |
 
 ## Why
 
-Democratize RL and fine-tuning by lowering the systems tax: you keep **data, loss, reward, environment**; Anvil handles a stable contract across **train**, **sample**, and **export** — and surfaces the signals that usually only show up after a failed eval. Different methods (DPO, GRPO, LoRA SFT, …) hit different cliffs; the platform should make those cliffs **visible and actionable**, including by an agent.
+Democratize post-training by lowering the systems tax: you keep **data, loss, reward, environment**; Anvil handles a stable contract across **train**, **sample**, and **export** — and surfaces signals that usually only appear after a failed eval.
+
+Different methods (**DPO**, **GRPO**, **LoRA SFT**, …) hit different **cliffs**. The product job is to make those cliffs **visible and actionable**—by a human *or* by an agent that can change recipe/method in real time under policy.
 
 Core verbs:
 
@@ -21,46 +38,43 @@ forward_backward · optim_step · sample · save_state
 | Surface | What it is |
 |---------|------------|
 | **Four-verb client** | Typed train/sample API; `fake://`, `local://` (torch+PEFT), remote HTTP, vLLM sample worker |
-| **Web control plane** | `anvil-web` (:7600) — recipe knobs, runs, architecture gates, live observe charts |
-| **RL observability** | Per-step `metrics.jsonl` (reward, group-std / advantage-collapse tripwire, IS ratio, loss) + SSE live charts |
-| **Live inference probes** | Fixed probe set sampled from the *current* policy every K steps during RL — eyes catch reward hacking and the rollover into **negative marginal returns** before final eval |
-| **Sample/train split** | Train on LocalBackend; sample on a dedicated vLLM worker with LoRA hot-swap |
-| **Agent surface (target)** | Same truth as the UI via HTTP (+ MCP later): watch cliffs, switch recipes/methods under audit |
-| **Vision (Phase 3)** | Media CAS, trajectories, VLM renderer, image modality on local train path |
+| **Web control plane** | `anvil-web` (:7600) — recipes, knobs, runs, gates, observe charts |
+| **RL observability** | `metrics.jsonl` (reward, group-std / advantage-collapse, IS ratio, loss) + SSE |
+| **Live inference probes** | Fixed prompts from the *current* policy every K steps — eyes before final eval |
+| **Sample/train split** | Train local; sample on vLLM with LoRA hot-swap |
+| **Agent control** | `AnvilControlClient`, live pause/resume/patch knobs, **`anvil mcp`**, **`anvil agent`** |
+| **Vision (Phase 3)** | Media CAS, trajectories, VLM renderer, image modality, `vlm_smoke` |
 
 ## Status
 
-**Phase 2 / 2.5 core complete · Phase 3 vision in progress · agent/MCP control plane next-class priority.**
+**Phase 2 / 2.5 core complete · Phase 3 vision in progress · agent control plane v0 landed.**
 
-Shipped:
+Shipped highlights:
 
 - Typed client + `fake://` / `local://` (hand-rolled torch+PEFT verbs, no HF Trainer)
-- `HFChatRenderer` / `HFVLMRenderer` train/sample consistency paths
-- HTTP transport (`anvil serve` + `RemoteBackend`)
-- GRPO loop + IS/PPO losses; async verb queue
-- vLLM sample worker with adapter hot-swap
-- Metrics + live probes + `/observe/{run_id}`; recipe gates + audit
-- Vision foundation: media store, trajectories, JSONL ingest, image modality wiring
+- `HFChatRenderer` / `HFVLMRenderer`; train/sample consistency paths
+- HTTP `anvil serve` + `RemoteBackend`; GRPO + IS/PPO; verb queue
+- vLLM sample worker + adapter hot-swap
+- Metrics, probes, `/observe/{run_id}`; recipe gates + audit
+- Vision foundation + image-modality train path; `scripts/vlm_smoke.py`
+- Agent: control HTTP client, MCP server (`[mcp]` extra), harness + prompt pack
 
-See [docs/roadmap.md](docs/roadmap.md) and [docs/product.md](docs/product.md).
+J-Lens permanent panel is **shelved** (forge spikes NO-GO); schema/CLI research only.
 
-### Web UI & live observe
+## Quick start
 
-Spark-dashboard-inspired dark UI for knobs, runs, loss/reward curves, models, export — and a dedicated **observe** page that tails training metrics and probe completions while RL runs:
+### Human / individual
 
 ```bash
-pip install -e ".[web]"
+pip install -e ".[web,dev]"
 anvil-web --host 0.0.0.0 --port 7600
 # open http://localhost:7600
-# live run debugger: http://localhost:7600/observe/<run_id>
+# live RL debugger: http://localhost:7600/observe/<run_id>
 ```
 
-Links out to forge/hammer [spark-dashboard](https://github.com/niklasfrick/spark-dashboard) (:3000) for GPU telemetry. Anvil owns *training* signals (reward collapse, IS drift, probe text); spark-dashboard owns *hardware* signals.
-
-### Minimal client example
+GPU telemetry: [spark-dashboard](https://github.com/niklasfrick/spark-dashboard) on lab hosts (:3000). Anvil owns *training* signals; spark-dashboard owns *hardware* signals.
 
 ```python
-import anvil
 from anvil import ServiceClient, Datum, ModelInput, AdamParams
 
 svc = ServiceClient()  # fake:// — no GPU
@@ -73,55 +87,100 @@ print(tc.forward_backward([datum], "cross_entropy").result().loss)
 tc.optim_step(AdamParams(learning_rate=1e-4)).result()
 ```
 
+### Agent / MCP
+
+```bash
+# terminal A — control plane (same SSOT as the UI)
+anvil-web --port 7600
+
+# terminal B — MCP stdio for Cursor / Claude Desktop / custom hosts
+pip install -e ".[mcp]"
+anvil mcp --url http://127.0.0.1:7600
+# or: anvil-mcp --url http://127.0.0.1:7600
+```
+
+```bash
+# portable prompts only (paste into your harness)
+anvil agent --print-prompts
+
+# optional Anvil harness — you bring the brain
+export ANVIL_AGENT_API_KEY=…          # or OPENAI_API_KEY
+export ANVIL_AGENT_MODEL=gpt-4o-mini  # any OpenAI-compatible model
+# optional: ANVIL_AGENT_BASE_URL=https://…/v1
+anvil agent "List runs and pause any that are running"
+```
+
+Live control HTTP (also used by MCP):
+
+```http
+POST /api/runs/{id}/pause
+POST /api/runs/{id}/resume
+PATCH /api/runs/{id}/knobs   {"knobs": {"learning_rate": 5e-5}}
+GET  /api/observe/{id}/metrics?tail=50
+GET  /api/audit
+```
+
 ### RL with metrics + probes
 
 ```python
 from anvil.recipes.grpo import run_grpo
 
-# Emits metrics.jsonl + probes.jsonl under run_dir; anvil-web tails them live.
-# Tier 1: push LoRA to a vLLM sample worker every sync_every steps.
 run_grpo(
-    endpoint="local://…",                 # train
-    sample_endpoint="http://forge:8741",  # sample worker (empty → Tier 0 in-process)
+    endpoint="local://…",
+    sample_endpoint="http://forge:8741",  # empty → Tier 0 in-process
     sync_every=5,
     run_dir="runs/demo",
     probes=[[…token ids…]],
     probe_every=10,
-    # …reward, groups, steps
 )
 ```
 
-In **anvil-web**, open **RL debugger** for `probe_every`, `sync_every`, sample endpoint, and observe links. Watch for **advantage collapse** (`group_reward_std_mean → 0`), IS ratio drift, adapter sync flags, and probe completions that go off-rails — the point of negative returns often shows up here first.
+Watch **advantage collapse** (`group_reward_std_mean → 0`), IS ratio drift, and probe text—the point of negative returns often shows up here first.
 
-## Docs (thin start)
+### Vision smoke
+
+```bash
+PYTHONPATH=. python scripts/vlm_smoke.py --endpoint fake:// --steps 2
+# forge: --endpoint local:// --model /mnt/data/models/Qwen2.5-VL-3B-Instruct
+```
+
+## Docs
 
 | Doc | When |
 |-----|------|
-| **[start.md](start.md)** | Session entry for agents/humans |
-| [docs/design.md](docs/design.md) | Full design |
-| [docs/roadmap.md](docs/roadmap.md) | Phases 0–5 (current: 2.5 RL debugger) |
-| [docs/governance.md](docs/governance.md) | How decisions & contributions work |
-| [CONTRIBUTING.md](CONTRIBUTING.md) | PR hygiene |
+| **[start.md](start.md)** | Session entry (humans + coding agents) |
+| **[docs/product.md](docs/product.md)** | Product thesis |
+| **[docs/agentic-control.md](docs/agentic-control.md)** | MCP / harness / prompt pack split |
+| **[prompts/agent/](prompts/agent/)** | Operator prompts (Anvil or foreign harness) |
+| [docs/design.md](docs/design.md) | Architecture |
+| [docs/roadmap.md](docs/roadmap.md) | Phases (current: Phase 3 vision + agent v0) |
+| [docs/phase3-vision.md](docs/phase3-vision.md) | Vision slices |
+| [docs/datasets-robotics.md](docs/datasets-robotics.md) | OXE / Bridge / LeRobot / … |
+| [docs/governance.md](docs/governance.md) | Decisions & contributions |
+| [CONTRIBUTING.md](CONTRIBUTING.md) | PR hygiene (you merge; agents open PRs) |
 
 ## Layout
 
 ```text
 anvil/
   client/       # ServiceClient / TrainingClient / SamplingClient / futures / remote
-  protocol/     # Datum, ModelInput, messages (vision-ready), serde
+  protocol/     # Datum, ModelInput, messages, trajectories, serde
+  agent/        # AnvilControlClient, MCP server, optional harness
   control/      # session, adapter registry, gate-override audit
-  observe/      # RunMetricsWriter — metrics.jsonl + probes.jsonl
-  render/       # ToyTextRenderer + HFChatRenderer (real chat templates)
+  observe/      # metrics.jsonl + probes.jsonl (+ jlens schema)
+  render/       # ToyTextRenderer, HFChatRenderer, HFVLMRenderer
   media/        # content-addressed LocalMediaStore
-  backends/     # FakeBackend; LocalBackend (torch+PEFT)
-  workers/      # VLLMSampleBackend (sample-only + LoRA hot-swap)
-  serve/        # anvil serve — HTTP four-verb transport
-  web/          # anvil-web control plane + /observe live debugger
-  recipes/      # architecture → pattern → plan; GRPO/SFT helpers
-  losses/       # named loss registry (ce, is, ppo, …)
-  export/       # peft / gguf / onnx / trt format tags
-docs/
-recipes/        # sl_loop, rl-facing scripts
+  data/         # JSONL / path ingest for VLM & robot rows
+  backends/     # FakeBackend; LocalBackend (torch+PEFT, image modality)
+  workers/      # VLLMSampleBackend
+  serve/        # anvil serve — four-verb HTTP
+  web/          # anvil-web control plane + /observe
+  recipes/      # architecture → pattern → plan; GRPO/SFT/VLM
+  losses/       # named loss registry
+  export/       # peft / gguf / onnx / trt tags
+docs/             # product, design, roadmap, agentic-control, …
+prompts/agent/    # portable operator prompt pack
+scripts/          # pull_base_model, vlm_smoke, jlens_spike, …
 tests/
 ```
 
@@ -130,14 +189,15 @@ tests/
 1. **Four verbs** before a mega `train()`.
 2. **LoRA-first** — small artifacts, hot-swap, export.
 3. **Same renderer** for train and sample (critical for RL).
-4. **Observe while training** — scalars + live probes catch negative returns and reward hacking before final eval.
-5. **Vision in the schema** from day one (image refs, not afterthoughts).
-6. **Edge export** (Jetson/ONNX/TRT/GGUF) is a product path, not a blog post.
-7. **Latent monitors (J-Lens)** are debugger views, not the hot path — spike-gated before product panels.
+4. **Observe while training** — scalars + live probes catch negative returns and reward hacking.
+5. **Dual clients** — human UI and agent MCP/API share one SSOT.
+6. **You bring the agent brain** — Anvil wraps tools, harness shape, and prompts.
+7. **Vision and edge** are first-class in the data model (not afterthoughts).
+8. **Audited force** — architecture gates and method switches leave a trail.
 
 ## Keywords
 
-post-training · SFT · RL · GRPO · PPO · LoRA · PEFT · vLLM · observability · RL debugger · live probes · advantage collapse · Jacobian lens · latent space · vision-language · Jetson · edge AI · fine-tuning · LLM training
+post-training · SFT · RL · GRPO · PPO · DPO · LoRA · PEFT · vLLM · observability · RL debugger · live probes · agent control · MCP · recipe gates · vision-language · robotics · Jetson · edge AI · fine-tuning · LLM training
 
 ## License
 

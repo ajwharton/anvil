@@ -217,3 +217,4 @@ For a spin-off agent session:
 | 2026-07-17 | **P3.1** `HFVLMRenderer`: processor-backed multimodal render; media-store image load; train/sample prefix invariant; image_refs on SFT Datum; fake-processor unit tests (no multi-GB download) |
 | 2026-07-17 | **P3.2** LocalBackend image modality + LoraTargets freeze/target_modules; CE metrics n_image_refs; run_sft/run_vlm_sft accept renderer; HFVLMRenderer auto on local:// + media_store |
 | 2026-07-17 | **Agent control plane v0:** AnvilControlClient; live pause/resume/patch knobs; MCP server (anvil mcp); optional harness (anvil agent); P3.3 scripts/vlm_smoke.py |
+| 2026-07-18 | Docs dual-focus pass: README/start/handoff/governance/design/CONTRIBUTING/Agents/prompts/pyproject/GH description — individual + agentic control facing narrative |
