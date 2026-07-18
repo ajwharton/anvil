@@ -334,13 +334,23 @@ def test_stop_strings_per_row(backend: LocalBackend, adapter_id) -> None:
     assert stop_str not in tok.decode(list(seq0.tokens), skip_special_tokens=False)
 
 
-def test_non_text_modality_rejected(backend: LocalBackend) -> None:
+def test_unsupported_modality_rejected(backend: LocalBackend) -> None:
     from anvil.protocol.types import TrainConfig
 
-    with pytest.raises(NotImplementedError, match="Phase 3"):
+    with pytest.raises(NotImplementedError, match="not supported"):
         backend.create_lora_session(
-            TrainConfig(base_model=TINY, modalities=("text", "image"))
+            TrainConfig(base_model=TINY, modalities=("text", "video"))
         )
+
+
+def test_image_modality_allowed(backend: LocalBackend) -> None:
+    """Phase 3.2: image is a first-class modality (token-CE path on tiny LMs)."""
+    from anvil.protocol.types import TrainConfig
+
+    aid = backend.create_lora_session(
+        TrainConfig(base_model=TINY, modalities=("text", "image"))
+    )
+    assert str(aid).startswith("adapter-")
 
 
 # --- opinionated gates --------------------------------------------------------
