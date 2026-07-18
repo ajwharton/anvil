@@ -19,9 +19,9 @@ State: `Track: anvil | Outcome: <one line>`
 - LoRA-first adapters; train/sample consistency; vision + edge (Jetson) path
 - Backends: local GPU → dual DGX Spark → export to edge
 - **RL debugger**: web UI (`anvil-web`), live metrics, inference probes during RL (negative-return detection)
-- **Agent-first control**: same run/metrics/recipe surface via API (and eventually MCP)—usable solo, shines when an agent watches cliffs and switches methods live
+- **Agent-first control**: Anvil owns MCP/tools + optional harness + portable prompts; **you bring the agent model** (frontier or local). Usable solo; shines when an agent watches cliffs and switches methods live
 
-Product thesis: [`docs/product.md`](docs/product.md). Not a full MoE train stack on day one. Inspiration one-liner lives in `README.md` only.
+Product thesis: [`docs/product.md`](docs/product.md) · agent split: [`docs/agentic-control.md`](docs/agentic-control.md) · prompts: [`prompts/agent/`](prompts/agent/). Not a full MoE train stack on day one. Inspiration one-liner lives in `README.md` only.
 
 ## Red lines
 
@@ -58,6 +58,8 @@ README.md                    # human front door
 | Path | When |
 |------|------|
 | `docs/product.md` | Why Anvil; agent control; MCP/API; method cliffs / RSI-shaped ambition |
+| `docs/agentic-control.md` | Anvil harness/MCP vs user brain; portable prompt pack |
+| `prompts/agent/` | Generic operator prompts for Anvil or foreign harnesses |
 | `docs/design.md` | API/backend/vision/Jetson design detail |
 | `docs/roadmap.md` | Phase scope, exit criteria, next gate |
 | `docs/governance.md` | Contribution / maintainer / license dispute |
