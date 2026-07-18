@@ -29,7 +29,9 @@ Record shape (schema_version 1)::
     }
 
 Gate / scoring helpers mirror ``scripts/jlens_spike.py`` so product code and
-the forge spike stay aligned.
+the forge spike stay aligned (including the v3 digit-aware helpers — Qwen2.5
+tokenizes numbers digit-by-digit, so multi-digit values only ever appear as
+single-digit token *sequences*).
 """
 
 from __future__ import annotations
@@ -137,6 +139,51 @@ def answer_min_rank(
                 best = rank if best is None else min(best, rank)
                 break
     return best
+
+
+# ---------------------------------------------------------------------------
+# v3 digit-aware scoring (mirrors scripts/jlens_spike.py protocol `solve`)
+# ---------------------------------------------------------------------------
+
+
+def digitseq_hit_layers(
+    layer_pos_tops: Mapping[Any, Mapping[Any, Sequence[str]]],
+    pos0: int,
+    digits: str,
+) -> list[int]:
+    """Layers where each digit of ``digits`` is in top-k at consecutive
+    positions ``pos0, pos0+1, …``.
+
+    Digit-by-digit tokenizers (e.g. Qwen2.5) can only ever represent a
+    multi-digit value as a *sequence* of single-digit tokens, so single-token
+    answer matching structurally cannot hit. Single-digit ``digits`` reduce
+    to a plain per-layer membership check at ``pos0``.
+    """
+    hits: list[int] = []
+    for L, pos_tops in layer_pos_tops.items():
+        norm = {int(p): tops for p, tops in pos_tops.items()}
+        ok = True
+        for j, d in enumerate(digits):
+            tops = [t.strip() for t in norm.get(pos0 + j, [])]
+            if d not in tops:
+                ok = False
+                break
+        if ok:
+            hits.append(int(L))
+    return hits
+
+
+def solve_order_score(
+    inter_layers: Sequence[int], ans_layers: Sequence[int]
+) -> float | None:
+    """1.0 if the intermediate value is readable no later than the answer.
+
+    Two-stage order (intermediate → answer); None when either stage has no
+    hit layer (unscored, matching ``intermediate_order_score`` semantics).
+    """
+    if not inter_layers or not ans_layers:
+        return None
+    return 1.0 if min(inter_layers) <= min(ans_layers) else 0.0
 
 
 def layer_tops_from_slice(

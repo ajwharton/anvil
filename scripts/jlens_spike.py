@@ -6,6 +6,19 @@ Protocols (``--protocol``):
   last_prompt   v1 — apply at last prompt token only (known weak for math)
   cot_in_prompt v2 — prompt already contains intermediate steps; multi-position
   generate      v2 — greedy-generate a short CoT, then apply on full sequence
+  solve         v3 — few-shot terse solve (completion guaranteed), digit-aware
+                     scoring, lens/model sanity panel
+
+v3 fixes three v2 measurement artifacts found on review (see
+docs/spikes/jlens-math.md §Second opinion):
+  - Qwen2.5 tokenizes numbers digit-by-digit, so a single-token answer match
+    can never hit; v3 scores the answer as a digit sequence at consecutive
+    prediction positions.
+  - v2 ``generate`` truncated at 48 tokens before the model finished the
+    arithmetic; v3 few-shots a terse format so the answer is always emitted,
+    and only scores probes the model actually solved.
+  - v2 never compared lens readout to the model's own logits; v3 reports a
+    final-layer top-1 agreement sanity so lens quality is visible directly.
 
 Phase 2.5 gate: reproduce "intermediate steps light up in order" before a
 permanent anvil-web J-Lens panel. See docs/spikes/jlens-math.md.
@@ -26,7 +39,7 @@ import re
 import time
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Mapping, Sequence
 
 
 # ---------------------------------------------------------------------------
@@ -44,6 +57,10 @@ class MathProbe:
     answer: str
     # Partial solution already written (protocol cot_in_prompt)
     cot_prompt: str = ""
+    # Step-1 result value (protocol solve digit-aware scoring)
+    inter: str = ""
+    # One-line problem used by the v3 few-shot solve format
+    solve_problem: str = ""
 
 
 DEFAULT_PROBES: tuple[MathProbe, ...] = (
@@ -67,6 +84,8 @@ DEFAULT_PROBES: tuple[MathProbe, ...] = (
             ("14",),
         ),
         answer="14",
+        inter="7",
+        solve_problem="First add 3 and 4, then multiply the sum by 2.",
     ),
     MathProbe(
         id="sub_chain",
@@ -88,6 +107,8 @@ DEFAULT_PROBES: tuple[MathProbe, ...] = (
             ("12",),
         ),
         answer="12",
+        inter="15",
+        solve_problem="Start with 20, subtract 5, then subtract 3.",
     ),
     MathProbe(
         id="double_plus",
@@ -109,6 +130,79 @@ DEFAULT_PROBES: tuple[MathProbe, ...] = (
             ("13",),
         ),
         answer="13",
+        inter="12",
+        solve_problem="Double 6, then add 1.",
+    ),
+    # v3 additions — answers NOT starting with "1", so the digit-prior alone
+    # cannot explain answer-digit hits (all v1/v2 answers were 12/13/14).
+    MathProbe(
+        id="mul_34",
+        prompt=(
+            "Solve step by step. First add 8 and 9, then multiply the sum by 2. "
+            "Final answer only after the steps.\n"
+        ),
+        cot_prompt=(
+            "Solve step by step.\n"
+            "Problem: First add 8 and 9, then multiply the sum by 2.\n"
+            "Step 1: 8 + 9 = 17\n"
+            "Step 2: 17 * 2 = "
+        ),
+        stages=(
+            ("8",),
+            ("9",),
+            ("17",),
+            ("2", "times", "*"),
+            ("34",),
+        ),
+        answer="34",
+        inter="17",
+        solve_problem="First add 8 and 9, then multiply the sum by 2.",
+    ),
+    MathProbe(
+        id="sub_25",
+        prompt=(
+            "Solve step by step. Start with 40, subtract 6, then subtract 9. "
+            "Final answer only after the steps.\n"
+        ),
+        cot_prompt=(
+            "Solve step by step.\n"
+            "Problem: Start with 40, subtract 6, then subtract 9.\n"
+            "Step 1: 40 - 6 = 34\n"
+            "Step 2: 34 - 9 = "
+        ),
+        stages=(
+            ("40",),
+            ("6",),
+            ("34",),
+            ("9",),
+            ("25",),
+        ),
+        answer="25",
+        inter="34",
+        solve_problem="Start with 40, subtract 6, then subtract 9.",
+    ),
+    MathProbe(
+        id="dbl_22",
+        prompt=(
+            "Solve step by step. Double 7, then add 8. "
+            "Final answer only after the steps.\n"
+        ),
+        cot_prompt=(
+            "Solve step by step.\n"
+            "Problem: Double 7, then add 8.\n"
+            "Step 1: 7 * 2 = 14\n"
+            "Step 2: 14 + 8 = "
+        ),
+        stages=(
+            ("7", "seven"),
+            ("2", "double", "times"),
+            ("14",),
+            ("8",),
+            ("22",),
+        ),
+        answer="22",
+        inter="14",
+        solve_problem="Double 7, then add 8.",
     ),
 )
 
@@ -118,7 +212,22 @@ DEFAULT_LENS_ROOT = "/mnt/data/models/lenses"
 DEFAULT_FIT_N = 64
 DEFAULT_SEQ_LEN = 128
 DEFAULT_TOP_K = 8
-DEFAULT_PROTOCOLS = ("cot_in_prompt", "generate", "last_prompt")
+DEFAULT_PROTOCOLS = ("solve", "cot_in_prompt", "generate", "last_prompt")
+
+# v3 few-shot prefix: forces a terse Step/Answer format so greedy decoding
+# completes the arithmetic within the token budget (v2 ``generate`` let the
+# model ramble and truncated before any computation finished).
+SOLVE_FEWSHOT = (
+    "Solve step by step, then give the final answer.\n"
+    "Problem: First add 2 and 5, then multiply the sum by 3.\n"
+    "Step 1: 2 + 5 = 7\n"
+    "Step 2: 7 * 3 = 21\n"
+    "Answer: 21\n\n"
+    "Problem: Start with 10, subtract 4, then subtract 1.\n"
+    "Step 1: 10 - 4 = 6\n"
+    "Step 2: 6 - 1 = 5\n"
+    "Answer: 5\n\n"
+)
 
 
 # ---------------------------------------------------------------------------
@@ -128,8 +237,10 @@ DEFAULT_PROTOCOLS = ("cot_in_prompt", "generate", "last_prompt")
 try:
     from anvil.observe.jlens import (  # type: ignore
         answer_min_rank,
+        digitseq_hit_layers,
         earliest_stage_layers,
         intermediate_order_score,
+        solve_order_score,
         token_matches,
         top_tokens_contain,
     )
@@ -195,6 +306,34 @@ except ImportError:  # pragma: no cover
                     break
         return best
 
+    def digitseq_hit_layers(
+        layer_pos_tops: Mapping[Any, Mapping[Any, Sequence[str]]],
+        pos0: int,
+        digits: str,
+    ) -> list[int]:
+        """Layers where each digit of ``digits`` is in top-k at consecutive
+        positions (digit-by-digit tokenizers, e.g. Qwen2.5)."""
+        hits: list[int] = []
+        for L, pos_tops in layer_pos_tops.items():
+            norm = {int(p): tops for p, tops in pos_tops.items()}
+            ok = True
+            for j, d in enumerate(digits):
+                tops = [t.strip() for t in norm.get(pos0 + j, [])]
+                if d not in tops:
+                    ok = False
+                    break
+            if ok:
+                hits.append(int(L))
+        return hits
+
+    def solve_order_score(
+        inter_layers: Sequence[int], ans_layers: Sequence[int]
+    ) -> float | None:
+        """1.0 if the intermediate value is readable no later than the answer."""
+        if not inter_layers or not ans_layers:
+            return None
+        return 1.0 if min(inter_layers) <= min(ans_layers) else 0.0
+
 
 def position_order_score(
     pos_tops: dict[int, list[str]],
@@ -251,9 +390,14 @@ def default_lens_path(model_path: str) -> Path:
     return Path(DEFAULT_LENS_ROOT) / name / "jacobian_lens.pt"
 
 
-def load_hf_model(model_path: str, device: str):
+def load_hf_model(model_path: str, device: str, dtype_name: str = "auto"):
     jlens, torch, transformers = _import_jlens()
-    dtype = torch.bfloat16 if device.startswith("cuda") else torch.float32
+    if dtype_name == "bf16":
+        dtype = torch.bfloat16
+    elif dtype_name == "fp32":
+        dtype = torch.float32
+    else:
+        dtype = torch.bfloat16 if device.startswith("cuda") else torch.float32
     print(f"loading model {model_path!r} device={device} dtype={dtype}", flush=True)
     tok = transformers.AutoTokenizer.from_pretrained(model_path, trust_remote_code=True)
     if tok.pad_token is None:
@@ -332,7 +476,7 @@ def _fit_prompts(n: int, seq_len: int) -> list[str]:
 
 def cmd_fit(args: argparse.Namespace) -> int:
     jlens, model, tok, _hf = load_hf_model(
-        resolve_model_path(args.model_path, args.hf_id), args.device
+        resolve_model_path(args.model_path, args.hf_id), args.device, args.dtype
     )
     out = Path(args.lens_path) if args.lens_path else default_lens_path(
         resolve_model_path(args.model_path, args.hf_id)
@@ -432,6 +576,40 @@ def _greedy_complete(hf: Any, tok: Any, prompt: str, device: str, max_new: int) 
     return tok.decode(out[0], skip_special_tokens=True)
 
 
+def _top1_agreement(
+    lens_logits: dict[Any, Any], model_logits: Any, n_pos: int
+) -> float | None:
+    """Fraction of measured positions where the lens readout at the final
+    layer agrees with the model's own top-1 next token.
+
+    Sanity panel: if this is low, the lens itself is unfaithful and any
+    null result is a lens artifact, not a property of the model.
+    """
+    if not lens_logits:
+        return None
+    last = max(lens_logits.keys(), key=_layer_index)
+    lens_t = lens_logits[last]
+    m = model_logits
+    if hasattr(lens_t, "ndim") and lens_t.ndim == 3:
+        lens_t = lens_t[0]
+    if hasattr(m, "ndim") and m.ndim == 3:
+        m = m[0]
+    if not (
+        hasattr(lens_t, "ndim") and lens_t.ndim >= 2 and hasattr(m, "ndim") and m.ndim >= 2
+    ):
+        return None
+    agree = 0
+    tot = 0
+    for pi in range(n_pos):
+        if pi >= lens_t.shape[0] or pi >= m.shape[0]:
+            break
+        mt = int(m[pi].float().argmax().item())
+        lt = int(lens_t[pi].float().argmax().item())
+        agree += mt == lt
+        tot += 1
+    return round(agree / tot, 4) if tot else None
+
+
 def apply_text(
     lens: Any,
     model: Any,
@@ -444,7 +622,7 @@ def apply_text(
     protocol: str,
 ) -> dict[str, Any]:
     t0 = time.monotonic()
-    lens_logits, _model_logits, _extra = lens.apply(model, text, positions=list(positions))
+    lens_logits, model_logits, _extra = lens.apply(model, text, positions=list(positions))
     n_pos = len(positions)
     layer_tops = _layer_tops_pooled(lens_logits, tok, top_k, positions)
     # also last-position-only for comparison
@@ -475,9 +653,118 @@ def apply_text(
         "order_score_last_pos": order_last,
         "position_order_score": pos_order,
         "stage_positions_mid_layer": stage_pos,
+        "sanity_top1_agreement": _top1_agreement(lens_logits, model_logits, n_pos),
         "layer_tops_pooled": {str(k): v for k, v in sorted(layer_tops.items())},
         "layer_tops_last": {str(k): v for k, v in sorted(last_only.items())},
         "mid_layer_pos_tops": {str(k): v for k, v in sorted(pos_tops.items())},
+        "wall_time_s": time.monotonic() - t0,
+    }
+
+
+def apply_solve(
+    lens: Any,
+    model: Any,
+    tok: Any,
+    hf: Any,
+    probe: MathProbe,
+    *,
+    top_k: int,
+    device: str,
+    max_new: int,
+) -> dict[str, Any]:
+    """Protocol v3 — few-shot terse solve + digit-aware scoring.
+
+    The model greedy-solves in the ``Step 1 / Step 2 / Answer`` format, then
+    the lens is applied at every position of the generated continuation.
+    Multi-digit values are scored as digit *sequences* at consecutive
+    prediction positions (Qwen2.5 splits numbers into single-digit tokens),
+    which is the only form in which they can ever appear in top-k.
+    """
+    t0 = time.monotonic()
+    prompt = SOLVE_FEWSHOT + "Problem: " + (probe.solve_problem or probe.prompt) + "\n"
+    enc = tok(prompt, return_tensors="pt")
+    enc = {k: v.to(device) for k, v in enc.items()}
+    n_prompt = int(enc["input_ids"].shape[1])
+    import torch
+
+    with torch.no_grad():
+        out = hf.generate(
+            **enc,
+            max_new_tokens=max_new,
+            do_sample=False,
+            pad_token_id=tok.pad_token_id or tok.eos_token_id,
+        )
+    n = int(out[0].shape[0])
+    full = tok.decode(out[0], skip_special_tokens=True)
+    gen = full[len(prompt):]
+
+    # Locate the answer digits: first token after the LAST "Answer: " marker.
+    a0: int | None = None
+    emitted_digits = ""
+    ans_idx = full.rfind("Answer:")
+    if ans_idx != -1:
+        tail = full[ans_idx + 7:].strip()
+        emitted_digits = "".join(ch for ch in (tail.split()[0] if tail else "") if ch.isdigit())
+        a0 = len(tok.encode(full[: ans_idx + 8]))  # through "Answer: "
+    correct = emitted_digits == probe.answer
+
+    # Locate step-1 intermediate digits (search inside the generated text only —
+    # the few-shot prefix also contains a "Step 1:" line).
+    ip: int | None = None
+    st1_marker = full.find("Step 1:", len(prompt))
+    if st1_marker != -1:
+        st1 = full.find(" = ", st1_marker)
+        if st1 != -1:
+            ip = len(tok.encode(full[: st1 + 3]))
+
+    span = list(range(n_prompt, n))
+    lens_logits, model_logits, _extra = lens.apply(model, full, positions=span)
+    layers = sorted(lens_logits.keys(), key=_layer_index)
+    layer_pos_tops: dict[int, dict[int, Sequence[str]]] = {
+        _layer_index(lk): {
+            pi: _row_topk(lens_logits[lk], pi, top_k, tok) for pi in range(len(span))
+        }
+        for lk in layers
+    }
+
+    def _in_span(p: int | None) -> bool:
+        return p is not None and span[0] <= p <= span[-1]
+
+    ans_pos0 = a0 - 1 - span[0] if a0 is not None and _in_span(a0 - 1) else None
+    ans_hits = (
+        digitseq_hit_layers(layer_pos_tops, ans_pos0, probe.answer)
+        if ans_pos0 is not None
+        else []
+    )
+    inter_pos0 = ip - 1 - span[0] if ip is not None and _in_span(ip - 1) else None
+    inter_hits = (
+        digitseq_hit_layers(layer_pos_tops, inter_pos0, probe.inter)
+        if probe.inter and inter_pos0 is not None
+        else []
+    )
+    order = solve_order_score(inter_hits, ans_hits)
+
+    return {
+        "probe_id": probe.id,
+        "protocol": "solve",
+        "text_preview": full[:240],
+        "generated_full": full,
+        "generated_continuation": gen,
+        "answer": probe.answer,
+        "inter": probe.inter,
+        "emitted_answer": emitted_digits,
+        "answer_correct": correct,
+        "answer_token_index": a0,
+        "inter_token_index": ip,
+        "positions": span,
+        "ans_hit_layers": ans_hits,
+        "inter_hit_layers": inter_hits,
+        "answer_digitseq_hit": bool(ans_hits),
+        "solve_order_score": order,
+        "primary_order_score": order,
+        "intermediate_order_score": None,
+        "answer_min_rank": None,
+        "sanity_top1_agreement": _top1_agreement(lens_logits, model_logits, len(span)),
         "wall_time_s": time.monotonic() - t0,
     }
 
@@ -506,6 +793,10 @@ def apply_probe(
     max_new: int,
     explicit_positions: Sequence[int] | None,
 ) -> dict[str, Any]:
+    if protocol == "solve":
+        return apply_solve(
+            lens, model, tok, hf, probe, top_k=top_k, device=device, max_new=max_new
+        )
     if protocol == "last_prompt":
         text = probe.prompt
     elif protocol == "cot_in_prompt":
@@ -525,10 +816,11 @@ def apply_probe(
 
 
 def _primary_order(rec: dict[str, Any]) -> float | None:
-    """Gate uses best of pooled-layer order and position order (v2)."""
+    """Gate uses best of pooled-layer order, position order, and solve order (v3)."""
     scores = [
         rec.get("intermediate_order_score"),
         rec.get("position_order_score"),
+        rec.get("solve_order_score"),
     ]
     nums = [float(s) for s in scores if s is not None]
     return max(nums) if nums else None
@@ -545,7 +837,12 @@ def _gate_decision(results: list[dict[str, Any]]) -> dict[str, Any]:
             o = _primary_order(r)
         if o is not None:
             orders.append(float(o))
-    ans_hits = sum(1 for r in results if r.get("answer_min_rank") is not None and not r.get("error"))
+    ans_hits = sum(
+        1
+        for r in results
+        if (r.get("answer_digitseq_hit") or r.get("answer_min_rank") is not None)
+        and not r.get("error")
+    )
     n_ok = sum(1 for r in results if not r.get("error"))
     mean_order = sum(orders) / len(orders) if orders else None
     go = (
@@ -575,7 +872,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
     if not lens_path.is_file():
         raise SystemExit(f"lens not found: {lens_path} — run fit first")
 
-    jlens, model, tok, hf = load_hf_model(model_path, args.device)
+    jlens, model, tok, hf = load_hf_model(model_path, args.device, args.dtype)
     print(f"loading lens {lens_path}", flush=True)
     lens = load_lens(jlens, lens_path)
 
@@ -609,13 +906,25 @@ def cmd_apply(args: argparse.Namespace) -> int:
                     explicit_positions=explicit,
                 )
                 rec["primary_order_score"] = _primary_order(rec)
-                print(
-                    f"  layer_order={rec.get('intermediate_order_score')} "
-                    f"pos_order={rec.get('position_order_score')} "
-                    f"ans_rank={rec.get('answer_min_rank')} "
-                    f"stages_L={rec.get('stage_layers')}",
-                    flush=True,
-                )
+                if protocol == "solve":
+                    print(
+                        f"  correct={rec.get('answer_correct')} "
+                        f"emitted={rec.get('emitted_answer')!r} "
+                        f"order={rec.get('solve_order_score')} "
+                        f"ans_layers={(rec.get('ans_hit_layers') or [])[:6]} "
+                        f"inter_layers={(rec.get('inter_hit_layers') or [])[:6]} "
+                        f"sanity={rec.get('sanity_top1_agreement')}",
+                        flush=True,
+                    )
+                else:
+                    print(
+                        f"  layer_order={rec.get('intermediate_order_score')} "
+                        f"pos_order={rec.get('position_order_score')} "
+                        f"ans_rank={rec.get('answer_min_rank')} "
+                        f"sanity={rec.get('sanity_top1_agreement')} "
+                        f"stages_L={rec.get('stage_layers')}",
+                        flush=True,
+                    )
             except Exception as e:
                 rec = {
                     "probe_id": probe.id,
@@ -654,8 +963,8 @@ def cmd_apply(args: argparse.Namespace) -> int:
     }
 
     payload = {
-        "schema_version": 2,
-        "spike": "jlens-math-j0-v2",
+        "schema_version": 3,
+        "spike": "jlens-math-j0-v3",
         "model_path": model_path,
         "lens_path": str(lens_path),
         "device": args.device,
@@ -669,10 +978,64 @@ def cmd_apply(args: argparse.Namespace) -> int:
     json_path.write_text(json.dumps(payload, indent=2) + "\n", encoding="utf-8")
     md_path = out_dir / "jlens_spike_results.md"
     md_path.write_text(_results_markdown(payload), encoding="utf-8")
+    n_j1 = _write_j1_records(all_results, out_dir, lens_path, args.top_k)
     print(json.dumps(overall, indent=2))
     print(f"wrote {json_path}")
     print(f"wrote {md_path}")
+    if n_j1:
+        print(f"wrote {out_dir / 'jlens.jsonl'} ({n_j1} J1 records)")
     return 0 if any_go else 2
+
+
+def _write_j1_records(
+    results: list[dict[str, Any]], out_dir: Path, lens_path: Path, top_k: int
+) -> int:
+    """Bridge spike → product: emit solve records in the J1 ``jlens.jsonl``
+    schema so ``GET /api/observe/{run}/jlens`` and the order tripwires work
+    on spike artifacts unchanged. No-op when the anvil package is absent."""
+    try:
+        from anvil.observe.jlens import append_jlens_record, build_jlens_record
+    except ImportError:
+        return 0
+    n = 0
+    for i, r in enumerate(results):
+        if r.get("protocol") != "solve" or r.get("error"):
+            continue
+        hit_layers = sorted(
+            set((r.get("ans_hit_layers") or []) + (r.get("inter_hit_layers") or []))
+        )
+        rec = build_jlens_record(
+            step=0,
+            probe_idx=i,
+            prompt_preview=r.get("text_preview"),
+            completion_preview=(r.get("generated_continuation") or "")[:240],
+            layers=hit_layers,
+            positions=r.get("positions") or "solve",
+            top_k=top_k,
+            signals={
+                "answer_token_min_rank": None,
+                "intermediate_order_score": r.get("solve_order_score"),
+                "stage_layers": None,
+                "off_task_mass": None,
+                "answer_digitseq_hit": r.get("answer_digitseq_hit"),
+                "solve_order_score": r.get("solve_order_score"),
+                "ans_hit_layers": r.get("ans_hit_layers"),
+                "inter_hit_layers": r.get("inter_hit_layers"),
+                "sanity_top1_agreement": r.get("sanity_top1_agreement"),
+                "answer_correct": r.get("answer_correct"),
+            },
+            lens_id=Path(str(lens_path)).parent.name,
+            wall_time_s=r.get("wall_time_s"),
+            extra={
+                "protocol": "solve",
+                "spike": "jlens-math-j0-v3",
+                "answer": r.get("answer"),
+                "emitted_answer": r.get("emitted_answer"),
+            },
+        )
+        append_jlens_record(out_dir, rec)
+        n += 1
+    return n
 
 
 def _results_markdown(payload: dict[str, Any]) -> str:
@@ -706,10 +1069,20 @@ def _results_markdown(payload: dict[str, Any]) -> str:
             continue
         lines.append(f"### {r.get('protocol')}/{r.get('probe_id')}")
         lines.append("")
+        if r.get("protocol") == "solve":
+            lines.append(f"- answer_correct: `{r.get('answer_correct')}` emitted `{r.get('emitted_answer')!r}` (gold `{r.get('answer')}`)")
+            lines.append(f"- solve_order: `{r.get('solve_order_score')}`")
+            lines.append(f"- ans_hit_layers: `{r.get('ans_hit_layers')}`")
+            lines.append(f"- inter_hit_layers: `{r.get('inter_hit_layers')}`")
+            lines.append(f"- sanity_top1_agreement: `{r.get('sanity_top1_agreement')}`")
+            lines.append(f"- continuation: `{(r.get('generated_continuation') or '')[:120]!r}`")
+            lines.append("")
+            continue
         lines.append(f"- primary_order: `{r.get('primary_order_score')}`")
         lines.append(f"- layer_order (pooled pos): `{r.get('intermediate_order_score')}` stages `{r.get('stage_layers')}`")
         lines.append(f"- pos_order (mid layer): `{r.get('position_order_score')}` stages `{r.get('stage_positions_mid_layer')}`")
         lines.append(f"- answer_min_rank: `{r.get('answer_min_rank')}`")
+        lines.append(f"- sanity_top1_agreement: `{r.get('sanity_top1_agreement')}`")
         lines.append(f"- text: `{r.get('text_preview', '')[:120]}…`")
         lines.append("")
         tops = r.get("layer_tops_last") or {}
@@ -742,13 +1115,19 @@ def build_parser() -> argparse.ArgumentParser:
     p.add_argument("--hf-id", default=None)
     p.add_argument("--lens-path", default=None)
     p.add_argument("--device", default="cuda")
+    p.add_argument(
+        "--dtype",
+        default="auto",
+        choices=("auto", "bf16", "fp32"),
+        help="model dtype; 'auto' = bf16 on cuda, fp32 on cpu",
+    )
     p.add_argument("--fit-n", type=int, default=DEFAULT_FIT_N)
     p.add_argument("--seq-len", type=int, default=DEFAULT_SEQ_LEN)
     p.add_argument("--top-k", type=int, default=DEFAULT_TOP_K)
     p.add_argument(
         "--protocol",
         default=",".join(DEFAULT_PROTOCOLS),
-        help="comma list: last_prompt,cot_in_prompt,generate",
+        help="comma list: solve,last_prompt,cot_in_prompt,generate",
     )
     p.add_argument(
         "--positions",

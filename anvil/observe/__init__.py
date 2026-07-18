@@ -4,8 +4,10 @@ from anvil.observe.jlens import (
     JLENS_SCHEMA_VERSION,
     build_jlens_record,
     compute_signals,
+    digitseq_hit_layers,
     intermediate_order_score,
     jlens_order_collapsed,
+    solve_order_score,
 )
 from anvil.observe.metrics import (
     JLENS_FILENAME,
@@ -28,6 +30,8 @@ __all__ = [
     "jlens_order_collapsed",
     "build_jlens_record",
     "compute_signals",
+    "digitseq_hit_layers",
     "intermediate_order_score",
+    "solve_order_score",
     "read_jsonl",
 ]
