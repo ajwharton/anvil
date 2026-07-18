@@ -186,6 +186,23 @@ def solve_order_score(
     return 1.0 if min(inter_layers) <= min(ans_layers) else 0.0
 
 
+def strong_hit_layers(
+    rank_map: Mapping[Any, Sequence[int | None]], k: int = 3
+) -> list[int]:
+    """Layers where every digit ranks ≤ k (exact ranks, not top-k membership).
+
+    Top-k membership is prior-prone: after ``Answer: ``, mid layers fill
+    top-8 with common digits ("a digit comes next"), which is not evidence
+    the value was computed. Requiring rank ≤ k on *all* digits of the value
+    separates the sharp readout from the digit prior.
+    """
+    out: list[int] = []
+    for L, rs in rank_map.items():
+        if rs and all(r is not None and r <= k for r in rs):
+            out.append(int(L))
+    return sorted(out)
+
+
 def layer_tops_from_slice(
     slice_: Mapping[str, Mapping[str, Sequence[Mapping[str, Any] | str]]],
     *,

@@ -1,6 +1,6 @@
 # Spike: J-Lens on multi-step math (J0)
 
-**Status:** **GO on protocol v3 `solve`** (2026-07-18, second-opinion re-review; v1/v2 NO-GO stands as-measured but was driven by scoring artifacts — see §Second opinion)  
+**Status:** **GO on protocol v3 `solve`** (2026-07-18, second-opinion re-review; v1/v2 NO-GO stands as-measured but was driven by scoring artifacts — see §Second opinion). **Refined by third pass:** proper fit + rank-resolved scoring keeps the answer-readout GO but **fails the J2 order/earliest-layer criteria** (see §Third pass).  
 **Product call:** **J-Lens is a first-class debugger-plane feature (research preview).** J1 artifact path live; spike emits `jlens.jsonl`; J2 train-loop apply is the next gate (needs a proper lens fit, not the smoke fit).  
 **Roadmap:** Phase 2.5 J0 gate passed under v3 measurement  
 **Script:** [`scripts/jlens_spike.py`](../../scripts/jlens_spike.py) (`--protocol solve,last_prompt,cot_in_prompt,generate`)  
@@ -23,9 +23,10 @@ Non-goals: web UI, per-token rollout instrumentation, vLLM hooks, consciousness 
 | Asset | Path |
 |-------|------|
 | Base model | `/mnt/data/models/qwen2.5-1.5b-instruct` (on-disk name; HF id `Qwen/Qwen2.5-1.5B-Instruct`) |
-| Fitted lens | `/mnt/data/models/lenses/qwen2.5-1.5b-instruct/jacobian_lens.pt` |
-| Fit meta | `/mnt/data/models/lenses/qwen2.5-1.5b-instruct/jacobian_lens.meta.json` |
-| Run artifacts | `/mnt/data/anvil-runs/jlens-spike-20260717-191152/` |
+| Fitted lens (v1 smoke) | `/mnt/data/models/lenses/qwen2.5-1.5b-instruct/jacobian_lens.pt` |
+| Fitted lens (**v2 proper**) | `/mnt/data/models/lenses/qwen2.5-1.5b-instruct-v2/jacobian_lens.pt` (fit_n=128, mixed wikitext+math CoT, dim_batch=64, ~36 min GPU) |
+| Fit meta | `jacobian_lens.meta.json` alongside each lens |
+| Run artifacts | `/mnt/data/anvil-runs/jlens-spike-20260717-191152/`, `/mnt/data/anvil/results/jlens-solve-v5/` |
 
 Weights and lens checkpoints stay on forge NVMe — never commit them.
 
@@ -179,8 +180,10 @@ Best protocol by order: **`generate`** (mean 0.75) — still fails the dual gate
 | **J0 v1** last-prompt spike | **done — NO-GO** (protocol artifact) |
 | **J0 v2** CoT / generate / digit-safe | **done — NO-GO** (scoring artifacts; superseded) |
 | **J0 v3** few-shot solve + digit-aware + sanity | **done — GO** (see §Second opinion) |
+| **J0 v4** rank-resolved scoring + foil control | **done** — artifact 4 found & fixed (weak top-k is digit-prior-prone) |
+| **J0 v5** proper fit (v2 lens) + J2 entry scoring | **done — J2 entry NOT met (1/3)** (see §Third pass) |
 | **J1** artifact schema + API + spike bridge | **landed** (`anvil/observe/jlens.py`, `log_jlens`, `GET /api/observe/{id}/jlens`; spike emits `jlens.jsonl`) |
-| **J2** real apply hook in `run_grpo` | **next gate** — scheduled; requires a proper lens fit (below) |
+| **J2** real apply hook in `run_grpo` | **gated** — order criterion fails on rank-resolved metric; cheapest unblock = intermediate-position fix (§Third pass) |
 | **J3** J-Lens worker | queued behind J2 |
 | **J4** permanent `/observe` panel | queued behind J2/J3 evidence |
 | **J5** J-Lens UI tripwires | queued behind J4 |
@@ -270,5 +273,87 @@ Then wire `run_grpo` apply via `RunMetricsWriter.log_jlens`.
 late-layer verbalization readouts + sanity metric, exposed via
 `jlens.jsonl` / `GET /api/observe/{run_id}/jlens`. The permanent panel (J4)
 earns its place when the proper fit demonstrates ordered mid-layer readout.
+
+---
+
+## Third pass (2026-07-18): proper fit + rank-resolved scoring
+
+The J2 entry run: re-fit the lens properly and re-measure. This pass found a
+**fourth measurement artifact** and fixed it; the J2 criteria are scored on
+the corrected metric.
+
+### Artifact 4 — weak top-k hits are digit-prior-prone
+
+v3 counted an answer hit when every digit appeared anywhere in the top-8 at
+its consecutive position. After `"Answer: "`, Qwen's digit prior keeps small
+digits in the top-8 at mid layers **regardless of computation** — e.g. the
+first digit of `14` sits at rank 2–6 from L0 onward on every probe. Weak
+membership can therefore "hit" without the residual stream containing the
+value.
+
+Fix (v4, in `anvil.observe.jlens.strong_hit_layers` + the spike): a **strong
+hit** requires *exact ranks* — every digit of the value at rank ≤ 3 at its
+position. Plus a **foil control**: rank a digit absent from both values at
+the answer position; if the foil ranks about as well as the answer's first
+digit, the hits are prior, not content.
+
+### v5 run (forge GPU, v2 proper lens)
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-18 |
+| Lens | **v2** — fit_n=128, mixed WikiText-103 + synthetic math CoT, dim_batch=64 (~36 min on GB10) |
+| Protocol | `solve`, rank-resolved scoring |
+| Artifact dir | `/mnt/data/anvil/results/jlens-solve-v5/` |
+| `answer_correct` | **6/6** |
+| Answer **strong** hits (all digits rank ≤ 3) | **6/6** |
+| Foil separation | answer-d1 mean rank **3.4–13.9** vs foil **18.1–80.0** on all 6 — strong hits are genuine residual-stream content, not prior |
+| Sanity (lens/model top-1) | 0.85–0.94 |
+
+Per-probe layers (strong):
+
+| Probe | order | ans strong | inter strong | d1~ | foil~ |
+|-------|-------|-----------|--------------|-----|-------|
+| `add_then_mul` | 0.0 | 22–26 | 23–26 | 9.3 | 36.5 |
+| `sub_chain` | 0.0 | **12**, 22–26 | 23–26 | 9.0 | 22.7 |
+| `double_plus` | 0.0 | 22–26 | 25–26 | 10.0 | 80.0 |
+| `mul_34` | 0.0 | 22–26 | 23–26 | 13.9 | 30.7 |
+| `sub_25` | 1.0 | 23–26 | 23–26 | 3.4 | 18.1 |
+| `dbl_22` | 0.0 | **9**, 12, 13, 17, 23–24 | 25–26 | 3.7 | 27.2 |
+
+### J2 entry criteria scorecard
+
+| Criterion | Result | Verdict |
+|-----------|--------|---------|
+| 6/6 answer hits | 6/6 **strong** hits | **PASS** |
+| mean order ≥ 0.6 | **0.167** (1/6) | **FAIL** |
+| earliest hit ≤ 20 on ≥ half | **2/6** (`sub_chain` L12, `dbl_22` L9) | **FAIL** |
+
+**J2 entry: not met (1 of 3).** The v3 GO for *answer readout* stands and is
+now prior-proofed; the *workspace ladder* (intermediate readable before the
+answer) does not hold at 1.5B under this protocol.
+
+### What the rank trajectories actually show
+
+Digit 1 is prior-dominated (rank ≤ 6 from L0 everywhere). Digit 2+ carries
+the computation signal: it starts at rank hundreds–1400 in early layers and
+declines roughly monotonically — reaching single digits at L9–L14 on
+`dbl_22`/`sub_chain`, L22+ elsewhere. The lens **does** watch the value
+condense; the v2 fit opened the mid-layer band that the smoke fit had
+poisoned. But intermediates only become lens-readable at L23+, at or after
+the answer — either the 1.5B model does not serialize through a lens-readable
+intermediate at the probed boundary position (token *before* the value), or
+the position choice itself is wrong.
+
+### Next experiment (cheapest first)
+
+1. **Position fix**: score the intermediate at its own token positions, not
+   the preceding boundary — one-line change, reuses the v2 lens.
+2. Only if (1) still fails: bigger base (7B) or deeper probe of per-position
+   rank curves.
+
+**J2 remains gated** until the order criterion passes on the rank-resolved
+metric. J1 artifact path stays live; the spike now emits weak + strong hits,
+per-digit rank maps, and foil controls in both the JSON and `jlens.jsonl`.
 
 ---

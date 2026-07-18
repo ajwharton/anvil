@@ -241,6 +241,7 @@ try:
         earliest_stage_layers,
         intermediate_order_score,
         solve_order_score,
+        strong_hit_layers,
         token_matches,
         top_tokens_contain,
     )
@@ -333,6 +334,16 @@ except ImportError:  # pragma: no cover
         if not inter_layers or not ans_layers:
             return None
         return 1.0 if min(inter_layers) <= min(ans_layers) else 0.0
+
+    def strong_hit_layers(
+        rank_map: Mapping[Any, Sequence[int | None]], k: int = 3
+    ) -> list[int]:
+        """Layers where every digit ranks ≤ k (exact ranks, not top-k membership)."""
+        out: list[int] = []
+        for L, rs in rank_map.items():
+            if rs and all(r is not None and r <= k for r in rs):
+                out.append(int(L))
+        return sorted(out)
 
 
 def position_order_score(
@@ -457,7 +468,69 @@ def cmd_check(args: argparse.Namespace) -> int:
     return 0
 
 
-def _fit_prompts(n: int, seq_len: int) -> list[str]:
+def _math_fit_prompts(n: int, seed: int = 20260718) -> list[str]:
+    """Varied worked-arithmetic prompts for lens fitting.
+
+    Combinatorial over operands / op shapes / formats so the lens sees real
+    math-CoT distributions (the v1 fit padded five seeds with lorem ipsum,
+    which is what poisoned mid-layer readouts).
+    """
+    import random
+
+    rng = random.Random(seed)
+    out: list[str] = []
+    while len(out) < n:
+        a, b, c = rng.randint(2, 49), rng.randint(2, 19), rng.randint(2, 9)
+        kind = rng.choice(("addmul", "subsub", "dbladd", "muladd", "addsub"))
+        if kind == "addmul":
+            inter, ans = a + b, (a + b) * c
+            q = f"First add {a} and {b}, then multiply the sum by {c}."
+            s1, s2 = f"{a} + {b} = {inter}", f"{inter} * {c} = {ans}"
+        elif kind == "subsub":
+            a = rng.randint(30, 99)
+            inter, ans = a - b, a - b - c
+            q = f"Start with {a}, subtract {b}, then subtract {c}."
+            s1, s2 = f"{a} - {b} = {inter}", f"{inter} - {c} = {ans}"
+        elif kind == "dbladd":
+            inter, ans = 2 * a, 2 * a + b
+            q = f"Double {a}, then add {b}."
+            s1, s2 = f"{a} * 2 = {inter}", f"{inter} + {b} = {ans}"
+        elif kind == "muladd":
+            inter, ans = a * c, a * c + b
+            q = f"Multiply {a} by {c}, then add {b}."
+            s1, s2 = f"{a} * {c} = {inter}", f"{inter} + {b} = {ans}"
+        else:
+            inter, ans = a + b, a + b - c
+            q = f"First add {a} and {b}, then subtract {c}."
+            s1, s2 = f"{a} + {b} = {inter}", f"{inter} - {c} = {ans}"
+        if rng.random() < 0.5:
+            out.append(f"Solve step by step.\nProblem: {q}\nStep 1: {s1}\nStep 2: {s2}\nAnswer: {ans}\n")
+        else:
+            out.append(
+                f"Problem: {q}\nTo solve, work one step at a time.\n"
+                f"Step 1: {s1}.\nStep 2: {s2}.\nThe final answer is {ans}.\n"
+            )
+    return out
+
+
+def _fit_prompts(n: int, seq_len: int, corpus: str = "synthetic") -> list[str]:
+    """Fit corpus. ``mixed`` = half WikiText-103 (paper-ish web distribution,
+    via jlens.examples) + half math CoT; falls back to synthetic if the
+    datasets package / network is unavailable."""
+    if corpus in ("wikitext", "mixed"):
+        wiki: list[str] = []
+        try:
+            from jlens.examples import load_wikitext_prompts  # type: ignore
+
+            n_wiki = n if corpus == "wikitext" else (n + 1) // 2
+            wiki = load_wikitext_prompts(n_wiki, min_chars=400)
+            print(f"  wikitext: {len(wiki)} prompts", flush=True)
+        except Exception as e:
+            print(f"  wikitext unavailable ({type(e).__name__}: {e}); synthetic fill", flush=True)
+        math = _math_fit_prompts(n - len(wiki))
+        return wiki + math
+    if corpus == "math":
+        return _math_fit_prompts(n)
     seeds = [
         "The capital of France is Paris and the river is the Seine.",
         "In arithmetic, two plus two equals four. Three plus four equals seven.",
@@ -482,18 +555,21 @@ def cmd_fit(args: argparse.Namespace) -> int:
         resolve_model_path(args.model_path, args.hf_id)
     )
     out.parent.mkdir(parents=True, exist_ok=True)
-    prompts = _fit_prompts(args.fit_n, args.seq_len)
-    print(f"fitting lens on {len(prompts)} prompts → {out}", flush=True)
+    prompts = _fit_prompts(args.fit_n, args.seq_len, args.fit_corpus)
+    print(f"fitting lens on {len(prompts)} prompts ({args.fit_corpus}) → {out}", flush=True)
     t0 = time.monotonic()
     lens = jlens.fit(
         model,
         prompts=prompts,
         checkpoint_path=str(out.with_suffix(".ckpt.pt")),
+        dim_batch=args.dim_batch,
     )
     lens.save(str(out))
     meta = {
         "model_path": resolve_model_path(args.model_path, args.hf_id),
         "fit_n": args.fit_n,
+        "fit_corpus": args.fit_corpus,
+        "dim_batch": args.dim_batch,
         "seq_len": args.seq_len,
         "wall_time_s": time.monotonic() - t0,
         "lens_path": str(out),
@@ -742,7 +818,56 @@ def apply_solve(
         if probe.inter and inter_pos0 is not None
         else []
     )
-    order = solve_order_score(inter_hits, ans_hits)
+    # Rank-resolved scoring + digit-prior foil. Top-k membership after
+    # "Answer: " is easily satisfied by a generic digit prior at mid layers;
+    # exact ranks (rank <= 3 on *all* digits) separate sharp readout from
+    # prior. The foil is a digit absent from both values: if the foil ranks
+    # about as well as the answer's first digit at mid layers, the mid-layer
+    # hits are prior, not computation.
+    def _digit_id(d: str) -> int:
+        return int(tok.encode(d)[0])
+
+    def _rank_at(lk: Any, pi: int, token_id: int) -> int | None:
+        t = lens_logits[lk]
+        if hasattr(t, "ndim") and t.ndim == 3:
+            t = t[0]
+        if not (hasattr(t, "ndim") and t.ndim >= 2) or pi >= t.shape[0]:
+            return None
+        row = t[pi].float()
+        v = row[token_id]
+        return int((row > v).sum().item()) + 1
+
+    ans_digits = [c for c in probe.answer if c.isdigit()]
+    inter_digits = [c for c in (probe.inter or "") if c.isdigit()]
+    foil = next(d for d in "357824691" if d not in ans_digits + inter_digits)
+
+    ans_ranks: dict[int, list[int | None]] = {}
+    foil_ranks: dict[int, int | None] = {}
+    if ans_pos0 is not None and ans_digits:
+        for lk in layers:
+            L = _layer_index(lk)
+            ans_ranks[L] = [
+                _rank_at(lk, ans_pos0 + j, _digit_id(d)) for j, d in enumerate(ans_digits)
+            ]
+            foil_ranks[L] = _rank_at(lk, ans_pos0, _digit_id(foil))
+    inter_ranks: dict[int, list[int | None]] = {}
+    if inter_pos0 is not None and inter_digits:
+        for lk in layers:
+            L = _layer_index(lk)
+            inter_ranks[L] = [
+                _rank_at(lk, inter_pos0 + j, _digit_id(d)) for j, d in enumerate(inter_digits)
+            ]
+
+    ans_strong = strong_hit_layers(ans_ranks)
+    inter_strong = strong_hit_layers(inter_ranks)
+    order = solve_order_score(inter_strong, ans_strong)
+
+    def _mean_rank(rs: Sequence[int | None]) -> float | None:
+        vals = [r for r in rs if r is not None]
+        return round(sum(vals) / len(vals), 1) if vals else None
+
+    d1_mean = _mean_rank([rs[0] for rs in ans_ranks.values()])
+    foil_mean = _mean_rank(list(foil_ranks.values()))
 
     return {
         "probe_id": probe.id,
@@ -759,7 +884,16 @@ def apply_solve(
         "positions": span,
         "ans_hit_layers": ans_hits,
         "inter_hit_layers": inter_hits,
+        "ans_strong_layers": ans_strong,
+        "inter_strong_layers": inter_strong,
+        "ans_digit_ranks": {str(k): v for k, v in sorted(ans_ranks.items())},
+        "inter_digit_ranks": {str(k): v for k, v in sorted(inter_ranks.items())},
+        "foil_digit": foil,
+        "foil_ranks": {str(k): v for k, v in sorted(foil_ranks.items())},
+        "ans_d1_mean_rank": d1_mean,
+        "foil_mean_rank": foil_mean,
         "answer_digitseq_hit": bool(ans_hits),
+        "answer_digitseq_strong_hit": bool(ans_strong),
         "solve_order_score": order,
         "primary_order_score": order,
         "intermediate_order_score": None,
@@ -837,12 +971,20 @@ def _gate_decision(results: list[dict[str, Any]]) -> dict[str, Any]:
             o = _primary_order(r)
         if o is not None:
             orders.append(float(o))
+    # Answer gate: rank-resolved (strong) hits for solve — weak top-k
+    # membership is digit-prior-prone after "Answer: ". Other protocols keep
+    # the legacy weak check.
     ans_hits = sum(
         1
         for r in results
-        if (r.get("answer_digitseq_hit") or r.get("answer_min_rank") is not None)
+        if (
+            r.get("answer_digitseq_strong_hit")
+            if r.get("protocol") == "solve"
+            else (r.get("answer_digitseq_hit") or r.get("answer_min_rank") is not None)
+        )
         and not r.get("error")
     )
+    n_weak = sum(1 for r in results if r.get("answer_digitseq_hit") and not r.get("error"))
     n_ok = sum(1 for r in results if not r.get("error"))
     mean_order = sum(orders) / len(orders) if orders else None
     go = (
@@ -857,6 +999,7 @@ def _gate_decision(results: list[dict[str, Any]]) -> dict[str, Any]:
         "n_probes": n_ok,
         "n_order_scored": len(orders),
         "n_answer_in_topk": ans_hits,
+        "n_answer_weak_topk": n_weak,
         "thresholds": {"mean_order_min": 0.6, "answer_hit_fraction_min": 0.5},
         "decision": (
             "GO — intermediate-order signal supports product panel work"
@@ -911,8 +1054,10 @@ def cmd_apply(args: argparse.Namespace) -> int:
                         f"  correct={rec.get('answer_correct')} "
                         f"emitted={rec.get('emitted_answer')!r} "
                         f"order={rec.get('solve_order_score')} "
-                        f"ans_layers={(rec.get('ans_hit_layers') or [])[:6]} "
-                        f"inter_layers={(rec.get('inter_hit_layers') or [])[:6]} "
+                        f"ans_strong={(rec.get('ans_strong_layers') or [])[:6]} "
+                        f"inter_strong={(rec.get('inter_strong_layers') or [])[:6]} "
+                        f"d1_rank~{rec.get('ans_d1_mean_rank')} "
+                        f"foil_rank~{rec.get('foil_mean_rank')} "
                         f"sanity={rec.get('sanity_top1_agreement')}",
                         flush=True,
                     )
@@ -1018,9 +1163,14 @@ def _write_j1_records(
                 "stage_layers": None,
                 "off_task_mass": None,
                 "answer_digitseq_hit": r.get("answer_digitseq_hit"),
+                "answer_digitseq_strong_hit": r.get("answer_digitseq_strong_hit"),
                 "solve_order_score": r.get("solve_order_score"),
                 "ans_hit_layers": r.get("ans_hit_layers"),
                 "inter_hit_layers": r.get("inter_hit_layers"),
+                "ans_strong_layers": r.get("ans_strong_layers"),
+                "inter_strong_layers": r.get("inter_strong_layers"),
+                "ans_d1_mean_rank": r.get("ans_d1_mean_rank"),
+                "foil_mean_rank": r.get("foil_mean_rank"),
                 "sanity_top1_agreement": r.get("sanity_top1_agreement"),
                 "answer_correct": r.get("answer_correct"),
             },
@@ -1028,7 +1178,7 @@ def _write_j1_records(
             wall_time_s=r.get("wall_time_s"),
             extra={
                 "protocol": "solve",
-                "spike": "jlens-math-j0-v3",
+                "spike": "jlens-math-j0-v4",
                 "answer": r.get("answer"),
                 "emitted_answer": r.get("emitted_answer"),
             },
@@ -1072,8 +1222,14 @@ def _results_markdown(payload: dict[str, Any]) -> str:
         if r.get("protocol") == "solve":
             lines.append(f"- answer_correct: `{r.get('answer_correct')}` emitted `{r.get('emitted_answer')!r}` (gold `{r.get('answer')}`)")
             lines.append(f"- solve_order: `{r.get('solve_order_score')}`")
-            lines.append(f"- ans_hit_layers: `{r.get('ans_hit_layers')}`")
-            lines.append(f"- inter_hit_layers: `{r.get('inter_hit_layers')}`")
+            lines.append(f"- ans_hit_layers (weak top-k): `{r.get('ans_hit_layers')}`")
+            lines.append(f"- inter_hit_layers (weak top-k): `{r.get('inter_hit_layers')}`")
+            lines.append(f"- ans_strong_layers (rank≤3): `{r.get('ans_strong_layers')}`")
+            lines.append(f"- inter_strong_layers (rank≤3): `{r.get('inter_strong_layers')}`")
+            lines.append(
+                f"- foil control: digit `{r.get('foil_digit')}` mean_rank "
+                f"{r.get('foil_mean_rank')} vs answer-d1 mean_rank {r.get('ans_d1_mean_rank')}"
+            )
             lines.append(f"- sanity_top1_agreement: `{r.get('sanity_top1_agreement')}`")
             lines.append(f"- continuation: `{(r.get('generated_continuation') or '')[:120]!r}`")
             lines.append("")
@@ -1122,6 +1278,18 @@ def build_parser() -> argparse.ArgumentParser:
         help="model dtype; 'auto' = bf16 on cuda, fp32 on cpu",
     )
     p.add_argument("--fit-n", type=int, default=DEFAULT_FIT_N)
+    p.add_argument(
+        "--fit-corpus",
+        default="mixed",
+        choices=("mixed", "wikitext", "math", "synthetic"),
+        help="fit data: mixed = wikitext + math CoT (default); synthetic = legacy lorem smoke",
+    )
+    p.add_argument(
+        "--dim-batch",
+        type=int,
+        default=8,
+        help="Jacobian cotangent batch — fit cost is ceil(d_model/dim_batch) backwards/prompt",
+    )
     p.add_argument("--seq-len", type=int, default=DEFAULT_SEQ_LEN)
     p.add_argument("--top-k", type=int, default=DEFAULT_TOP_K)
     p.add_argument(

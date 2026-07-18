@@ -139,11 +139,20 @@ def test_digitseq_hit_layers():
 
 def test_solve_order_score():
     from anvil.observe.jlens import solve_order_score
+    def test_solve_order_score():
+        assert solve_order_score([23, 24], [23, 26]) == 1.0
+        assert solve_order_score([25, 26], [23, 24]) == 0.0
+        assert solve_order_score([], [23]) is None
+        assert solve_order_score([23], []) is None
 
-    assert solve_order_score([23, 24], [23, 26]) == 1.0
-    assert solve_order_score([25, 26], [23, 24]) == 0.0
-    assert solve_order_score([], [23]) is None
-    assert solve_order_score([23], []) is None
+
+    def test_strong_hit_layers():
+        from anvil.observe.jlens import strong_hit_layers
+
+        ranks = {12: [4, 6], 13: [2, 3], 22: [1, 1], 23: [1, 2], 24: [None, 1]}
+        assert strong_hit_layers(ranks) == [13, 22, 23]
+        assert strong_hit_layers(ranks, k=1) == [22]
+        assert strong_hit_layers({}) == []
 
 
 def test_observe_package_exports_v3_helpers():
