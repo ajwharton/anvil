@@ -6,7 +6,7 @@
 
 ## Product goal
 
-A researcher or roboticist can SFT (and later RL) a **VLM** with **image refs** through the same four verbs, with freeze defaults that make sense for edge export (LM + projector LoRA, vision encoder frozen).
+A researcher, roboticist, or **their agent** can SFT (and later RL) a **VLM** with **image refs** through the same four verbs, with freeze defaults that make sense for edge export (LM + projector LoRA, vision encoder frozen). Vision runs must remain **observable and controllable** on the same HTTP/MCP SSOT as text RL (see [`product.md`](product.md)).
 
 ## Ordered slices
 

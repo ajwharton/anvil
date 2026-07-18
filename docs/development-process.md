@@ -6,6 +6,8 @@ Aligned with the **Mia** lab rule: GitHub is the source of truth; the maintainer
 
 Nothing is done until it is **committed, pushed on a PR branch, and merged on GitHub** by the maintainer.
 
+Product dual focus (individuals + agentic control) lives in [`product.md`](product.md) and [`agentic-control.md`](agentic-control.md). Docs PRs that touch public facing text should keep both modes honest.
+
 ## No direct pushes to `main`
 
 | Allowed | Not allowed |

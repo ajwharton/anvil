@@ -2,10 +2,11 @@
 
 **Project:** [Anvil](https://github.com/ajwharton/anvil) (this repo)  
 **Status:** Design SSOT  
-**Outcome:** Democratized RL+SFT with a small four-verb API, own hardware (lab GPU → dual DGX Spark → Jetson edge), **vision** first-class, and live RL observability.  
-**Date:** 2026-07-16 (de-brand pass 2026-07-17)
+**Outcome:** Democratized RL+SFT with a small four-verb API, own hardware (lab GPU → dual DGX Spark → Jetson edge), **vision** first-class, live RL observability, and an **agent-operable control plane** (HTTP/MCP; user-supplied brain).  
+**Date:** 2026-07-16 (de-brand 2026-07-17; agent dual-focus 2026-07-18)
 
-Inspiration / non-affiliation one-liner: see `README.md` (only public place we name prior product art).
+Inspiration / non-affiliation one-liner: see `README.md` (only public place we name prior product art).  
+Product thesis: [`product.md`](product.md) · agent split: [`agentic-control.md`](agentic-control.md).
 
 Related personal lab context (private): dual-Spark serve, starwatch agents, Jetson robot — not required to use Anvil.
 
@@ -17,7 +18,9 @@ Related personal lab context (private): dual-Spark serve, starwatch agents, Jets
 
 | Piece | Role |
 |-------|------|
-| **Client SDK** | Thin. You write loops on a laptop/CPU box. |
+| **Client SDK** | Thin. You write loops on a laptop/CPU box—or an agent does, via the same contract. |
+| **Control / observe APIs** | HTTP + SSE SSOT for web UI **and** agents (`anvil-web`, `AnvilControlClient`). |
+| **MCP + harness** | Anvil-owned tools and optional loop; **user brings** the agent model (see agentic-control.md). |
 | **Train / sample workers** | Warm bases + LoRA adapters. Scheduling, multi-node, fault tolerance as backends grow. |
 | **Recipes** | SFT, GRPO/PPO-style RL, DPO/RLHF, distillation, tools, multi-agent, VLM classifier, robot offline. |
 | **Renderers** | Chat/tool/reasoning/multimodal rendering so train and sample share one message↔token contract. |
