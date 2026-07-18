@@ -74,7 +74,7 @@ Product thesis: [`docs/product.md`](product.md).
       logged with recipe, shape, and reasons — `anvil/control/audit.py` +
       `/api/audit` (start of the control-plane audit trail)  
 
-## Phase 2.5 — RL observability (the RL debugger) *(core complete; J-Lens shelved)*
+## Phase 2.5 — RL observability (the RL debugger) *(core complete; J-Lens research preview live)*
 
 **Why:** RL runs fail quietly. Reward climbs while the policy degrades, group
 rewards homogenize and advantages collapse to zero, entropy crashes — and the
@@ -126,9 +126,22 @@ the base never changes, only the LoRA adapter does, and that is megabytes):
 - [x] J1 artifact path (schema): `anvil/observe/jlens.py` +
       `RunMetricsWriter.log_jlens` → `jlens.jsonl`;
       `GET /api/observe/{run_id}/jlens` (optional; no panel).
-- [ ] J-lens **permanent panel / train-loop apply** — **shelved** until re-open
-      criteria in the spike writeup (not near-term roadmap load-bearing).
-      Grounding paper remains Gurnee et al. 2026-07-06 if revived.
+- [x] J-lens spike **v3** on forge (2026-07-18): protocol `solve` (few-shot
+      terse CoT + digit-aware scoring + lens/model sanity panel) — **GO**:
+      6/6 answer digit-seq hits (layers 23–26), mean order 0.667, sanity
+      0.81–0.90 on the *same* smoke lens. Second-opinion review showed the
+      v1/v2 NO-GO was driven by scoring artifacts (digit-by-digit
+      tokenization, truncated generate window, no lens sanity check).
+      Artifacts `/mnt/data/anvil-runs/jlens-spike-v3-final-20260718-085742/`;
+      spike now emits J1-schema `jlens.jsonl`.
+- [ ] J2 **train-loop apply** in `run_grpo` (real lens readouts during RL via
+      `log_jlens`) — **next gate**; entry criteria: re-fit lens on a varied
+      corpus (`fit_n ≥ 128`), `solve` re-run keeps 6/6 answer hits + mean
+      order ≥ 0.6 with earliest hit layer ≤ 20 on ≥ half the probes
+      (evidence the mid-layer band opened up). See spike writeup §Second
+      opinion.
+- [ ] J3–J5 (J-Lens worker, permanent `/observe` panel, UI tripwires) —
+      queued behind J2 evidence.
 
 **Non-goals:** per-token J-lens on rollouts (debugger view, not hot path);
 autointerp beyond the J-lens readout.
@@ -218,3 +231,4 @@ For a spin-off agent session:
 | 2026-07-17 | **P3.2** LocalBackend image modality + LoraTargets freeze/target_modules; CE metrics n_image_refs; run_sft/run_vlm_sft accept renderer; HFVLMRenderer auto on local:// + media_store |
 | 2026-07-17 | **Agent control plane v0:** AnvilControlClient; live pause/resume/patch knobs; MCP server (anvil mcp); optional harness (anvil agent); P3.3 scripts/vlm_smoke.py |
 | 2026-07-18 | Docs dual-focus pass: README/start/handoff/governance/design/CONTRIBUTING/Agents/prompts/pyproject/GH description — individual + agentic control facing narrative |
+| 2026-07-18 | **J-Lens first-class (research preview):** second-opinion re-review found the J0 v1/v2 NO-GO was measurement artifacts — Qwen2.5 digit-by-digit tokenization made single-token answer matching unhittable (all answers 12/13/14 shared first digit "1"), `generate` truncated before any computation, and no lens-vs-model sanity check existed (smoke lens top-1 agreement 0.81–0.97 — faithful). New protocol `solve` (few-shot terse CoT + digit-seq scoring + sanity panel, 6 probes incl. non-"1" answers): **GO** — 6/6 answer hits at L23–26, mean order 0.667. Package v3 helpers (`digitseq_hit_layers`, `solve_order_score`) mirror the spike; spike emits J1 `jlens.jsonl`. J2 train-loop apply is next gate pending a proper lens fit (`fit_n ≥ 128`, varied corpus). Artifacts `jlens-spike-v3-final-20260718-085742` |

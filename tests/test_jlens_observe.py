@@ -121,3 +121,33 @@ def test_digit_match_no_false_prefix():
     assert not top_tokens_contain(["1", "2", "4"], ("14",))
     assert answer_min_rank({10: ["1", "2", "4"]}, "14") is None
     assert answer_min_rank({10: ["14", "x"]}, "14") == 1
+
+
+def test_digitseq_hit_layers():
+    """v3: digit-by-digit tokenizers only expose multi-digit values as sequences."""
+    from anvil.observe.jlens import digitseq_hit_layers
+
+    layer_pos_tops = {
+        20: {5: ["1", "2"], 6: ["4", "8"]},
+        "23": {"5": ["2", " 1"], "6": ["4"]},  # str keys + whitespace tolerated
+        26: {5: ["1"], 6: ["7"]},  # second digit missing
+    }
+    assert digitseq_hit_layers(layer_pos_tops, 5, "14") == [20, 23]
+    assert digitseq_hit_layers(layer_pos_tops, 5, "1") == [20, 23, 26]
+    assert digitseq_hit_layers({}, 0, "14") == []
+
+
+def test_solve_order_score():
+    from anvil.observe.jlens import solve_order_score
+
+    assert solve_order_score([23, 24], [23, 26]) == 1.0
+    assert solve_order_score([25, 26], [23, 24]) == 0.0
+    assert solve_order_score([], [23]) is None
+    assert solve_order_score([23], []) is None
+
+
+def test_observe_package_exports_v3_helpers():
+    import anvil.observe as obs
+
+    assert "digitseq_hit_layers" in obs.__all__
+    assert "solve_order_score" in obs.__all__

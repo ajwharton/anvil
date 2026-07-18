@@ -52,7 +52,7 @@ Why LoRA is load-bearing (not just “efficient FT”):
 - **SFT** chat, **math RL** (verifiable), **code RL** (sandbox), **preference** (DPO + multi-stage RLHF), **distillation**, **tool/RAG RL**, **multi-agent**, **audio**, **VLM image classification**.  
 - **Eval** harness alongside train.  
 - **Weight export** for local serve.  
-- **RL debugger** — live metrics, inference probes during training, eventual J-Lens / latent monitors.
+- **RL debugger** — live metrics, inference probes during training, J-Lens residual readouts (research preview; train-loop apply gated on proper lens fit).
 
 ### 1.4 Explicit non-goals (early)
 
@@ -208,7 +208,7 @@ While training runs, continuously:
 - Append per-step **metrics** (reward mean/std, within-group reward std / advantage-collapse tripwire, IS mean_ratio, loss).  
 - Sample a fixed **probe set** from the live policy every K steps — eyes catch reward hacking and the rollover into negative marginal returns.  
 - Stream both into `anvil-web` (`/observe/{run_id}`).  
-- Later: **J-Lens / latent-space** monitors as a debugger panel (spike-gated; not hot path).
+- **J-Lens / latent-space** residual readouts: artifact path live (`jlens.jsonl` + `GET /api/observe/{run_id}/jlens`); spike protocol `solve` passed the J0 gate (2026-07-18). Train-loop apply + debugger panel land behind a proper lens fit (see `docs/spikes/jlens-math.md` §Second opinion; debugger view, not hot path).
 
 ---
 
@@ -345,7 +345,7 @@ See **`docs/roadmap.md`** for live exit criteria. Summary:
 | **0** | Spec, stubs, fake backend, web shell |
 | **1** | Local Anvil (text, single GPU) — **done** |
 | **2** | Sample/train split, GRPO/IS/PPO, futures — **done** |
-| **2.5** | RL observability (metrics, probes, adapter sync, J-Lens spike) — **current** |
+| **2.5** | RL observability (metrics, probes, adapter sync, J-Lens readouts) — **current** |
 | **3** | Vision first-class |
 | **4** | Robot / Jetson edge loop |
 | **5** | Multi-tenant lab (optional) |

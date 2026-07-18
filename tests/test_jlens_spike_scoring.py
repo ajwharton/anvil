@@ -98,3 +98,125 @@ def test_gate_uses_primary_order(spike):
         {"primary_order_score": 0.8, "answer_min_rank": 2},
     ]
     assert spike._gate_decision(results)["go"] is True
+
+
+def test_digitseq_hit_layers(spike):
+    # answer "14" as digit sequence: "1" at pos 5, "4" at pos 6
+    layer_pos_tops = {
+        20: {5: ["1", "2"], 6: ["4", "8"]},
+        23: {5: ["2", "1"], 6: ["4", "0"]},
+        26: {5: ["1"], 6: ["7"]},  # second digit missing at pos 6
+    }
+    assert spike.digitseq_hit_layers(layer_pos_tops, 5, "14") == [20, 23]
+
+
+def test_digitseq_hit_layers_single_digit(spike):
+    layer_pos_tops = {10: {3: ["7", "x"]}, 12: {3: ["a"]}}
+    assert spike.digitseq_hit_layers(layer_pos_tops, 3, "7") == [10]
+
+
+def test_digitseq_hit_layers_missing_position(spike):
+    layer_pos_tops = {23: {5: ["1"]}}  # pos 6 absent
+    assert spike.digitseq_hit_layers(layer_pos_tops, 5, "14") == []
+
+
+def test_digitseq_strips_whitespace(spike):
+    layer_pos_tops = {23: {5: [" 1", "2"], 6: [" 4"]}}
+    assert spike.digitseq_hit_layers(layer_pos_tops, 5, "14") == [23]
+
+
+def test_solve_order_score(spike):
+    assert spike.solve_order_score([23, 24], [23, 26]) == 1.0
+    assert spike.solve_order_score([25, 26], [23, 24]) == 0.0
+    assert spike.solve_order_score([], [23]) is None
+    assert spike.solve_order_score([23], []) is None
+
+
+def test_primary_order_picks_up_solve_score(spike):
+    # regression: solve records have no pooled/position order — the primary
+    # must come from solve_order_score, not get clobbered to None
+    rec = {
+        "intermediate_order_score": None,
+        "position_order_score": None,
+        "solve_order_score": 1.0,
+    }
+    assert spike._primary_order(rec) == 1.0
+    assert spike._primary_order({"intermediate_order_score": None}) is None
+
+
+def test_gate_digitseq_answer_hits(spike):
+    # v3 solve records: answer hit via digit sequence, order via solve_order_score
+    results = [
+        {
+            "primary_order_score": 1.0,
+            "solve_order_score": 1.0,
+            "answer_digitseq_hit": True,
+            "answer_min_rank": None,
+            "intermediate_order_score": None,
+        },
+        {
+            "primary_order_score": 1.0,
+            "solve_order_score": 1.0,
+            "answer_digitseq_hit": True,
+            "answer_min_rank": None,
+            "intermediate_order_score": None,
+        },
+        {
+            "primary_order_score": 0.0,
+            "solve_order_score": 0.0,
+            "answer_digitseq_hit": True,
+            "answer_min_rank": None,
+            "intermediate_order_score": None,
+        },
+    ]
+    g = spike._gate_decision(results)
+    assert g["n_answer_in_topk"] == 3
+    assert g["go"] is True  # mean order 2/3 ≥ 0.6, hits 3 ≥ 2
+
+
+def test_new_probes_have_v3_fields(spike):
+    by_id = {p.id: p for p in spike.DEFAULT_PROBES}
+    assert len(spike.DEFAULT_PROBES) == 6
+    for pid in ("add_then_mul", "sub_chain", "double_plus", "mul_34", "sub_25", "dbl_22"):
+        p = by_id[pid]
+        assert p.inter, pid
+        assert p.solve_problem, pid
+    # v3 guards the "all answers start with 1" digit-prior artifact
+    assert any(not p.answer.startswith("1") for p in spike.DEFAULT_PROBES)
+
+
+def test_write_j1_records_bridge(spike, tmp_path):
+    """Solve results land in jlens.jsonl in the J1 schema (endpoint/tripwire-ready)."""
+    pytest.importorskip("anvil.observe.jlens")
+    results = [
+        {
+            "protocol": "solve",
+            "probe_id": "add_then_mul",
+            "text_preview": "Problem: …",
+            "generated_continuation": "Step 1: 3 + 4 = 7\nStep 2: 7 * 2 = 14\nAnswer: 14\n",
+            "answer": "14",
+            "emitted_answer": "14",
+            "answer_correct": True,
+            "ans_hit_layers": [23, 24, 25, 26],
+            "inter_hit_layers": [23, 24],
+            "answer_digitseq_hit": True,
+            "solve_order_score": 1.0,
+            "sanity_top1_agreement": 0.9,
+            "positions": [80, 81, 82],
+            "wall_time_s": 1.0,
+        },
+        {"protocol": "last_prompt", "probe_id": "x"},  # skipped
+        {"protocol": "solve", "probe_id": "y", "error": "boom"},  # skipped
+    ]
+    n = spike._write_j1_records(results, tmp_path, "/lenses/qwen2.5-1.5b-instruct/jacobian_lens.pt", 8)
+    assert n == 1
+    from anvil.observe.jlens import jlens_order_collapsed
+    from anvil.observe.metrics import read_jsonl
+
+    (rec,) = read_jsonl(tmp_path / "jlens.jsonl")
+    assert rec["type"] == "jlens"
+    assert rec["signals"]["answer_digitseq_hit"] is True
+    assert rec["signals"]["intermediate_order_score"] == 1.0
+    assert rec["lens_id"] == "qwen2.5-1.5b-instruct"
+    assert rec["protocol"] == "solve"
+    assert not jlens_order_collapsed(rec)
