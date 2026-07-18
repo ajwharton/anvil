@@ -1,12 +1,14 @@
 # Anvil
 
-**Open-source post-training toolkit** — SFT and RL with a tiny four-verb API, LoRA-first adapters, pluggable backends (lab GPU → dual DGX Spark → edge export), and a **live RL debugger** so you can see *when* training stops helping.
+**Open-source post-training toolkit** — SFT and RL with a tiny four-verb API, LoRA-first adapters, pluggable backends (lab GPU → dual DGX Spark → edge export), and a **live RL debugger** so you can see *when* training stops helping. Built for individuals; designed so **agents** can watch runs and change methods in real time.
 
 > Originally inspired by the product shape of Thinking Machines’ Tinker API (four low-level train/sample verbs + LoRA). Anvil is independent open-source software; no affiliation, no wire compatibility.
 
+Product thesis (human + agentic control, method cliffs, API/MCP): **[docs/product.md](docs/product.md)**.
+
 ## Why
 
-Democratize RL and fine-tuning by lowering the systems tax: you keep **data, loss, reward, environment**; Anvil handles a stable contract across **train**, **sample**, and **export** — and surfaces the signals that usually only show up after a failed eval.
+Democratize RL and fine-tuning by lowering the systems tax: you keep **data, loss, reward, environment**; Anvil handles a stable contract across **train**, **sample**, and **export** — and surfaces the signals that usually only show up after a failed eval. Different methods (DPO, GRPO, LoRA SFT, …) hit different cliffs; the platform should make those cliffs **visible and actionable**, including by an agent.
 
 Core verbs:
 
@@ -23,22 +25,24 @@ forward_backward · optim_step · sample · save_state
 | **RL observability** | Per-step `metrics.jsonl` (reward, group-std / advantage-collapse tripwire, IS ratio, loss) + SSE live charts |
 | **Live inference probes** | Fixed probe set sampled from the *current* policy every K steps during RL — eyes catch reward hacking and the rollover into **negative marginal returns** before final eval |
 | **Sample/train split** | Train on LocalBackend; sample on a dedicated vLLM worker with LoRA hot-swap |
-| **Roadmap: J-Lens** | Jacobian-lens / latent-space monitor as a debugger panel (spike-gated) — unverbalized reasoning traces as training signal |
+| **Agent surface (target)** | Same truth as the UI via HTTP (+ MCP later): watch cliffs, switch recipes/methods under audit |
+| **Vision (Phase 3)** | Media CAS, trajectories, VLM renderer, image modality on local train path |
 
 ## Status
 
-**Phase 2 complete · Phase 2.5 (RL debugger) in progress.**
+**Phase 2 / 2.5 core complete · Phase 3 vision in progress · agent/MCP control plane next-class priority.**
 
 Shipped:
 
 - Typed client + `fake://` / `local://` (hand-rolled torch+PEFT verbs, no HF Trainer)
-- `HFChatRenderer` train/sample prefix consistency
+- `HFChatRenderer` / `HFVLMRenderer` train/sample consistency paths
 - HTTP transport (`anvil serve` + `RemoteBackend`)
 - GRPO loop + IS/PPO losses; async verb queue
-- vLLM sample worker with adapter hot-swap (verified mac → forge)
-- Metrics scaffolding + Tier-0 live probes + `/observe/{run_id}` UI
+- vLLM sample worker with adapter hot-swap
+- Metrics + live probes + `/observe/{run_id}`; recipe gates + audit
+- Vision foundation: media store, trajectories, JSONL ingest, image modality wiring
 
-Next gate: J-lens spike (last). See [docs/roadmap.md](docs/roadmap.md).
+See [docs/roadmap.md](docs/roadmap.md) and [docs/product.md](docs/product.md).
 
 ### Web UI & live observe
 
