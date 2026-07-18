@@ -165,20 +165,34 @@ expose them; the **recipe graph** (product.md) suggests next edges. The
 
 ---
 
-## Implementation order (when we build this)
+## Implementation status
 
-Does not block Phase 3 vision work; runs as a parallel track when prioritized:
+| Item | Status |
+|------|--------|
+| HTTP SSOT (`/api/*`, observe SSE) | **landed** (web + observe) |
+| Live act: pause / resume / patch knobs | **landed** (`POST …/pause|resume`, `PATCH …/knobs`) |
+| **MCP server** | **landed** — `anvil mcp` / `anvil-mcp` (`pip install -e ".[mcp]"`) |
+| **`prompts/agent/`** pack v0 | **landed** |
+| **Optional harness** | **landed** — `anvil agent --print-prompts` or tool loop via env model |
+| Recipe-graph doc + richer cliffs | open |
+| Full method-switch tooling | open (patch knobs + new run today) |
 
-1. Stabilize HTTP SSOT (every UI panel = JSON/SSE)—mostly started.  
-2. **MCP server** over that SSOT (no smarts, only tools).  
-3. **`prompts/agent/`** pack v0 (generic operator prompts).  
-4. **Optional harness** CLI: `anvil agent --model …` (or compose with a
-   documented OpenAI-compatible client).  
-5. Live **act** tools (pause / switch / sync) with audit.  
-6. Recipe-graph doc + tripwire library.
+```bash
+# terminal A
+anvil-web --port 7600
 
-Until (2)–(4) exist, agents can still use raw HTTP + hand-written prompts;
-this note is the contract we build toward.
+# terminal B — MCP stdio for Cursor/Claude Desktop
+pip install -e ".[mcp]"
+anvil mcp --url http://127.0.0.1:7600
+
+# or dump prompts into your own harness
+anvil agent --print-prompts
+
+# one-shot operator turn (OpenAI-compatible brain)
+export ANVIL_AGENT_API_KEY=...
+export ANVIL_AGENT_MODEL=gpt-4o-mini
+anvil agent "List runs and pause any that are running"
+```
 
 ---
 

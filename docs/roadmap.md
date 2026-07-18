@@ -216,3 +216,4 @@ For a spin-off agent session:
 | 2026-07-17 | **Phase 3 opened (P3.0):** media store `put_path`/path resolve; Example/Message public serde; `Trajectory` → VLM SFT examples; `anvil.data.ingest` JSONL path ingest; docs `phase3-vision.md` + `datasets-robotics.md` (OXE, Bridge, OpenVLA, LeRobot, Robo2VLM). Next: processor-backed VLM renderer |
 | 2026-07-17 | **P3.1** `HFVLMRenderer`: processor-backed multimodal render; media-store image load; train/sample prefix invariant; image_refs on SFT Datum; fake-processor unit tests (no multi-GB download) |
 | 2026-07-17 | **P3.2** LocalBackend image modality + LoraTargets freeze/target_modules; CE metrics n_image_refs; run_sft/run_vlm_sft accept renderer; HFVLMRenderer auto on local:// + media_store |
+| 2026-07-17 | **Agent control plane v0:** AnvilControlClient; live pause/resume/patch knobs; MCP server (anvil mcp); optional harness (anvil agent); P3.3 scripts/vlm_smoke.py |

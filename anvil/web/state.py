@@ -294,6 +294,43 @@ class RunStore:
         with self._lock:
             return sorted(self._runs.values(), key=lambda r: -r.created_at)
 
+    def pause_run(self, run_id: str) -> RunRecord:
+        """Mark run paused (agent live-control)."""
+        rec = self.get_run(run_id)
+        if rec.status in {"completed", "failed", "exported"}:
+            raise RuntimeError(f"run is {rec.status}; cannot pause")
+        rec.status = "paused"
+        rec.log("paused (agent/API)")
+        return rec
+
+    def resume_run(self, run_id: str) -> RunRecord:
+        rec = self.get_run(run_id)
+        if rec.status not in {"paused", "created"}:
+            raise RuntimeError(f"run is {rec.status}; cannot resume")
+        rec.status = "running"
+        rec.log("resumed (agent/API)")
+        return rec
+
+    def patch_knobs(self, run_id: str, updates: dict[str, Any]) -> RunRecord:
+        """Patch run knobs in place (live control). Audited via log line."""
+        from dataclasses import fields as dc_fields
+
+        rec = self.get_run(run_id)
+        if rec.status in {"completed", "failed", "exported"}:
+            raise RuntimeError(f"run is {rec.status}; knobs frozen")
+        known = {f.name for f in dc_fields(RunKnobs)}
+        applied: dict[str, Any] = {}
+        for key, val in updates.items():
+            if key not in known:
+                continue
+            setattr(rec.knobs, key, val)
+            applied[key] = val
+        if not applied:
+            raise ValueError("no valid knobs to patch")
+        rec.log(f"knobs patched: {applied}")
+        rec.updated_at = time.time()
+        return rec
+
     def train_steps(self, run_id: str, n_steps: int | None = None) -> RunRecord:
         """Run n toy SFT steps on the fake backend (real PEFT in Phase 1)."""
         rec = self.get_run(run_id)
@@ -301,6 +338,8 @@ class RunStore:
             tc = self._clients[run_id]
         if rec.status in {"completed", "failed"}:
             raise RuntimeError(f"run is {rec.status}")
+        if rec.status == "paused":
+            raise RuntimeError("run is paused; resume before training")
 
         steps = n_steps if n_steps is not None else 1
         remaining = max(0, rec.knobs.max_steps - rec.step)
