@@ -1,13 +1,14 @@
 """Basic SFT recipe — CE on assistant tokens (forward_backward + optim_step).
 
-Runs against any ServiceClient backend (fake today; PEFT worker later).
-Shape/knobs should come from ``plan_recipe`` / model card inspection.
+Runs against any ServiceClient backend. Shape/knobs should come from
+``plan_recipe`` / model card inspection. Pass a multimodal renderer
+(``HFVLMRenderer``) for vision Examples.
 """
 
 from __future__ import annotations
 
 from dataclasses import dataclass
-from typing import Any, Sequence
+from typing import Any, Protocol, Sequence
 
 from anvil.client.service import ServiceClient
 from anvil.client.training import TrainingClient
@@ -15,6 +16,10 @@ from anvil.protocol.messages import Example, Message, TextPart
 from anvil.protocol.types import AdamParams, Datum, LoraTargets
 from anvil.recipes.profiles import JobPattern, RecipePlan, plan_recipe
 from anvil.render.text import ToyTextRenderer
+
+
+class _SFTRenderer(Protocol):
+    def render_example_for_sft(self, example: Example) -> Datum: ...
 
 
 @dataclass
@@ -37,9 +42,9 @@ def build_plan(base_model: str, **overrides: Any) -> RecipePlan:
 def examples_to_data(
     examples: Sequence[Example],
     *,
-    renderer: ToyTextRenderer | None = None,
+    renderer: _SFTRenderer | None = None,
 ) -> list[Datum]:
-    r = renderer or ToyTextRenderer()
+    r: _SFTRenderer = renderer if renderer is not None else ToyTextRenderer()
     return [r.render_example_for_sft(ex) for ex in examples]
 
 
@@ -52,6 +57,7 @@ def run_sft(
     export_dir: str | None = None,
     plan: RecipePlan | None = None,
     overrides: dict[str, Any] | None = None,
+    renderer: _SFTRenderer | None = None,
 ) -> SFTResult:
     """Minimal SFT: create LoRA client → CE steps → optional export."""
     plan = plan or build_plan(base_model, **(overrides or {}))
@@ -69,7 +75,7 @@ def run_sft(
         ),
     )
 
-    data = examples_to_data(examples) if examples else _toy_batch()
+    data = examples_to_data(examples, renderer=renderer) if examples else _toy_batch()
     n = steps if steps is not None else min(5, plan.max_steps)
     losses: list[float] = []
     for _ in range(n):
@@ -79,8 +85,11 @@ def run_sft(
 
     export_path = None
     if export_dir:
-        export_path = tc.export_adapter(export_dir, format=plan.export_hint if plan.export_hint == "peft" else "peft").path
+        export_path = tc.export_adapter(
+            export_dir, format=plan.export_hint if plan.export_hint == "peft" else "peft"
+        ).path
 
+    svc.close()
     return SFTResult(
         plan=plan,
         steps_run=n,

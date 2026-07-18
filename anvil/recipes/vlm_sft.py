@@ -3,6 +3,10 @@
 Public anchors: HF TRL VLM cookbook (LoRA on LM projections), Qwen2.5-VL card
 (image-text-to-text, agentic). Our fine-tune data is separate; the *recipe shape*
 is card-derivable.
+
+Phase 3.2: pass ``media_store`` + ``renderer`` (or let this module build
+``HFVLMRenderer`` for ``local://``) so Examples with ``ImagePart`` refs train
+through the same four verbs.
 """
 
 from __future__ import annotations
@@ -12,7 +16,8 @@ from typing import Any, Sequence
 from anvil.protocol.messages import Example, ImagePart, Message, TextPart
 from anvil.recipes.model_card import ModelCardFacts, inspect_base_model
 from anvil.recipes.profiles import JobPattern, RecipePlan, plan_recipe
-from anvil.recipes.sft import SFTResult, run_sft
+from anvil.recipes.sft import SFTResult, examples_to_data, run_sft
+from anvil.render.text import ToyTextRenderer
 
 
 def build_plan(
@@ -60,14 +65,38 @@ def run_vlm_sft(
     export_dir: str | None = None,
     fetch_remote: bool = True,
     overrides: dict[str, Any] | None = None,
+    media_store: Any | None = None,
+    renderer: Any | None = None,
 ) -> SFTResult:
+    """VLM SFT loop.
+
+    - ``fake://`` / missing store: ``ToyTextRenderer`` (image refs as text placeholders).
+    - ``local://`` + ``media_store``: ``HFVLMRenderer`` (processor-backed) unless
+      ``renderer`` is passed explicitly.
+    """
     card = inspect_base_model(base_model, fetch_remote=fetch_remote)
     plan = build_plan(base_model, card=card, fetch_remote=False, **(overrides or {}))
+    exs = list(examples) if examples is not None else toy_vlm_examples()
+
+    if renderer is None:
+        if media_store is not None and (
+            endpoint.startswith("local://") or endpoint.startswith("http")
+        ):
+            from anvil.render.vlm import HFVLMRenderer
+
+            renderer = HFVLMRenderer(plan.base_model, media_store)
+        else:
+            renderer = ToyTextRenderer()
+
+    # Validate renderer can build data before opening a train session
+    _ = examples_to_data(exs[:1], renderer=renderer)
+
     return run_sft(
         base_model=plan.base_model,
-        examples=list(examples) if examples is not None else toy_vlm_examples(),
+        examples=exs,
         steps=steps,
         endpoint=endpoint,
         export_dir=export_dir,
         plan=plan,
+        renderer=renderer,
     )

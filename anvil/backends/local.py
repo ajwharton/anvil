@@ -1,14 +1,16 @@
 """Local in-process backend — real torch + PEFT training behind the four verbs.
 
-Phase 1. Single host, single GPU (CPU works for smoke tests). The verbs are
-implemented by hand — no HF Trainer: ``forward_backward`` runs the forward
-pass, computes a named server-side loss, and calls ``.backward()``, leaving
-grads on the LoRA params; ``optim_step`` applies AdamW. A Trainer-style
-abstraction would swallow exactly the verb separation that is Anvil's API
-contract.
+Single host, single GPU (CPU works for smoke tests). The verbs are implemented
+by hand — no HF Trainer: ``forward_backward`` runs the forward pass, computes a
+named server-side loss, and calls ``.backward()``, leaving grads on the LoRA
+params; ``optim_step`` applies AdamW. A Trainer-style abstraction would swallow
+exactly the verb separation that is Anvil's API contract.
 
-Losses v0: ``cross_entropy`` (SFT). The IS/PPO/DPO family lands with the
-Phase 2 RL workers (they need old-policy logprob plumbing, not just a loss).
+Phase 3.2: ``image`` modality is allowed. Sessions load a VLM auto-class when
+available (else causal LM for smoke tests). CE still runs on token ids from the
+renderer; ``image_refs`` on the Datum are recorded for the multimodal train
+path (pixel fusion lands with full processor wiring on forge).
+``LoraTargets`` steers which families receive LoRA (vision encoder default off).
 
 Optional deps: ``pip install anvil-train[local]`` (torch, transformers, peft).
 Nothing in this module imports those at module load time.
@@ -33,6 +35,7 @@ from anvil.protocol.types import (
     ExportResult,
     ForwardBackwardOutput,
     LossFn,
+    LoraTargets,
     ModelInput,
     OptimStepOutput,
     SampledSequence,
@@ -142,6 +145,7 @@ class LocalBackend:
         root: str | Path | None = None,
         target_modules: Sequence[str] | None = None,
         allow_tiny_models: bool = False,
+        media_store: Any | None = None,
     ) -> None:
         torch, _, _ = _deps()
         if device is None:
@@ -151,6 +155,7 @@ class LocalBackend:
         self.dtype = torch.float32 if device == "cpu" else torch.bfloat16
         self._target_modules = list(target_modules) if target_modules else None
         self._allow_tiny_models = allow_tiny_models
+        self.media_store = media_store
         self._sessions: dict[str, _LocalSession] = {}
         self._base_models: dict[str, tuple[Any, Any]] = {}  # base_model → (model, tokenizer)
         self._root = Path(root) if root is not None else Path(
@@ -162,35 +167,36 @@ class LocalBackend:
 
     def create_lora_session(self, config: TrainConfig) -> AdapterId:
         torch, transformers, peft = _deps()
-        non_text = [m for m in config.modalities if m != "text"]
-        if non_text:
+        unknown = [m for m in config.modalities if m not in {"text", "image"}]
+        if unknown:
             raise NotImplementedError(
-                f"LocalBackend is text-only in Phase 1; modalities {non_text} "
-                f"land with the Phase 3 VLM path"
+                f"LocalBackend modalities not supported yet: {unknown}; "
+                f"supported: text, image"
             )
 
         tokenizer = transformers.AutoTokenizer.from_pretrained(config.base_model)
         if tokenizer.pad_token is None:
             tokenizer.pad_token = tokenizer.eos_token
 
-        model = transformers.AutoModelForCausalLM.from_pretrained(
-            config.base_model, dtype=self.dtype
-        )
+        wants_vision = "image" in config.modalities
+        model = self._load_base_model(transformers, config.base_model, wants_vision)
         self._check_capacity(config.base_model, model.config)
+        target_modules = self._resolve_target_modules(config.lora.targets)
         lora_cfg = peft.LoraConfig(
             r=config.lora.rank,
             lora_alpha=config.lora.effective_alpha(),
             lora_dropout=config.lora.dropout,
             task_type="CAUSAL_LM",
             # None → peft's per-architecture default (e.g. gpt2 → ["c_attn"])
-            target_modules=self._target_modules,
+            target_modules=target_modules,
         )
         model = peft.get_peft_model(model, lora_cfg)
+        self._enforce_freeze_policy(model, config.lora.targets)
         n_trainable = sum(p.numel() for p in model.parameters() if p.requires_grad)
         if n_trainable == 0:
             raise ValueError(
                 f"LoRA attached zero trainable params on {config.base_model} — "
-                f"target_modules={self._target_modules!r} matched nothing. Pass "
+                f"target_modules={target_modules!r} matched nothing. Pass "
                 f"target_modules= to LocalBackend for this architecture."
             )
         model.to(self.device)
@@ -201,6 +207,98 @@ class LocalBackend:
             config=config, model=model, tokenizer=tokenizer
         )
         return aid
+
+    def _load_base_model(self, transformers: Any, base_model: str, wants_vision: bool) -> Any:
+        """Load causal LM, or a VLM auto-class when image modality is requested."""
+        load_kw: dict[str, Any] = {"dtype": self.dtype}
+        if not wants_vision:
+            return transformers.AutoModelForCausalLM.from_pretrained(base_model, **load_kw)
+
+        # Prefer modern multimodal auto classes; fall back for unit-test tiny LMs.
+        for attr in (
+            "AutoModelForImageTextToText",
+            "AutoModelForVision2Seq",
+        ):
+            cls = getattr(transformers, attr, None)
+            if cls is None:
+                continue
+            try:
+                return cls.from_pretrained(base_model, **load_kw)
+            except Exception:
+                continue
+        warnings.warn(
+            f"could not load {base_model!r} as a VLM auto-class; "
+            f"falling back to AutoModelForCausalLM (token-CE only; pixel "
+            f"fusion needs a real VLM on forge)",
+            stacklevel=2,
+        )
+        return transformers.AutoModelForCausalLM.from_pretrained(base_model, **load_kw)
+
+    def _resolve_target_modules(self, targets: LoraTargets) -> list[str] | None:
+        """Map LoraTargets → peft target_modules (None = peft architecture default)."""
+        if self._target_modules is not None:
+            return list(self._target_modules)
+        if not targets.language and not targets.mm_projector and not targets.vision_encoder:
+            return []  # will fail n_trainable check with a clear error
+        # Default: let peft pick language attention modules (works for GPT-2 / LLaMA / Qwen LM).
+        # Explicit vision / projector names are additive when those flags are on.
+        if targets.language and not targets.vision_encoder and not targets.mm_projector:
+            return None
+        mods: list[str] = []
+        if targets.language:
+            # Common LM attention / MLP projections across Qwen / LLaMA / Phi families
+            mods.extend(
+                [
+                    "q_proj",
+                    "k_proj",
+                    "v_proj",
+                    "o_proj",
+                    "gate_proj",
+                    "up_proj",
+                    "down_proj",
+                    "c_attn",
+                    "c_proj",
+                    "c_fc",
+                ]
+            )
+        if targets.mm_projector:
+            mods.extend(
+                [
+                    "merger",
+                    "mm_projector",
+                    "multi_modal_projector",
+                    "visual_projection",
+                ]
+            )
+        if targets.vision_encoder:
+            mods.extend(["qkv", "proj", "fc1", "fc2"])  # ViT-style; architecture-specific
+        return mods or None
+
+    @staticmethod
+    def _enforce_freeze_policy(model: Any, targets: LoraTargets) -> None:
+        """Ensure non-targeted towers stay frozen (no accidental full FT)."""
+        for name, param in model.named_parameters():
+            if "lora_" in name:
+                continue  # peft adapters stay trainable
+            lname = name.lower()
+            is_vision = any(
+                k in lname for k in ("vision", "visual", "vit", "vision_tower")
+            )
+            is_proj = any(
+                k in lname
+                for k in ("mm_projector", "multi_modal_projector", "merger", "visual_projection")
+            )
+            if is_vision and not targets.vision_encoder:
+                param.requires_grad = False
+            if is_proj and not targets.mm_projector:
+                param.requires_grad = False
+            if (
+                not is_vision
+                and not is_proj
+                and not targets.language
+                and "lora_" not in name
+            ):
+                param.requires_grad = False
 
     def _get(self, adapter_id: AdapterId) -> _LocalSession:
         try:
@@ -270,6 +368,13 @@ class LocalBackend:
         if not rows:
             raise ValueError("all examples are empty")
 
+        # Count multimodal refs for metrics (pixel fusion is forge/VLM follow-up;
+        # CE is on renderer token ids — same contract as text SFT).
+        n_image_refs = 0
+        for datum in data:
+            refs = datum.loss_fn_inputs.get("image_refs") or []
+            n_image_refs += len(refs)
+
         width = max(len(r[0]) for r in rows)
         input_ids = torch.full((len(rows), width), pad_id, dtype=torch.long)
         labels = torch.full((len(rows), width), -100, dtype=torch.long)
@@ -303,6 +408,7 @@ class LocalBackend:
             metrics={
                 "n_tokens": float(w.sum().item()),
                 "n_examples": float(len(rows)),
+                "n_image_refs": float(n_image_refs),
             },
         )
 

@@ -142,8 +142,8 @@ autointerp beyond the J-lens readout.
 - [x] JSONL / path ingest — `anvil.data.ingest` (Bridge/OXE convert *into* this shape)  
 - [x] Multimodal **renderer** (processor-backed `HFVLMRenderer`) + train/sample prefix tests  
 
-- [ ] VLM SFT recipe on real frames (forge) + optional classifier-style recipe  
-- [x] Freeze/LoRA knobs for encoder vs projector vs LM — already in recipe plans (`vision_encoder` default off)  
+- [~] VLM SFT recipe wiring (`run_vlm_sft` + renderer); **real frames on forge** still open  
+- [x] Freeze/LoRA knobs for encoder vs projector vs LM — recipe plans + LocalBackend enforce
 
 **Near-term test sources:** BridgeData V2, OXE subsample, LeRobot hub sets, Robo2VLM — see datasets doc.
 
@@ -213,3 +213,4 @@ For a spin-off agent session:
 | 2026-07-17 | J0 protocol **v2** re-spike **NO-GO**: cot_in_prompt / generate / last_prompt + digit-safe match; generate best mean order 0.75 but 0/3 answer top-k. **Product call: shelve permanent J-Lens panel** (keep J1 schema + CLI). Artifacts `/mnt/data/anvil-runs/jlens-spike-v2-20260717-194416/` |
 | 2026-07-17 | **Phase 3 opened (P3.0):** media store `put_path`/path resolve; Example/Message public serde; `Trajectory` → VLM SFT examples; `anvil.data.ingest` JSONL path ingest; docs `phase3-vision.md` + `datasets-robotics.md` (OXE, Bridge, OpenVLA, LeRobot, Robo2VLM). Next: processor-backed VLM renderer |
 | 2026-07-17 | **P3.1** `HFVLMRenderer`: processor-backed multimodal render; media-store image load; train/sample prefix invariant; image_refs on SFT Datum; fake-processor unit tests (no multi-GB download) |
+| 2026-07-17 | **P3.2** LocalBackend image modality + LoraTargets freeze/target_modules; CE metrics n_image_refs; run_sft/run_vlm_sft accept renderer; HFVLMRenderer auto on local:// + media_store |
