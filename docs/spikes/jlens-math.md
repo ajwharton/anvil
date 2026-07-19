@@ -1,8 +1,8 @@
 # Spike: J-Lens on multi-step math (J0)
 
-**Status:** **GO on protocol v3 `solve`** (2026-07-18, second-opinion re-review; v1/v2 NO-GO stands as-measured but was driven by scoring artifacts — see §Second opinion). **Third pass:** proper fit + rank-resolved scoring keeps the answer-readout GO but **fails the J2 order/earliest-layer criteria** (see §Third pass). **Fourth pass (v6 position fix):** scoring intermediates at their own token positions **kills** intermediate strong hits (0/6) — boundary-before-value remains the right readout for this next-token lens (see §Fourth pass).  
-**Product call:** **J-Lens is a first-class debugger-plane feature (research preview).** J1 artifact path live; spike emits `jlens.jsonl`; J2 train-loop apply stays gated (order criterion).  
-**Roadmap:** Phase 2.5 J0 gate passed under v3 measurement  
+**Status:** Spike **parked** (2026-07-19). Protocol v3 `solve` remains a valid measurement (answer readout works; see §Second opinion). Rank-resolved J2 entry **failed** on 1.5B (v5) and on **Qwen2.5-7B mixed** fit (v7 — mean order 0.5 &lt; 0.6). Position-fix v6 was a clean negative.  
+**Product call:** **Shelve J2–J5 product work.** Keep J1 schema + forge CLI as optional research tooling. **Anvil’s RL debugger value is metrics / probes / cliffs / live control — not J-Lens.** Re-open only against the high bar below.  
+**Roadmap:** Phase 2.5 core complete without J-Lens panel; J0 measurement archive lives here  
 **Script:** [`scripts/jlens_spike.py`](../../scripts/jlens_spike.py) (`--protocol solve,last_prompt,cot_in_prompt,generate`)  
 **Paper:** Gurnee, Sofroniew, Lindsey et al., *Verbalizable Representations Form a Global Workspace in Language Models* (Anthropic / Transformer Circuits, 2026-07-06)  
 **Code:** [`anthropics/jacobian-lens`](https://github.com/anthropics/jacobian-lens) (Apache-2.0, reference impl)
@@ -24,9 +24,10 @@ Non-goals: web UI, per-token rollout instrumentation, vLLM hooks, consciousness 
 |-------|------|
 | Base model | `/mnt/data/models/qwen2.5-1.5b-instruct` (on-disk name; HF id `Qwen/Qwen2.5-1.5B-Instruct`) |
 | Fitted lens (v1 smoke) | `/mnt/data/models/lenses/qwen2.5-1.5b-instruct/jacobian_lens.pt` |
-| Fitted lens (**v2 proper**) | `/mnt/data/models/lenses/qwen2.5-1.5b-instruct-v2/jacobian_lens.pt` (fit_n=128, mixed wikitext+math CoT, dim_batch=64, ~36 min GPU) |
+| Fitted lens (**v2 proper**, 1.5B) | `/mnt/data/models/lenses/qwen2.5-1.5b-instruct-v2/jacobian_lens.pt` (fit_n=128, mixed, dim_batch=64, ~36 min) |
+| Fitted lens (**7B mixed**, v7) | `/mnt/data/models/lenses/qwen2.5-7b-instruct-v0/jacobian_lens.pt` (fit_n=128, mixed WikiText+math, dim_batch=64, **~4.9 h**) |
 | Fit meta | `jacobian_lens.meta.json` alongside each lens |
-| Run artifacts | `/mnt/data/anvil-runs/jlens-spike-20260717-191152/`, `/mnt/data/anvil/results/jlens-solve-v5/` |
+| Run artifacts | forge: `…/jlens-spike-*`, `/mnt/data/anvil/results/jlens-solve-v5/`, `/mnt/data/anvil/results/jlens-solve-7b-mixed/` |
 
 Weights and lens checkpoints stay on forge NVMe — never commit them.
 
@@ -183,13 +184,12 @@ Best protocol by order: **`generate`** (mean 0.75) — still fails the dual gate
 | **J0 v4** rank-resolved scoring + foil control | **done** — artifact 4 found & fixed (weak top-k is digit-prior-prone) |
 | **J0 v5** proper fit (v2 lens) + J2 entry scoring | **done — J2 entry NOT met (1/3)** (see §Third pass) |
 | **J0 v6** intermediate at own-token positions | **done — fails harder** (0/6 inter strong; order null) — see §Fourth pass |
-| **J1** artifact schema + API + spike bridge | **landed** (`anvil/observe/jlens.py`, `log_jlens`, `GET /api/observe/{id}/jlens`; spike emits `jlens.jsonl`) |
-| **J2** real apply hook in `run_grpo` | **gated** — order criterion fails; position fix closed; next = 7B or per-position rank curves |
-| **J3** J-Lens worker | queued behind J2 |
-| **J4** permanent `/observe` panel | queued behind J2/J3 evidence |
-| **J5** J-Lens UI tripwires | queued behind J4 |
+| **J0 v7** 7B mixed fit + solve | **done — J2 entry NOT met** (mean order **0.5**; see §Fifth pass) |
+| **J1** artifact schema + API + spike bridge | **landed** (keep; inert without writers) |
+| **J2** real apply hook in `run_grpo` | **shelved** — not product path |
+| **J3–J5** worker / panel / UI tripwires | **shelved** with J2 |
 
-Attribution in README stays deferred until a real product path exists.
+Attribution in README stays deferred. Spike is **archive + re-open bar**, not a scheduled workstream.
 
 ---
 
@@ -348,14 +348,10 @@ the position choice itself is wrong.
 
 ### Next experiment (cheapest first)
 
-1. ~~**Position fix**: score the intermediate at its own token positions~~ →
-   **done, negative** (see §Fourth pass).
-2. Bigger base (7B) **or** deeper probe of per-position rank curves (still
-   at boundary-before-value for both stages).
+1. ~~**Position fix**~~ → done, negative (§Fourth pass).
+2. ~~**7B mixed fit**~~ → done, order 0.5 still fails J2 (§Fifth pass).
 
-**J2 remains gated** until the order criterion passes on the rank-resolved
-metric. J1 artifact path stays live; the spike now emits weak + strong hits,
-per-digit rank maps, and foil controls in both the JSON and `jlens.jsonl`.
+Spike **parked** after §Fifth pass. J1 path stays; J2–J5 not scheduled.
 
 ---
 
@@ -410,11 +406,71 @@ Default scoring stays: answer + intermediate both at **boundary-before-value**
 (`--inter-score-mode boundary`, default). The v6 experiment is retained as
 `--inter-score-mode value` (negative control).
 
-### Next
+### Next (historical — superseded by §Fifth pass)
 
-1. Unblock path: **7B** re-fit + solve, or per-position rank curves at
-   boundary for both stages on 1.5B.
-2. Do not schedule J2 train-loop apply until order criterion passes under
-   rank-resolved boundary scoring.
+1. ~~**7B** re-fit + solve~~ → done, still fails J2 order (see §Fifth pass).
+2. Per-position rank curves remain optional research if re-opened.
+
+---
+
+## Fifth pass (2026-07-19): Qwen2.5-7B mixed fit + solve
+
+Overnight forge run after installing `datasets` so `--fit-corpus mixed`
+actually loads WikiText-103 (64 wiki + 64 math CoT).
+
+| Field | Value |
+|-------|-------|
+| Date | 2026-07-18 → 2026-07-19 |
+| Model | `/mnt/data/models/qwen2.5-7b-instruct` (HF `Qwen/Qwen2.5-7B-Instruct`) |
+| Lens | **v0 mixed** — fit_n=128, dim_batch=64, bf16, **wikitext: 64 prompts** |
+| Fit wall | **17576 s (~4.9 h)** |
+| Lens size | ~662 MB |
+| Protocol | `solve`, `--inter-score-mode boundary` |
+| Artifact dir | `/mnt/data/anvil/results/jlens-solve-7b-mixed/` |
+| `answer_correct` | **6/6** |
+| Answer **strong** hits | **6/6** |
+| Mean order (strong) | **0.50** (3/6 probes order=1.0) |
+| Sanity top-1 | **0.95–1.0** (excellent lens/model agreement) |
+| Gate | **NO-GO** (script; mean order &lt; 0.6) |
+
+Per-probe strong layers:
+
+| Probe | order | ans strong | inter strong |
+|-------|-------|------------|--------------|
+| `add_then_mul` | 1.0 | 24–26 | **13**, 14, 16, 22–26 |
+| `sub_chain` | 1.0 | 25–26 | 25–26 |
+| `double_plus` | 0.0 | 24–26 | 25–26 |
+| `mul_34` | 0.0 | 24–26 | 25–26 |
+| `sub_25` | 1.0 | 23–26 | **16**, 23–26 |
+| `dbl_22` | 0.0 | **8**, 23–26 | 25–26 |
+
+### J2 entry scorecard (7B)
+
+| Criterion | Result | Verdict |
+|-----------|--------|---------|
+| 6/6 answer hits | 6/6 strong | **PASS** |
+| mean order ≥ 0.6 | **0.50** | **FAIL** |
+| earliest ans hit ≤ 20 on ≥ half | **1/6** (`dbl_22` L8) | **FAIL** |
+
+**J2 entry: not met (1 of 3).** Better than 1.5B v5 (order 0.167 → 0.50);
+intermediates sometimes open mid-layer (L13–16). Still not a clean workspace
+ladder, and foil/d1 mean ranks across all layers are noisy on 7B — treat
+rank maps as research data, not product signals.
+
+### Product decision (2026-07-19)
+
+- [x] **Park the spike.** Interesting measurement stack; not load-bearing for
+      Anvil’s RL platform or debugger story.
+- [x] **Keep** J1 schema + CLI + this writeup as optional research tooling.
+- [x] **Do not schedule** J2 train-loop apply, J3 worker, J4 panel, J5
+      tripwires.
+- [x] **Ship value without J-Lens:** metrics, probes, advantage/IS cliffs,
+      adapter sync, live knobs, agent/MCP control, vision path.
+
+**Re-open bar (unchanged high bar):** fixed probe set, rank-resolved
+boundary scoring, 6/6 strong answer hits, mean order ≥ 0.6, earliest
+strong answer hit ≤ 20 on ≥ half the probes — on a protocol that remains
+honest under foil controls. Prefer new task design over “try a bigger
+base again.”
 
 ---
