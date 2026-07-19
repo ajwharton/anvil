@@ -34,4 +34,4 @@ Use BridgeData V2 / OXE subsample / LeRobot / Robo2VLM as **test sources**, conv
 
 - Full OXE pretrain  
 - Action-head architectures beyond text-tokenized actions  
-- Permanent J-Lens panel (J4; research preview artifact path landed in P2.5, panel queued behind J2 train-loop apply)  
+- Permanent J-Lens panel (J4; spike parked 2026-07-19 — not on vision critical path)  

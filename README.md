@@ -59,7 +59,7 @@ Shipped highlights:
 - Vision foundation + image-modality train path; `scripts/vlm_smoke.py`
 - Agent: control HTTP client, MCP server (`[mcp]` extra), harness + prompt pack
 
-J-Lens residual readouts (Jacobian lens, Anthropic reference impl) are a **first-class debugger-plane feature (research preview)**: schema + digit-aware scoring in `anvil/observe/jlens.py`, `RunMetricsWriter.log_jlens` → `jlens.jsonl`, `GET /api/observe/{run_id}/jlens`, and the forge spike CLI (`scripts/jlens_spike.py`, protocol `solve` — J0 gate **GO** 2026-07-18, see `docs/spikes/jlens-math.md`). Train-loop apply (J2) is the next gate, pending a proper lens fit.
+J-Lens residual readouts (Jacobian lens) are **optional research tooling, not load-bearing**: schema + scoring in `anvil/observe/jlens.py`, `log_jlens` → `jlens.jsonl`, `GET /api/observe/{run_id}/jlens`, forge CLI `scripts/jlens_spike.py`. Spike **parked** 2026-07-19 after 1.5B/7B math-order gates failed J2 entry (see `docs/spikes/jlens-math.md`). The RL debugger ships via metrics, probes, and cliffs without it.
 
 ## Quick start
 
