@@ -59,7 +59,7 @@ Shipped highlights:
 - Vision foundation + image-modality train path; `scripts/vlm_smoke.py`
 - Agent: control HTTP client, MCP server (`[mcp]` extra), harness + prompt pack
 
-J-Lens residual readouts (Jacobian lens) are **optional research tooling, not load-bearing**: schema + scoring in `anvil/observe/jlens.py`, `log_jlens` → `jlens.jsonl`, `GET /api/observe/{run_id}/jlens`, forge CLI `scripts/jlens_spike.py`. Spike **parked** 2026-07-19 after 1.5B/7B math-order gates failed J2 entry (see `docs/spikes/jlens-math.md`). The RL debugger ships via metrics, probes, and cliffs without it.
+J-Lens residual readouts (Jacobian lens) are **optional research tooling, not load-bearing**: schema + scoring in `anvil/observe/jlens.py`, `log_jlens` → `jlens.jsonl`, `GET /api/observe/{run_id}/jlens`, forge CLI `scripts/jlens_spike.py` (+ `scripts/run_jlens_7b_mixed.sh` overnight resume). Spike **parked** 2026-07-19 after 1.5B/7B math-order gates failed J2 entry (see `docs/spikes/jlens-math.md`). Mixed-corpus fit needs the `datasets` package on the lab host. The RL debugger ships via metrics, probes, and cliffs without it.
 
 ## Quick start
 
@@ -180,7 +180,7 @@ anvil/
   export/       # peft / gguf / onnx / trt tags
 docs/             # product, design, roadmap, agentic-control, …
 prompts/agent/    # portable operator prompt pack
-scripts/          # pull_base_model, vlm_smoke, jlens_spike, …
+scripts/          # pull_base_model, vlm_smoke, jlens_spike, run_jlens_7b_mixed, …
 tests/
 ```
 
