@@ -3,7 +3,7 @@
 **Status:** Spike **parked** (2026-07-19). Protocol v3 `solve` remains a valid measurement (answer readout works; see §Second opinion). Rank-resolved J2 entry **failed** on 1.5B (v5) and on **Qwen2.5-7B mixed** fit (v7 — mean order 0.5 &lt; 0.6). Position-fix v6 was a clean negative.  
 **Product call:** **Shelve J2–J5 product work.** Keep J1 schema + forge CLI as optional research tooling. **Anvil’s RL debugger value is metrics / probes / cliffs / live control — not J-Lens.** Re-open only against the high bar below.  
 **Roadmap:** Phase 2.5 core complete without J-Lens panel; J0 measurement archive lives here  
-**Script:** [`scripts/jlens_spike.py`](../../scripts/jlens_spike.py) (`--protocol solve,last_prompt,cot_in_prompt,generate`)  
+**Script:** [`scripts/jlens_spike.py`](../../scripts/jlens_spike.py) · overnight resume [`scripts/run_jlens_7b_mixed.sh`](../../scripts/run_jlens_7b_mixed.sh)  
 **Paper:** Gurnee, Sofroniew, Lindsey et al., *Verbalizable Representations Form a Global Workspace in Language Models* (Anthropic / Transformer Circuits, 2026-07-06)  
 **Code:** [`anthropics/jacobian-lens`](https://github.com/anthropics/jacobian-lens) (Apache-2.0, reference impl)
 
@@ -36,18 +36,33 @@ Weights and lens checkpoints stay on forge NVMe — never commit them.
 ```bash
 source /mnt/data/anvil-venv/bin/activate
 pip install 'git+https://github.com/anthropics/jacobian-lens.git'   # once
+pip install 'datasets>=2.14'   # required for --fit-corpus mixed (WikiText-103)
 
 cd /mnt/data/anvil && git checkout main && git pull
 python scripts/jlens_spike.py check \
   --model-path /mnt/data/models/qwen2.5-1.5b-instruct
 
+# Smoke / small fit (fit_n=32 is not paper-scale)
 python scripts/jlens_spike.py all \
   --model-path /mnt/data/models/qwen2.5-1.5b-instruct \
   --device cuda \
   --fit-n 32 \
+  --fit-corpus mixed \
   --out /mnt/data/anvil-runs/jlens-spike-$(date +%Y%m%d-%H%M%S)
 
 # exit 0 = gate GO, exit 2 = NO-GO with artifacts written
+```
+
+**`datasets` note:** without the Hugging Face `datasets` package, `--fit-corpus mixed`
+cannot load WikiText and **silently fills with math-only** prompts. Install
+`datasets>=2.14` for a true mixed fit (as used in the 7B overnight run).
+
+**7B overnight resume** (fit if lens missing, then `solve` apply):
+
+```bash
+# model: /mnt/data/models/qwen2.5-7b-instruct  (pull separately if needed)
+nohup bash scripts/run_jlens_7b_mixed.sh &
+tail -f /mnt/data/anvil/results/jlens-solve-7b-mixed/run.log
 ```
 
 ## Gate criteria (script-enforced)
