@@ -42,8 +42,9 @@ cd /mnt/data/anvil
 python scripts/grpo_observe_demo.py \
   --endpoint local:// \
   --model /mnt/data/models/qwen2.5-1.5b-instruct \
-  --run-id grpo-arith-demo \
-  --steps 30 --group-size 4 \
+  --problem hard \
+  --run-id grpo-hard-demo \
+  --steps 40 --group-size 8 \
   --attach-wait 8
 
 # terminal B — same observe root, control plane + SSE
