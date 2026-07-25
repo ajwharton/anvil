@@ -150,7 +150,7 @@ path. Re-open only against the high bar in the spike writeup.
 - [x] JSONL / path ingest — `anvil.data.ingest` (Bridge/OXE convert *into* this shape)  
 - [x] Multimodal **renderer** (processor-backed `HFVLMRenderer`) + train/sample prefix tests  
 
-- [~] VLM SFT recipe wiring (`run_vlm_sft` + renderer); **real frames on forge** still open  
+- [x] VLM SFT recipe wiring (`run_vlm_sft` + renderer); **real frames on forge** (P3.3 + pixel fusion + LeRobot demo, 2026-07-25)  
 - [x] Freeze/LoRA knobs for encoder vs projector vs LM — recipe plans + LocalBackend enforce
 
 **Near-term test sources:** BridgeData V2, OXE subsample, LeRobot hub sets, Robo2VLM — see datasets doc.

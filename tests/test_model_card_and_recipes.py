@@ -72,6 +72,18 @@ def test_plan_uses_card_shape(tmp_path: Path):
     assert plan.export_hint == "onnx"
     assert plan.peft_target_modules
     assert plan.sources  # research citations attached
+    # Loader path must stay local so AutoProcessor does not hit the Hub with a bare name.
+    assert plan.base_model == str(d)
+
+
+def test_vlm_plan_preserves_local_path(tmp_path: Path):
+    d = tmp_path / "Qwen2.5-VL-3B-Instruct"
+    d.mkdir()
+    (d / "config.json").write_text(json.dumps(QWEN_VL_CONFIG), encoding="utf-8")
+    (d / "README.md").write_text(QWEN_README, encoding="utf-8")
+
+    plan = vlm_plan(str(d), fetch_remote=False)
+    assert plan.base_model == str(d)
 
 
 def test_run_sft_fake():

@@ -6,10 +6,10 @@ named server-side loss, and calls ``.backward()``, leaving grads on the LoRA
 params; ``optim_step`` applies AdamW. A Trainer-style abstraction would swallow
 exactly the verb separation that is Anvil's API contract.
 
-Phase 3.2: ``image`` modality is allowed. Sessions load a VLM auto-class when
-available (else causal LM for smoke tests). CE still runs on token ids from the
-renderer; ``image_refs`` on the Datum are recorded for the multimodal train
-path (pixel fusion lands with full processor wiring on forge).
+Phase 3.2+: ``image`` modality is allowed. Sessions load a VLM auto-class when
+available (else causal LM for smoke tests). CE uses token ids from the renderer;
+when ``pixel_values`` (and optional ``image_grid_thw``) are present on the Datum
+(from ``HFVLMRenderer``), they are passed into the model for real vision fusion.
 ``LoraTargets`` steers which families receive LoRA (vision encoder default off).
 
 Optional deps: ``pip install anvil-train[local]`` (torch, transformers, peft).
@@ -234,45 +234,47 @@ class LocalBackend:
         )
         return transformers.AutoModelForCausalLM.from_pretrained(base_model, **load_kw)
 
-    def _resolve_target_modules(self, targets: LoraTargets) -> list[str] | None:
-        """Map LoraTargets → peft target_modules (None = peft architecture default)."""
+    def _resolve_target_modules(self, targets: LoraTargets) -> list[str] | str | None:
+        """Map LoraTargets → peft target_modules (None = peft architecture default).
+
+        Returns a list of name suffixes, or a single regex string (peft fullmatch)
+        when we must avoid matching the vision tower's identically named Linears
+        (Qwen2.5-VL visual blocks also expose ``gate_proj`` / ``up_proj`` / …).
+        """
         if self._target_modules is not None:
             return list(self._target_modules)
         if not targets.language and not targets.mm_projector and not targets.vision_encoder:
             return []  # will fail n_trainable check with a clear error
-        # Default: let peft pick language attention modules (works for GPT-2 / LLaMA / Qwen LM).
-        # Explicit vision / projector names are additive when those flags are on.
+        # Pure language (no vision flags): peft's per-architecture default is fine.
         if targets.language and not targets.vision_encoder and not targets.mm_projector:
             return None
-        mods: list[str] = []
-        if targets.language:
-            # Common LM attention / MLP projections across Qwen / LLaMA / Phi families
-            mods.extend(
-                [
-                    "q_proj",
-                    "k_proj",
-                    "v_proj",
-                    "o_proj",
-                    "gate_proj",
-                    "up_proj",
-                    "down_proj",
-                    "c_attn",
-                    "c_proj",
-                    "c_fc",
-                ]
-            )
+
+        # Multimodal: prefer path-aware regex so we do not LoRA frozen vision blocks
+        # just because they share leaf names with the LM.
+        lm_leaves = (
+            "q_proj|k_proj|v_proj|o_proj|gate_proj|up_proj|down_proj|c_attn|c_proj|c_fc"
+        )
+        parts: list[str] = []
+        if targets.language and not targets.vision_encoder:
+            # Match LM leaves anywhere except under a visual/vision tower path
+            # (Qwen2.5-VL visual blocks also name MLP mats gate/up/down_proj).
+            parts.append(rf"(?!.*(?:visual|vision_tower)\.).*(?:{lm_leaves})$")
+        elif targets.language and targets.vision_encoder:
+            parts.append(rf".*(?:{lm_leaves})$")
         if targets.mm_projector:
-            mods.extend(
-                [
-                    "merger",
-                    "mm_projector",
-                    "multi_modal_projector",
-                    "visual_projection",
-                ]
+            # Peft only wraps Linear — not the Qwen2_5_VLPatchMerger container.
+            # Leaf names: model.visual.merger.mlp.0 / .2
+            parts.append(
+                r".*(?:merger\.mlp\.(?:0|2)|mm_projector|multi_modal_projector|"
+                r"visual_projection)$"
             )
         if targets.vision_encoder:
-            mods.extend(["qkv", "proj", "fc1", "fc2"])  # ViT-style; architecture-specific
-        return mods or None
+            parts.append(r".*visual.*\.(?:qkv|proj|fc1|fc2|gate_proj|up_proj|down_proj)$")
+        if not parts:
+            return None
+        if len(parts) == 1:
+            return parts[0]
+        return "(?:" + "|".join(f"(?:{p})" for p in parts) + ")"
 
     @staticmethod
     def _enforce_freeze_policy(model: Any, targets: LoraTargets) -> None:
@@ -351,6 +353,11 @@ class LocalBackend:
         if not data:
             raise ValueError("forward_backward requires non-empty data")
 
+        # Vision path: micro-batch one example at a time when any Datum carries
+        # pixel tensors (Qwen2.5-VL patch layouts do not pad cleanly across rows).
+        if any(d.loss_fn_inputs.get("pixel_values") is not None for d in data):
+            return self._forward_backward_vlm_ce(sess, data)
+
         pad_id = sess.tokenizer.pad_token_id
         rows: list[tuple[list[int], list[int], list[float]]] = []
         for datum in data:
@@ -368,8 +375,6 @@ class LocalBackend:
         if not rows:
             raise ValueError("all examples are empty")
 
-        # Count multimodal refs for metrics (pixel fusion is forge/VLM follow-up;
-        # CE is on renderer token ids — same contract as text SFT).
         n_image_refs = 0
         for datum in data:
             refs = datum.loss_fn_inputs.get("image_refs") or []
@@ -409,6 +414,91 @@ class LocalBackend:
                 "n_tokens": float(w.sum().item()),
                 "n_examples": float(len(rows)),
                 "n_image_refs": float(n_image_refs),
+            },
+        )
+
+    def _forward_backward_vlm_ce(
+        self,
+        sess: _LocalSession,
+        data: Sequence[Datum],
+    ) -> ForwardBackwardOutput:
+        """CE with processor pixel tensors (one example micro-batch, summed)."""
+        torch, _, _ = _deps()
+        total_loss = None
+        total_tok = 0.0
+        n_image_refs = 0
+        n_examples = 0
+        n_with_pixels = 0
+
+        for datum in data:
+            ids = datum.model_input.token_ids()
+            targets = [int(t) for t in datum.loss_fn_inputs.get("target_tokens", [])]
+            weights = [float(w) for w in datum.loss_fn_inputs.get("weights", [])]
+            if not ids:
+                continue
+            if not (len(ids) == len(targets) == len(weights)):
+                raise ValueError(
+                    f"input/target/weights length mismatch: "
+                    f"{len(ids)}/{len(targets)}/{len(weights)} — build data via "
+                    f"HFVLMRenderer.render_example_for_sft"
+                )
+            n_examples += 1
+            refs = datum.loss_fn_inputs.get("image_refs") or []
+            n_image_refs += len(refs)
+
+            input_ids = torch.tensor([ids], dtype=torch.long, device=self.device)
+            labels = torch.tensor([targets], dtype=torch.long, device=self.device)
+            weights_t = torch.tensor([weights], dtype=torch.float32, device=self.device)
+            attn = torch.ones_like(input_ids, dtype=torch.long)
+            kwargs: dict[str, Any] = {
+                "input_ids": input_ids,
+                "attention_mask": attn,
+            }
+            pv = datum.loss_fn_inputs.get("pixel_values")
+            if pv is not None:
+                n_with_pixels += 1
+                kwargs["pixel_values"] = torch.tensor(
+                    pv, dtype=self.dtype, device=self.device
+                )
+            grid = datum.loss_fn_inputs.get("image_grid_thw")
+            if grid is not None:
+                kwargs["image_grid_thw"] = torch.tensor(
+                    grid, dtype=torch.long, device=self.device
+                )
+            # mm_token_type_ids if the processor provided them (optional for some VLMs)
+            mm_tt = datum.loss_fn_inputs.get("mm_token_type_ids")
+            if mm_tt is not None:
+                # Align to input length (renderer stores full-seq; we use ids[:-1]).
+                mm = torch.tensor(mm_tt, dtype=torch.long, device=self.device)
+                if mm.dim() == 1:
+                    mm = mm.unsqueeze(0)
+                if mm.shape[-1] == len(ids) + 1:
+                    mm = mm[..., :-1]
+                if mm.shape[-1] == len(ids):
+                    kwargs["mm_token_type_ids"] = mm
+
+            logits = sess.model(**kwargs).logits
+            logp = torch.log_softmax(logits.float(), dim=-1)
+            gather_idx = labels.clamp_min(0).unsqueeze(-1)
+            tok_lp = logp.gather(-1, gather_idx).squeeze(-1)
+            supervised = labels != -100
+            w = weights_t * supervised
+            ex_loss = -(tok_lp * w).sum() / w.sum().clamp_min(1e-8)
+            total_tok += float(w.sum().item())
+            total_loss = ex_loss if total_loss is None else total_loss + ex_loss
+
+        if total_loss is None or n_examples == 0:
+            raise ValueError("all VLM examples are empty")
+        loss = total_loss / n_examples
+        loss.backward()
+        sess.pending_grad = True
+        return ForwardBackwardOutput(
+            loss=float(loss.detach().cpu()),
+            metrics={
+                "n_tokens": total_tok,
+                "n_examples": float(n_examples),
+                "n_image_refs": float(n_image_refs),
+                "n_with_pixels": float(n_with_pixels),
             },
         )
 
