@@ -264,7 +264,13 @@ def plan_recipe(
             card = None
 
     if card is not None:
-        resolved_base = getattr(card, "repo_id", None) or base_model
+        # Prefer on-disk snapshot for loading (AutoProcessor/from_pretrained).
+        # repo_id alone is not a valid HF id when it is only a folder basename.
+        resolved_base = (
+            getattr(card, "local_path", None)
+            or getattr(card, "repo_id", None)
+            or base_model
+        )
         if shape is None:
             shape = card.shape
         shape_confidence = getattr(card, "shape_confidence", "medium")

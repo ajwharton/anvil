@@ -80,10 +80,12 @@ def test_resolve_target_modules_language_default(tmp_path):
         )
         is None
     )
-    # + projector → explicit name list
+    # + projector → path-aware regex (avoids wrapping non-Linear merger container
+    # and avoids LoRA on visual.blocks.* gate_proj when encoder is frozen).
     mods = bare._resolve_target_modules(
         LoraTargets(language=True, vision_encoder=False, mm_projector=True)
     )
     assert mods is not None
-    assert "q_proj" in mods or "c_attn" in mods
-    assert "merger" in mods or "mm_projector" in mods
+    assert isinstance(mods, str)
+    assert "language_model" in mods or "q_proj" in mods
+    assert "merger.mlp" in mods or "mm_projector" in mods

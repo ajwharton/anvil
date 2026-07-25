@@ -106,7 +106,12 @@ class _FakeProcessor:
             # still encode — real processors are strict; we only check shape
             pass
         ids = self.tokenizer.encode(text)
-        return {"input_ids": [ids]}
+        out: dict[str, Any] = {"input_ids": [ids]}
+        if n_img:
+            # Fake pixel payload so render_example_for_sft can attach vision kwargs.
+            out["pixel_values"] = [[0.1, 0.2], [0.3, 0.4]][:n_img]
+            out["image_grid_thw"] = [[1, 1, 1]] * n_img
+        return out
 
 
 @pytest.fixture()
@@ -114,6 +119,23 @@ def store_with_image(tmp_path):
     store = LocalMediaStore(tmp_path / "cas")
     ref = store.put(_png_bytes(), suffix=".png")
     return store, ref
+
+
+def test_vlm_sft_datum_includes_pixel_values(store_with_image):
+    store, ref = store_with_image
+    r = HFVLMRenderer(_FakeProcessor(), store)
+    ex = Example(
+        messages=(
+            Message(
+                role="user",
+                content=(TextPart(text="grasp?"), ImagePart(ref=ref)),
+            ),
+            Message(role="assistant", content="yes"),
+        )
+    )
+    d = r.render_example_for_sft(ex)
+    assert d.loss_fn_inputs.get("pixel_values") is not None
+    assert d.loss_fn_inputs.get("image_refs")
 
 
 def test_vlm_sft_datum_includes_image_refs(store_with_image):
@@ -193,13 +215,21 @@ def test_broken_prefix_raises(store_with_image, monkeypatch):
     calls = {"n": 0}
     orig = r._tokenize
 
-    def flaky(messages, add_generation_prompt=False):
-        ids, imgs = orig(messages, add_generation_prompt=add_generation_prompt)
+    def flaky(messages, add_generation_prompt=False, return_pixel_inputs=False):
+        out = orig(
+            messages,
+            add_generation_prompt=add_generation_prompt,
+            return_pixel_inputs=return_pixel_inputs,
+        )
         calls["n"] += 1
         # Corrupt the sample-prompt render so it is not a prefix of the full SFT ids
         if add_generation_prompt and calls["n"] <= 3:
+            if return_pixel_inputs:
+                ids, imgs, pix = out
+                return [99999] + ids, imgs, pix
+            ids, imgs = out
             return [99999] + ids, imgs
-        return ids, imgs
+        return out
 
     monkeypatch.setattr(r, "_tokenize", flaky)
     ex = Example(

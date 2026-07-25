@@ -28,8 +28,10 @@ def build_plan(
     **overrides: Any,
 ) -> RecipePlan:
     card = card or inspect_base_model(base_model, fetch_remote=fetch_remote)
+    # Keep absolute lab paths so forge loads /mnt/data/models/... not a bare name.
+    load_id = card.local_path or base_model or card.repo_id
     return plan_recipe(
-        base_model=card.repo_id if card.repo_id else base_model,
+        base_model=load_id,
         pattern=JobPattern.VLM_SFT,
         shape=card.shape,
         overrides=overrides or None,

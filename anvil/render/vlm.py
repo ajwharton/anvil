@@ -32,6 +32,19 @@ def _require_pil() -> Any:
     return Image
 
 
+def _to_plain(obj: Any) -> Any:
+    """Convert processor tensors / numpy to nested lists for Datum storage."""
+    if obj is None:
+        return None
+    if hasattr(obj, "detach"):
+        return obj.detach().cpu().tolist()
+    if hasattr(obj, "tolist") and not isinstance(obj, (list, tuple)):
+        return obj.tolist()
+    if isinstance(obj, (list, tuple)):
+        return [_to_plain(x) for x in obj]
+    return obj
+
+
 class HFVLMRenderer:
     """Render multimodal Examples through a HF vision-language processor.
 
@@ -158,8 +171,15 @@ class HFVLMRenderer:
         messages: Sequence[Message],
         *,
         add_generation_prompt: bool = False,
-    ) -> tuple[list[int], list[Any]]:
-        """Return (input_ids, images) for a conversation."""
+        return_pixel_inputs: bool = False,
+    ) -> tuple[list[int], list[Any]] | tuple[list[int], list[Any], dict[str, Any]]:
+        """Return (input_ids, images[, pixel_inputs]) for a conversation.
+
+        When ``return_pixel_inputs`` is True and images are present, also return
+        a dict of model kwargs (``pixel_values``, ``image_grid_thw``, …) as plain
+        nested lists so LocalBackend can fuse vision without re-running the
+        processor.
+        """
         hf_msgs = self._to_hf_messages(messages)
         images = self.collect_images(messages)
         # Prefer processor(text=template, images=...) when images present.
@@ -175,12 +195,24 @@ class HFVLMRenderer:
             ids = enc["input_ids"]
             if ids and isinstance(ids[0], list):
                 ids = ids[0]
-            return [int(t) for t in ids], images
+            ids_out = [int(t) for t in ids]
+            if not return_pixel_inputs:
+                return ids_out, images
+            pixel_inputs: dict[str, Any] = {}
+            for key in ("pixel_values", "image_grid_thw", "mm_token_type_ids"):
+                if key not in enc or enc[key] is None:
+                    continue
+                pixel_inputs[key] = _to_plain(enc[key])
+            return ids_out, images, pixel_inputs
         # Text-only path (still allowed on a VLM processor)
         if isinstance(text, str):
             ids = self.tokenizer.encode(text, add_special_tokens=False)
-            return [int(t) for t in ids], []
-        return [int(t) for t in text], []
+            ids_out = [int(t) for t in ids]
+        else:
+            ids_out = [int(t) for t in text]
+        if return_pixel_inputs:
+            return ids_out, [], {}
+        return ids_out, []
 
     # public API matching HFChatRenderer --------------------------------------
 
@@ -200,10 +232,14 @@ class HFVLMRenderer:
         return self.render_messages(messages, add_generation_prompt=True)
 
     def render_example_for_sft(self, example: Example) -> Datum:
-        """Build CE Datum; records image_refs for the train backend (P3.2)."""
+        """Build CE Datum; records image_refs + pixel tensors for LocalBackend."""
         if not example.messages:
             raise ValueError("example has no messages")
-        ids, _images = self._tokenize(example.messages, add_generation_prompt=False)
+        ids, _images, pixel_inputs = self._tokenize(
+            example.messages,
+            add_generation_prompt=False,
+            return_pixel_inputs=True,
+        )
         if len(ids) < 2:
             raise ValueError("example too short to form CE targets")
 
@@ -225,13 +261,17 @@ class HFVLMRenderer:
             mask = self._assistant_mask(example.messages, ids)
 
         refs = example.image_refs()
+        loss_fn_inputs: dict[str, Any] = {
+            "target_tokens": ids[1:],
+            "weights": mask[1:],
+            "image_refs": list(refs),
+        }
+        # Pixel fusion kwargs for LocalBackend (nested lists; not on the wire).
+        for key, val in pixel_inputs.items():
+            loss_fn_inputs[key] = val
         return Datum(
             model_input=ModelInput.from_ints(ids[:-1]),
-            loss_fn_inputs={
-                "target_tokens": ids[1:],
-                "weights": mask[1:],
-                "image_refs": list(refs),
-            },
+            loss_fn_inputs=loss_fn_inputs,
         )
 
     def _assistant_mask(
