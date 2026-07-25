@@ -180,8 +180,20 @@
                 <a class="link-btn" id="link-observe" href="#" target="_blank" rel="noopener"
                   >open observe for selected run</a
                 >
+                <a class="link-btn" href="/observe" target="_blank" rel="noopener"
+                  >all live RL observe runs</a
+                >
               </div>
             </details>
+            <div class="observe-disk" style="margin-top: 0.75rem">
+              <div class="muted" style="margin-bottom: 0.35rem">
+                Disk observe runs (GRPO metrics.jsonl) ·
+                <span class="mono" id="observe-root-label">—</span>
+              </div>
+              <ul class="mono" id="observe-disk-list" style="margin: 0; padding-left: 1.2rem; font-size: 12px">
+                <li class="muted">loading…</li>
+              </ul>
+            </div>
             <div id="rationale-box" class="rationale mono"></div>
             <div class="form-actions">
               <button type="submit" class="btn primary">Start from recipe</button>

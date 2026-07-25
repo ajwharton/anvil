@@ -379,6 +379,42 @@ function escapeHtml(s) {
     .replace(/"/g, "&quot;");
 }
 
+async function refreshObserveDisk() {
+  const list = $("observe-disk-list");
+  const rootLbl = $("observe-root-label");
+  if (!list) return;
+  try {
+    const data = await api("/api/observe");
+    if (rootLbl) rootLbl.textContent = data.root || "—";
+    const runs = data.runs || [];
+    if (!runs.length) {
+      list.innerHTML =
+        '<li class="muted">none yet — run scripts/grpo_observe_demo.py</li>';
+      return;
+    }
+    list.innerHTML = "";
+    for (const r of runs.slice(0, 12)) {
+      const li = document.createElement("li");
+      const rew =
+        r.last && r.last.reward_mean != null
+          ? ` r=${Number(r.last.reward_mean).toFixed(3)}`
+          : "";
+      const step =
+        r.last && r.last.step != null ? `step ${r.last.step}` : `${r.n_steps} pts`;
+      li.innerHTML = `<a href="${escapeHtml(
+        r.observe_url || `/observe/${encodeURIComponent(r.run_id)}`
+      )}" target="_blank" rel="noopener">${escapeHtml(
+        r.run_id
+      )}</a> <span class="muted">${escapeHtml(step)}${escapeHtml(rew)}</span>`;
+      list.appendChild(li);
+    }
+  } catch (e) {
+    list.innerHTML = `<li class="muted">observe list error: ${escapeHtml(
+      String(e.message || e)
+    )}</li>`;
+  }
+}
+
 async function refresh() {
   try {
     const ov = await api("/api/overview");
@@ -402,6 +438,7 @@ async function refresh() {
       const run = (ov.runs || []).find((r) => r.run_id === state.selectedRunId);
       renderRunDetail(run || null);
     }
+    await refreshObserveDisk();
   } catch (e) {
     $("pill-conn").textContent = "offline";
     $("pill-conn").className = "pill pill-warn";

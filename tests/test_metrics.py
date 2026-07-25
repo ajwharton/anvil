@@ -152,7 +152,16 @@ def test_observe_endpoints(tmp_path, monkeypatch):
 
     r = client.get("/api/observe")
     assert r.status_code == 200
-    assert r.json()["runs"] == ["r1"]
+    body = r.json()
+    assert body["root"] == str(tmp_path)
+    assert [x["run_id"] for x in body["runs"]] == ["r1"]
+    assert body["runs"][0]["observe_url"] == "/observe/r1"
+    assert body["runs"][0]["n_steps"] == 1
+
+    r = client.get("/observe")
+    assert r.status_code == 200
+    assert "live RL" in r.text
+    assert "r1" in r.text
 
     r = client.get("/api/observe/r1/metrics")
     assert r.status_code == 200

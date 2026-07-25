@@ -414,16 +414,32 @@ def create_app() -> FastAPI:
 
     @app.get("/api/observe")
     def observe_runs() -> dict[str, Any]:
+        """List disk observe runs (productized GRPO writes here).
+
+        Each entry includes last metrics step when available so the control-plane
+        UI can deep-link without polling every metrics file twice.
+        """
         root = _observe_root()
-        runs = (
-            sorted(
-                p.name
-                for p in root.iterdir()
-                if p.is_dir() and (p / METRICS_FILENAME).exists()
-            )
-            if root.is_dir()
-            else []
-        )
+        runs: list[dict[str, Any]] = []
+        if root.is_dir():
+            for p in sorted(root.iterdir(), key=lambda x: x.stat().st_mtime, reverse=True):
+                if not p.is_dir():
+                    continue
+                metrics_path = p / METRICS_FILENAME
+                if not metrics_path.exists() and not (p / PROBES_FILENAME).exists():
+                    continue
+                recs = read_jsonl(metrics_path) if metrics_path.exists() else []
+                last = recs[-1] if recs else None
+                runs.append(
+                    {
+                        "run_id": p.name,
+                        "path": str(p),
+                        "n_steps": len(recs),
+                        "last": last,
+                        "mtime": p.stat().st_mtime,
+                        "observe_url": f"/observe/{p.name}",
+                    }
+                )
         return {"root": str(root), "runs": runs}
 
     @app.get("/api/observe/{run_id}/metrics")
@@ -469,6 +485,48 @@ def create_app() -> FastAPI:
             media_type="text/event-stream",
             headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
         )
+
+    @app.get("/observe", response_class=HTMLResponse)
+    def observe_index() -> str:
+        """Landing page for live RL debugger runs on disk."""
+        data = observe_runs()
+        rows = []
+        for r in data["runs"]:
+            last = r.get("last") or {}
+            rew = last.get("reward_mean")
+            rew_s = f"{rew:.3f}" if isinstance(rew, (int, float)) else "—"
+            step = last.get("step") if last else None
+            step_s = str(step) if step is not None else "—"
+            rows.append(
+                f'<tr><td><a href="{r["observe_url"]}">{r["run_id"]}</a></td>'
+                f'<td class="mono">{step_s}</td><td class="mono">{rew_s}</td>'
+                f'<td class="mono">{r["n_steps"]}</td></tr>'
+            )
+        body = (
+            "\n".join(rows)
+            if rows
+            else '<tr><td colspan="4" class="meta">no runs yet — start '
+            "<code>scripts/grpo_observe_demo.py</code> with this "
+            f"ANVIL_OBSERVE_ROOT ({data['root']})</td></tr>"
+        )
+        return f"""<!doctype html>
+<html><head><meta charset="utf-8"><title>anvil observe</title>
+<style>
+ body{{background:#0d1117;color:#c9d1d9;font:14px/1.5 -apple-system,sans-serif;margin:0;padding:24px;max-width:900px}}
+ h1{{font-size:18px;color:#58a6ff}} a{{color:#58a6ff}}
+ table{{width:100%;border-collapse:collapse;background:#161b22;border:1px solid #30363d;border-radius:8px}}
+ th,td{{padding:10px 12px;border-bottom:1px solid #30363d;text-align:left}}
+ th{{color:#8b949e;font-size:12px;text-transform:uppercase}}
+ .mono{{font-family:ui-monospace,Menlo,monospace;font-size:12px}}
+ .meta{{color:#8b949e}} code{{background:#21262d;padding:2px 6px;border-radius:4px}}
+</style></head><body>
+<h1>anvil observe — live RL runs</h1>
+<p class="meta">root <code>{data["root"]}</code> · auto-refresh 5s ·
+<a href="/">control plane</a></p>
+<table><thead><tr><th>run</th><th>last step</th><th>reward_mean</th><th>n_steps</th></tr></thead>
+<tbody>{body}</tbody></table>
+<script>setTimeout(() => location.reload(), 5000);</script>
+</body></html>"""
 
     @app.get("/observe/{run_id}", response_class=HTMLResponse)
     def observe_page(run_id: str) -> str:
