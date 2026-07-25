@@ -7,6 +7,7 @@
 | `run_jlens_7b_mixed.sh` | Overnight recipe: fit 7B lens with **mixed WikiText+math** then `solve` apply (resume helper; needs `datasets` + `jlens` on the lab venv) |
 | `vlm_smoke.py` | **P3.3** VLM SFT smoke: CAS frame + `run_vlm_sft` (`fake://` or `local://`) |
 | `robot_vlm_sft_demo.py` | Short LoRA SFT on Qwen2.5-VL-3B with synthetic tabletop or **LeRobot** frames (ffmpeg) |
+| `grpo_observe_demo.py` | **Productized GRPO** → `ANVIL_OBSERVE_ROOT/<run_id>/metrics.jsonl`; live charts at `/observe/<run_id>` |
 
 Weights stay on lab hosts and out of git. Default vision pull: Qwen2.5-VL-3B. See [docs/models.md](../docs/models.md).
 
@@ -31,6 +32,27 @@ python scripts/robot_vlm_sft_demo.py \
 ```
 
 Requires lab deps: `torch`, `transformers`, `peft`, `pillow`, `torchvision`, `accelerate` (and `ffmpeg` for LeRobot video).
+
+## Productized GRPO + live web observe
+
+```bash
+# terminal A — forge trainer (writes metrics under observe root)
+export ANVIL_OBSERVE_ROOT=/mnt/data/anvil-observe
+cd /mnt/data/anvil
+python scripts/grpo_observe_demo.py \
+  --endpoint local:// \
+  --model /mnt/data/models/qwen2.5-1.5b-instruct \
+  --run-id grpo-arith-demo \
+  --steps 30 --group-size 4 \
+  --attach-wait 8
+
+# terminal B — same observe root, control plane + SSE
+ANVIL_OBSERVE_ROOT=/mnt/data/anvil-observe anvil-web --host 0.0.0.0 --port 7600
+# open http://<host>:7600/observe          (index)
+# open http://<host>:7600/observe/grpo-arith-demo  (live reward / probes)
+```
+
+Control-plane home also lists disk observe runs and links into the SSE debugger.
 
 ## J-Lens lab deps (optional / parked)
 
