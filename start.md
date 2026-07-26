@@ -8,7 +8,7 @@
 
 **Outcome default:** advance the next roadmap phase gate without expanding scope.  
 **Track:** Lab / OSS product (not mia-rl Ship coach).  
-**Current:** Phase 3 vision + agent control plane v0 (MCP/harness).
+**Current:** **Live sufficiency** for all post-training (observe mid-run → enough / shift gears); Phase 3 vision productization + agent control v0.
 
 State: `Track: anvil | Outcome: <one line>`
 
@@ -18,15 +18,17 @@ State: `Track: anvil | Outcome: <one line>`
 
 | Focus | Meaning |
 |-------|---------|
-| **Individual** | Recipes, four verbs, web UI, live RL debugger on your GPUs |
+| **Individual** | Recipes, four verbs, web UI, live debugger on your GPUs |
 | **Agentic** | Same SSOT via HTTP + **MCP**; optional harness; portable prompts; **you bring the brain** |
+
+**Thesis:** do not fire-and-forget a full post-training set then eval after. Instrument **while** data is applied (metrics, probes, cliffs); detect when returns go **southward**; stop or change recipe/method. Applies to text **and** vision.
 
 Mechanics:
 
 - Four verbs: `forward_backward`, `optim_step`, `sample`, `save_state`
 - LoRA-first adapters; train/sample consistency; vision + edge (Jetson) path
 - Backends: local GPU → dual DGX Spark → export to edge
-- **RL debugger**: `anvil-web`, metrics, probes, cliffs (advantage collapse, IS drift)
+- **Live debugger**: `anvil-web`, metrics, probes, cliffs; early-stop + recipe queue (GRPO); extend to SFT/VLM
 - **Agent control**: `AnvilControlClient`, `anvil mcp`, `anvil agent`, `prompts/agent/`
 
 Product thesis: [`docs/product.md`](docs/product.md) · agent split: [`docs/agentic-control.md`](docs/agentic-control.md).  

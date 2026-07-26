@@ -4,11 +4,44 @@ Status legend: **todo** · **doing** · **done** · **blocked**
 
 ## North star
 
-An open post-training toolkit: four verbs, LoRA-first, train/sample consistency, vision in the data model, export to lab serve and **Jetson/edge**—**usable by individuals, optimized for agent control** (live observe + API/MCP + audited method switches when DPO/GRPO/SFT hit cliffs).
+An open post-training toolkit: four verbs, LoRA-first, train/sample consistency, vision in the data model, export to lab serve and **Jetson/edge**—**usable by individuals, optimized for agent control**.
 
-Success looks like: a researcher, roboticist, or **their agent** can SFT/RL a small LLM/VLM on own GPUs, see negative returns as they form, and change recipe/method without rewriting infrastructure.
+**Live sufficiency:** instrument every post-training job **while** data is applied (metrics, probes, cliffs)—not only after the budget ends—so operators and agents can decide **how much training is enough** and **when to shift gears** before the model turns southward.
 
-Product thesis: [`docs/product.md`](product.md).
+Success looks like: a researcher, roboticist, or **their agent** can SFT/RL a small LLM/VLM on own GPUs, **see cliffs and diminishing (or negative) returns as they form**, stop or advance recipes early, and change method without rewriting infrastructure.
+
+Product thesis: [`docs/product.md`](product.md) (esp. *The idea most people skip* + *Live sufficiency*).
+
+---
+
+## Platform goal — Live post-training sufficiency *(cross-cutting; not vision-only)*
+
+These goals apply to **SFT, preference, GRPO, VLM, robot offline**—any job that spends a corpus or on-policy steps. Vision/robotics slices in Phase 3–4 **inherit** this SSOT; they do not own it alone.
+
+### P.Sufficiency — Observe every train path *(required)*
+
+- [x] GRPO/RL: `metrics.jsonl` + probes + SSE `/observe` + advantage-collapse tripwire  
+- [x] GRPO early-stop on dead signal (ceiling/floor/collapse) + recipe queue advance  
+- [ ] **SFT / VLM SFT** emit the same observe SSOT (`RunMetricsWriter`: loss, step, wall, n_tokens / n_image_refs)  
+- [ ] **Preference (DPO/…)** emit observe SSOT + family-specific cliffs  
+- [ ] **Probes for all methods** — fixed held-out prompts/frames sampled during the run (not only final eval)  
+- [ ] **Southward-turn detectors** — probe quality regression, reward↑ while probes↓, homogenization; machine-readable flags for agents  
+- [ ] **Live web** lists all run kinds; one control-plane UX for “is this still worth running?”  
+
+### P.Ops — Multi-hour / large-corpus jobs *(required)*
+
+- [ ] Checkpoint + resume (adapter + step) for long SFT/RL without full replay  
+- [ ] Batching / throughput defaults documented per shape (dense text, VLM, …)  
+- [ ] Lab smoke profiles for multi-hour runs (`lab_smokes` + report.json)  
+- [ ] Optional multi-worker train/sample when single-process is the wall  
+
+### P.Decide — Gear-shift as product *(required)*
+
+- [x] Early-stop abandons dead GRPO stages (no power burn on flat charts)  
+- [x] RL recipe queue tees up next stage on same adapter  
+- [ ] Method-switch recipes (“if cliff X → try Y”) with audit trail  
+- [ ] Data-mixture / stage advance for SFT curricula (same pattern as RL queue)  
+- [ ] Agent/MCP can watch → decide → act (pause, stop, advance, switch) without HTML scraping  
 
 ## Phase 0 — Spec & stubs *(complete)*
 
@@ -139,28 +172,63 @@ the base never changes, only the LoRA adapter does, and that is megabytes):
 **Non-goals:** per-token J-lens on rollouts; J-Lens as load-bearing product
 path. Re-open only against the high bar in the spike writeup.
 
-## Phase 3 — Vision first-class *(current)*
+## Phase 3 — Vision first-class *(current — core done; productization open)*
 
 **Working plan:** [`docs/phase3-vision.md`](phase3-vision.md) · **datasets:** [`docs/datasets-robotics.md`](datasets-robotics.md)
 
-**Exit criteria**
+**Product bar:** ~3–4B VLM + **real robotics corpus** + **live sufficiency** (same observe/decide SSOT as text GRPO). Observe/ops goals here **specialize** [Platform goal — Live post-training sufficiency](#platform-goal--live-post-training-sufficiency-cross-cutting-not-vision-only); they are not a second product.
+
+### 3.A Core platform *(done)*
 
 - [x] Media store (content-addressed refs) — `LocalMediaStore` + `put_path` / path resolve  
 - [x] Multimodal message schema + serde — `Example`/`Message` public JSON; **Trajectory** for robot demos  
-- [x] JSONL / path ingest — `anvil.data.ingest` (Bridge/OXE convert *into* this shape)  
+- [x] JSONL / path ingest helpers — `anvil.data.ingest` (shape only; bulk converters in 3.B)  
 - [x] Multimodal **renderer** (processor-backed `HFVLMRenderer`) + train/sample prefix tests  
-
 - [x] VLM SFT recipe wiring (`run_vlm_sft` + renderer); **real frames on forge** (P3.3 + pixel fusion + LeRobot demo, 2026-07-25)  
-- [x] Freeze/LoRA knobs for encoder vs projector vs LM — recipe plans + LocalBackend enforce
+- [x] Freeze/LoRA knobs for encoder vs projector vs LM — recipe plans + LocalBackend enforce  
 
-**Near-term test sources:** BridgeData V2, OXE subsample, LeRobot hub sets, Robo2VLM — see datasets doc.
+### 3.B Robotics data at product scale *(open — required)*
 
-## Phase 4 — Robot / Jetson edge loop
+- [ ] Lab corpus on disk in Anvil shape (Bridge / OXE subsample / Robo2VLM → `anvil_jsonl` + CAS)  
+- [ ] Production conversion pipeline (RLDS/LeRobot → frames + language/action text; resumable; subsample; licenses)  
+- [ ] Scale ladder 1k → 5k → 50k+ exercised on forge  
+- [ ] Real-corpus smoke checklist green (`docs/datasets-robotics.md`)  
 
-**Exit criteria**
+### 3.C Vision under live sufficiency *(open — required; implements P.Sufficiency for VLM)*
 
-- [ ] Offline trajectory format (obs/action/reward + frame refs)  
-- [ ] Export path documented (ONNX and/or TRT and/or GGUF as applicable)  
+- [ ] `run_vlm_sft` → `metrics.jsonl` (loss, step, wall, n_image_refs)  
+- [ ] Live `/observe` for vision SFT runs  
+- [ ] Held-out frame probes during VLM train  
+- [ ] Early-stop / recipe advance hooks for vision stages (share GRPO queue patterns)  
+
+### 3.D Multi-hour VLM jobs *(open — required; implements P.Ops for vision)*
+
+- [ ] Checkpoint + resume for VLM LoRA  
+- [ ] Batching/throughput notes for 3B VLM on Spark  
+- [ ] Multi-hour lab smoke against a real robotics slice  
+
+**Near-term data sources:** BridgeData V2 first; OXE / Robo2VLM / LeRobot as converters land.
+
+## Phase 4 — Robot policy + Jetson edge loop
+
+**Product bar:** offline (then on-policy) robot learning under four verbs + edge export; **live sufficiency** still applies.
+
+### 4.A Offline robot learning *(open — required)*
+
+- [ ] Offline trajectory format productized (schema exists; **trainer + `robot_offline` recipe**)  
+- [ ] **Action tokenization recipe** (text-tokenized actions v1; no proprietary API claims)  
+- [ ] Offline loop on real subset with observe metrics  
+- [ ] Held-out episode / success-proxy eval next to train metrics  
+
+### 4.B On-policy vision RL *(open — required)*
+
+- [ ] Multimodal sample for vision rollouts  
+- [ ] Vision-aware rewards / rubrics  
+- [ ] Recipe queue for vision/robot stages  
+
+### 4.C Edge / Jetson *(open — required for dual product thesis)*
+
+- [ ] Export path documented (ONNX / TRT / GGUF / PEFT merge as applicable)  
 - [ ] Distill or small-student path for edge FPS/power notes  
 - [ ] Optional `backend=jetson` sample stub (may be remote process)  
 
@@ -226,3 +294,4 @@ For a spin-off agent session:
 | 2026-07-18 | Docs dual-focus pass: README/start/handoff/governance/design/CONTRIBUTING/Agents/prompts/pyproject/GH description — individual + agentic control facing narrative |
 | 2026-07-18 | **J-Lens measurement stack:** v3 `solve` GO on answer readout (scoring artifacts fixed); J1 schema + spike bridge. Later same day: rank-resolved strong hits + 1.5B proper fit — J2 order still fails (mean 0.167). |
 | 2026-07-19 | **J-Lens spike parked:** 7B mixed fit (~4.9 h, WikiText+math) + solve → 6/6 strong answer hits, mean order **0.5**, sanity 0.95–1.0; J2 entry still not met. **Shelve J2–J5**; keep J1 + CLI. Product focus = RL debugger without J-Lens. Writeup §Fifth pass |
+| 2026-07-26 | **Live sufficiency thesis:** product.md + roadmap §P.Sufficiency / P.Ops / P.Decide — instrument all post-training mid-run; decide “enough” and shift gears; southward-turn detection; not fire-and-forget full budgets. Vision 3.B–3.D and Phase 4 robot goals inherit this SSOT |

@@ -1,8 +1,8 @@
 # Anvil product note
 
 **Audience:** humans building with Anvil, and agents that will *run* it.  
-**Date:** 2026-07-17  
-**Status:** product thesis (independent of Phase 3 completion)
+**Date:** 2026-07-26 (thesis expanded)  
+**Status:** product thesis (SSOT for “why”)
 
 This note is the short “what is this for?” document. Architecture detail stays in
 [`design.md`](design.md); phase gates stay in [`roadmap.md`](roadmap.md).
@@ -15,6 +15,36 @@ Anvil is a **LoRA-first post-training platform** (SFT + RL) with a tiny stable
 API, good default recipes, and **live observability**—usable by a single
 operator, but built so it **shines under agent control**.
 
+---
+
+## The idea most people skip
+
+Default industry habit for post-training:
+
+1. Pick a dataset and a method.  
+2. Run the full budget (epochs / steps / mixture).  
+3. Evaluate **afterward**.  
+4. Discover (too late) that quality peaked early—or that the model got **worse**.
+
+Anvil’s product bet is the opposite:
+
+> **Instrument the run while data is being applied**, so you can decide *how
+> much training is enough* and *when to shift gears*—long before the budget
+> ends.
+
+That applies to **every** post-training job—text SFT, DPO, GRPO, VLM/robot
+LoRA—not only robotics. Robotics is a first-class *path*; live sufficiency is
+the *platform*.
+
+In a long run there is often a moment where returns go **southward**: loss still
+moves, a proxy still climbs, but probes, held-out quality, or group-relative
+signal say the policy is getting dumber or more collapsed. **Anvil’s job is to
+surface that moment and make smart choices available**—stop, early-stop,
+advance the recipe queue, switch method, change LR/rank, swap data mixture—
+under human policy, optionally executed by an agent.
+
+Lenses, metrics, and probes applied **during** the pass over data are not
+decorative dashboards. They are the control signal for sufficiency.
 ---
 
 ## Two modes of use
@@ -41,15 +71,19 @@ should power agents. Agents are not a bolt-on chat wrapper; they are a
 3. **Places for data** — multimodal examples, trajectories, media refs, run
    artifacts (`metrics.jsonl`, `probes.jsonl`, exports)—not black-box “upload
    and hope.”  
-4. **Live signal** — reward, advantage collapse, IS drift, probe completions,
-   audit events—so *negative marginal returns* are visible *during* the run.
+4. **Live signal** — reward, loss, advantage collapse, IS drift, probe
+   completions, audit events—so *negative marginal returns* and *southward
+   turns* are visible *during* the run.  
+5. **Sufficiency & gear-shift** — early-stop, recipe queue advance, method
+   switch, and pause/patch so “enough” is a live decision, not a fixed epoch
+   count.
 
 **Is not:**
 
 - A single mega-`train()` that hides the policy loop.  
+- A fire-and-forget full-dataset pass with evaluation only at the end.  
 - A proprietary hosted cloud (you bring GPUs).  
 - A claim that any one method (DPO, GRPO, SFT, …) always wins.
-
 ---
 
 ## Why agent control matters
@@ -111,13 +145,26 @@ Anvil’s job is to make:
 
 - data easy to place (examples, trajectories, media CAS, JSONL ingest);  
 - methods easy to start (recipes + gates);  
-- failure easy to see early (observe + probes);  
+- failure easy to see early (observe + probes + cliffs);  
+- “enough” easy to decide mid-run (early-stop, recipe advance, method switch);  
 - intervention easy to automate (API/MCP + audited control).
+
+### Live sufficiency (all methods)
+
+| Job type | Live signals (examples) | Smart choices |
+|----------|-------------------------|---------------|
+| SFT / VLM SFT | loss, held-out probes, n_image_refs | stop, resume, freeze knobs, next data stage |
+| GRPO / on-policy | reward, group_std (advantage collapse), IS ratio, probes | early-stop, next recipe stage, temp/LR |
+| Preference (DPO, …) | margin proxies, probe quality, collapse | switch to SFT/GRPO, stop, re-mix prefs |
+| Robot offline / later RL | trajectory reward, success proxies, probes | stop, next task, export edge |
+
+**Anti-pattern we reject:** train the entire set blindly, then test.  
+**Pattern we productize:** lenses/metrics/probes **while** the set is applied;
+detect the southward turn; stop or shift gears.
 
 At significant scale—many runs, many bases, continuous evaluation—the only
 tractable operator is an **agent loop**. Humans set policy and red lines;
 agents execute watch/decide/act.
-
 ---
 
 ## North-star ambition (explicitly lofty)
@@ -148,24 +195,27 @@ Detail: [`agentic-control.md`](agentic-control.md) · prompts: [`prompts/agent/`
 
 ## Implications for the roadmap (guidance, not a new phase list)
 
-Prioritize work that increases **agent operability** even while Phase 3 vision
-and edge land:
+Prioritize work that increases **live sufficiency** and **agent operability**
+for **all** post-training jobs (text and vision):
 
 1. **SSOT APIs** — every web panel has a stable JSON/SSE counterpart.  
-2. **MCP server** — thin tools over those APIs (list/run/tail/act/audit); Anvil-owned façade.  
-3. **Optional harness** — model-agnostic loop; user plugs brain + keys.  
-4. **Prompt pack** — versioned generic operator prompts (portable to foreign harnesses).  
-5. **Live control** — pause, patch knobs, hot-swap sample adapter, method
+2. **Observe for every train path** — SFT/VLM/preference emit metrics + probes
+   the way GRPO already does; one `/observe` SSOT.  
+3. **Cliff library** — per-method tripwires (advantage collapse, IS drift,
+   probe regression, preference collapse, SFT probe worsening).  
+4. **Early-stop + recipe queue** — abandon dead stages; tee up the next stage
+   or method without burning power (already landing for GRPO; extend to SFT/VLM).  
+5. **Long-job ops** — checkpoint/resume, batching notes, multi-hour lab smokes
+   for any large corpus (not vision-only).  
+6. **MCP + live control** — pause, patch knobs, hot-swap sample adapter, method
    switch without process death where possible.  
-6. **Cliff library** — per-method tripwires + probe policies (DPO, GRPO, SFT).  
-7. **Recipe graph** — documented “if cliff X, try recipe Y” edges agents can
-   follow (human-editable, not hardcoded magic).  
-8. **Vision/robot data paths** — keep going; agents need the same observe loop
-   on VLM/robot runs.
+7. **Recipe graph** — “if cliff X, try recipe Y” edges agents can follow
+   (human-editable, not hardcoded magic).  
+8. **Vision/robot data paths** — convert pipelines + scale ladder; same
+   observe/sufficiency loop as text.
 
 Human UI remains essential for trust and debugging. It should be a client of
 the same control plane, not a separate parallel system.
-
 ---
 
 ## Red lines (product)
