@@ -1,38 +1,35 @@
 # Phase 3 — Vision first-class (working plan)
 
-**Status:** open (2026-07-17)  
-**Exit criteria:** see `docs/roadmap.md` §Phase 3  
-**Datasets:** `docs/datasets-robotics.md`
+**Status:** core platform **done**; **productization open** (2026-07-26)  
+**Exit criteria:** `docs/roadmap.md` §Phase 3 (3.A–3.D)  
+**Cross-cutting SSOT:** `docs/roadmap.md` §Platform goal — Live post-training sufficiency  
+**Datasets:** `docs/datasets-robotics.md` · **Product thesis:** `docs/product.md`
 
 ## Product goal
 
-A researcher, roboticist, or **their agent** can SFT (and later RL) a **VLM** with **image refs** through the same four verbs, with freeze defaults that make sense for edge export (LM + projector LoRA, vision encoder frozen). Vision runs must remain **observable and controllable** on the same HTTP/MCP SSOT as text RL (see [`product.md`](product.md)).
+A researcher, roboticist, or **their agent** can SFT (and later RL) a **~3–4B VLM** on a **real robotics corpus**, with freeze defaults that make sense for edge export. Vision runs use the **same live sufficiency loop** as text: metrics/probes/cliffs **while** data is applied, so “enough” and “shift gears” are mid-run decisions—not fire-and-forget full epochs then eval.
 
 ## Ordered slices
 
 | Slice | Deliverable | Status |
 |-------|-------------|--------|
-| **P3.0** | Media store harden + message/trajectory serde + JSONL ingest + robotics dataset notes | **done** |
-| **P3.1** | Processor-backed VLM renderer (`HFVLMRenderer`) with train/sample prefix tests | **done** |
-| **P3.2** | `LocalBackend` image modality + freeze policy + VLM SFT renderer wiring | **done** |
-| **P3.3** | `scripts/vlm_smoke.py` — CAS frame + `run_vlm_sft` (fake always; forge local://) | **done** (forge 2026-07-25) |
-| **P3.3b** | Pixel fusion in LocalBackend + LeRobot demo (`robot_vlm_sft_demo.py`) | **done** |
-| **P3.4** | Classifier / rubric recipe; web knobs for vision freeze | later |
-| **P4** | Full offline robot loop (Jetson export) builds on Trajectory | later |
+| **P3.0–P3.3b** | Media, schema, renderer, pixel fusion, forge VLM/LeRobot smoke | **done** |
+| **P3.4** | Classifier / rubric recipe; web knobs for vision freeze | **open** |
+| **P3.5** | Production robotics convert + lab corpus (roadmap 3.B) | **open** |
+| **P3.6** | VLM/SFT observe SSOT + probes (roadmap 3.C / P.Sufficiency) | **open** |
+| **P3.7** | Multi-hour VLM jobs (roadmap 3.D / P.Ops) | **open** |
+| **P4** | Offline robot RL, action tokens, vision RL, Jetson | **open** |
 
 ## Invariants
 
-1. **Refs not blobs** in batches — `cas://sha256/…` via `LocalMediaStore`.  
-2. **Same renderer** for train and sample once P3.1 lands.  
-3. **Default freeze:** `vision_encoder=False`, `mm_projector=True`, `language=True`.  
-4. **No multi‑GB datasets in git** — lab NVMe only.
-
-## Robotics LoRA / RL datasets
-
-Use BridgeData V2 / OXE subsample / LeRobot / Robo2VLM as **test sources**, converted into Example or Trajectory rows. See datasets doc for mapping and smoke checklist.
+1. **Refs not blobs** — `cas://` via `LocalMediaStore`.  
+2. **Same renderer** for train and sample.  
+3. **Default freeze:** vision encoder off; projector + LM LoRA on.  
+4. **No multi‑GB datasets in git.**  
+5. **No second-class observe path** — vision is not log-only while text GRPO gets `/observe`.  
 
 ## Non-goals (Phase 3)
 
-- Full OXE pretrain  
-- Action-head architectures beyond text-tokenized actions  
-- Permanent J-Lens panel (J4; spike parked 2026-07-19 — not on vision critical path)  
+- Full OXE pretrain on day one (scale ladder instead)  
+- Continuous action heads beyond text-tokenized actions (Phase 4 recipe)  
+- Permanent J-Lens panel (parked)  
