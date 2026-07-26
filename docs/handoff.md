@@ -2,51 +2,59 @@
 
 Use this when starting a **new agent session** dedicated to Anvil (separate from aiops / mia-rl Ship).
 
-## Bootstrap
+## Bootstrap (thin)
 
-1. Clone or open this repo as the workspace root.  
-2. Tell the agent: **`read start.md`**.  
-3. One line: **`Outcome: …`** (e.g. Phase 3 forge VLM smoke, or MCP desktop config).  
-4. Optional: `Track: anvil`.
+1. Open this repo as the workspace root.  
+2. **`read start.md`** once.  
+3. One line: **`Outcome: …`** (optional `Track: anvil`).  
+4. Act. **Do not** multi-doc boot; pull-on-miss only.
 
-Do **not** preload mia-rl scoreboard, coach ontology, or full dual-Spark ops history.
-
-## Product dual focus (keep in mind)
+## Product dual focus
 
 | Mode | Job |
 |------|-----|
 | **Individual** | Recipes, four verbs, web UI, observe cliffs |
 | **Agentic** | Same SSOT via API/MCP; Anvil owns tools/harness/prompts; **user brings the brain** |
 
-Thesis: `docs/product.md` · control split: `docs/agentic-control.md` · prompts: `prompts/agent/`.
+**Thesis:** live sufficiency — instrument **while** data is applied; decide **how much is enough** / **when to shift gears** before the model turns southward. Not fire-and-forget full budgets then eval. See `docs/product.md`.
 
-## Context you may need later (pull-on-miss)
+## Where we are (2026-07-26, main @ live-sufficiency docs)
+
+| Done | Open (next) |
+|------|-------------|
+| Phases 0–2.5 (text SFT/RL, GRPO observe, early-stop, recipe queue, agent MCP v0) | **P.Sufficiency:** SFT/VLM metrics + probes on same `/observe` SSOT |
+| Phase 3.A vision core (renderer, pixel fusion, 3B forge smoke, LeRobot tiny) | **Phase 3.B:** Bridge/OXE convert → lab `anvil_jsonl` + CAS |
+| Lab smokes `scripts/lab_smokes.py` (not GitHub CI) | **3.C / 3.D:** vision observe + checkpoint/resume + multi-hour |
+| | **Phase 4:** offline robot RL, action tokens, Jetson |
+
+**Recommended next Outcome:**  
+`P3.6 / 3.C — run_vlm_sft writes metrics.jsonl and appears on /observe`  
+(or parallel: Bridge→JSONL converter for 1k rows)
+
+## Pull-on-miss only
 
 | Topic | Where |
 |-------|--------|
-| Product / agent thesis | `docs/product.md`, `docs/agentic-control.md` |
-| Full design | `docs/design.md` |
-| Phases | `docs/roadmap.md` |
-| Vision / robotics data | `docs/phase3-vision.md`, `docs/datasets-robotics.md` |
-| Rules | `docs/governance.md` |
-| MCP / harness code | `anvil/agent/` |
-| Local DS4 serve (personal lab) | private `aiops` — not required for Anvil OSS |
-| Coach Ship | private `mia-rl` — out of scope here |
+| Product / live sufficiency | `docs/product.md` |
+| Phases + P.Sufficiency/P.Ops/P.Decide | `docs/roadmap.md` |
+| Vision slices | `docs/phase3-vision.md` |
+| Robotics corpora | `docs/datasets-robotics.md` |
+| Lab smokes / cron | `docs/lab-smokes.md`, `scripts/run_lab_smokes.sh` |
+| Agent control | `docs/agentic-control.md`, `anvil/agent/` |
+| Design | `docs/design.md` |
+| PR process | `docs/development-process.md` |
 
-## Good first Outcomes
+## Lab facts (no secrets in commits)
 
-- Phase 3: forge `vlm_smoke` on Qwen2.5-VL + real frames  
-- Agent: document Cursor/Claude Desktop MCP config for `anvil mcp`  
-- Recipe-graph doc (“if cliff X → try Y”)  
-- Live method-switch tooling beyond knobs patch  
-- Bridge/LeRobot → JSONL convertor smoke  
-
-## Done looks like
-
-PR **opened** (not agent-merged) against an exit criterion in `docs/roadmap.md` or a product/docs gate in `docs/product.md` / `docs/agentic-control.md`, ready for Andrew to review and merge — or a clear blocked note with next decision.
+- Weights/data: forge `/mnt/data/models`, `/mnt/data/anvil-observe`, `/mnt/data/anvil-runs`  
+- Default VLM: `Qwen2.5-VL-3B-Instruct`; text GRPO: `qwen2.5-1.5b-instruct`  
+- Never commit weights, datasets, or private host dumps  
 
 ## Git / PR (Mia-aligned)
 
-- Never push to `main`.  
-- `feat/…` or `docs/…` branch → `gh pr create` → stop; human merges.  
-- Details: `docs/development-process.md`.
+- Never push to `main`. Branch → `gh pr create` → **Andrew merges**.  
+- Small PRs. Design/product thesis via `docs/` first when large.
+
+## Done looks like
+
+PR opened against a **roadmap checkbox** (3.B / 3.C / 3.D / P.Sufficiency / Phase 4), tests green, ready for human merge — or a clear blocked note.
