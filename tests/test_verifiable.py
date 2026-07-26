@@ -69,7 +69,17 @@ def test_select_problem_round_trip():
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
     u, g = mod.select_problem("hard", 0)
-    assert g == "45"
+    assert g == "127"  # 15*8+7 — calibrated partial-hit problem
+    assert "15*8+7" in u
     u2, g2 = mod.select_problem("easy", 0)
     assert g2 == "4"
     assert u != u2
+
+
+def test_hard_bank_is_not_trivial_two_plus_two():
+    """Guard against re-introducing saturated toys (2+2 / 17+28)."""
+    prompts = " ".join(p for p, _ in DEFAULT_HARD_PROBLEMS)
+    assert "2+2" not in prompts
+    assert "17+28" not in prompts
+    golds = {g for _, g in DEFAULT_HARD_PROBLEMS}
+    assert "4" not in golds  # easy-bank gold; hard bank must stay harder

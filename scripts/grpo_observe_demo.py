@@ -190,7 +190,9 @@ def main(argv: list[str] | None = None) -> int:
             overrides={
                 "rank": args.rank,
                 "max_tokens": args.max_tokens,
-                "temperature": 0.9,
+                # ≥1.0 needed for group diversity on peaked 1.5B policies;
+                # 0.9 often collapsed every sample to the same wrong answer.
+                "temperature": 1.1,
             },
         )
 
