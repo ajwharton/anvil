@@ -19,7 +19,6 @@ from typing import Any
 
 from anvil.recipes.profiles import ModelShape
 
-
 HF_API = "https://huggingface.co/api/models/"
 HF_RAW = "https://huggingface.co/{repo}/raw/main/{path}"
 

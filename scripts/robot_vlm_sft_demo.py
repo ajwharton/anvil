@@ -121,9 +121,10 @@ def _examples_from_lerobot(store, n: int, repo: str):
     except ImportError as e:
         raise SystemExit("huggingface_hub required for --source lerobot") from e
 
+    from PIL import Image
+
     from anvil.data.ingest import put_images_from_paths
     from anvil.protocol.messages import Example, ImagePart, Message, TextPart
-    from PIL import Image
 
     files = list_repo_files(repo, repo_type="dataset")
     task = "complete the robot manipulation task shown in the camera frame"

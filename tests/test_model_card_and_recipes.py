@@ -11,7 +11,6 @@ from anvil.recipes.sft import run_sft
 from anvil.recipes.vlm_sft import build_plan as vlm_plan
 from anvil.recipes.vlm_sft import run_vlm_sft
 
-
 QWEN_VL_CONFIG = {
     "architectures": ["Qwen2_5_VLForConditionalGeneration"],
     "model_type": "qwen2_5_vl",

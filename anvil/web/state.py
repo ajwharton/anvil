@@ -21,7 +21,6 @@ from anvil.protocol.types import (
     SamplingParams,
 )
 
-
 DEFAULT_BASE_MODELS = (
     "Qwen/Qwen2.5-VL-3B-Instruct",
     "Qwen/Qwen2.5-VL-7B-Instruct",

@@ -95,8 +95,9 @@ def test_observe_jlens_api(tmp_path, monkeypatch):
         stages=(("3",), ("14",)),
         answer="14",
     )
-    from anvil.web.app import create_app
     from fastapi.testclient import TestClient
+
+    from anvil.web.app import create_app
 
     client = TestClient(create_app())
     r = client.get("/api/observe/r-jlens/jlens")

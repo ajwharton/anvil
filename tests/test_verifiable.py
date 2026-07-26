@@ -4,8 +4,8 @@ from __future__ import annotations
 
 from anvil.recipes.verifiable import (
     DEFAULT_HARD_PROBLEMS,
-    extract_first_int,
     exact_integer_reward,
+    extract_first_int,
     multi_gold_membership_reward,
 )
 
