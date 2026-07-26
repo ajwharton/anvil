@@ -116,7 +116,17 @@ def test_grpo_group_advantages_and_loop():
 
 def test_grpo_loop_local_backend():
     """Full GRPO loop against LocalBackend — sample → reward → group advantages
-    → IS forward_backward → optim_step, all with real logprobs and grads."""
+    → IS forward_backward → optim_step, all with real logprobs and grads.
+
+    Requires ``pip install anvil-train[local]`` (torch/peft). CI installs only
+    ``[dev,web]`` so this skips there; the fake:// path is covered above.
+    """
+    import pytest
+
+    pytest.importorskip("torch")
+    pytest.importorskip("peft")
+    pytest.importorskip("transformers")
+
     out = run_grpo(
         base_model="hf-internal-testing/tiny-random-gpt2",
         prompts=[[10, 11, 12, 13]],
