@@ -22,14 +22,14 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 
 | Done | Open (next) |
 |------|-------------|
-| Phases 0–2.5 (text SFT/RL, GRPO observe, early-stop, recipe queue, agent MCP v0) | **P.Sufficiency:** SFT/VLM metrics + probes on same `/observe` SSOT |
+| Phases 0–2.5 (text SFT/RL, GRPO observe, early-stop, recipe queue, agent MCP v0) | **P.Sufficiency:** held-out probes + southward-turn for SFT/VLM |
 | Phase 3.A vision core (renderer, pixel fusion, 3B forge smoke, LeRobot tiny) | **Phase 3.B:** Bridge/OXE convert → lab `anvil_jsonl` + CAS |
-| Lab smokes `scripts/lab_smokes.py` (not GitHub CI) | **3.C / 3.D:** vision observe + checkpoint/resume + multi-hour |
-| | **Phase 4:** offline robot RL, action tokens, Jetson |
+| **P3.6 metrics:** `run_vlm_sft(run_dir=)` → `/observe` loss curve | **3.C probes / early-stop** + **3.D** multi-hour |
+| Lab smokes `scripts/lab_smokes.py` (not GitHub CI) | **Phase 4:** offline robot RL, action tokens, Jetson |
 
 **Recommended next Outcome:**  
-`P3.6 / 3.C — run_vlm_sft writes metrics.jsonl and appears on /observe`  
-(or parallel: Bridge→JSONL converter for 1k rows)
+`3.B — Bridge→JSONL converter for 1k lab rows`  
+(or: held-out frame probes during VLM SFT)
 
 ## Pull-on-miss only
 

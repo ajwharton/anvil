@@ -113,7 +113,7 @@ def _observe_html(run_id: str) -> str:
 <h1>anvil observe — {run_id}</h1>
 <div id="trip">&#9888; ADVANTAGE COLLAPSED — group reward std &asymp; 0, gradient signal dead</div>
 <div id="stop">&#9632; EARLY STOP — run abandoned (dead signal streak); no more power burn</div>
-<div class="card"><h2>reward_mean/step (blue) &middot; group reward std (orange)</h2>
+<div class="card"><h2 id="chart-title">metrics / step</h2>
 <canvas id="chart" width="900" height="220"></canvas>
 <div class="meta" id="laststep">waiting for first step&hellip;</div></div>
 <div class="card"><h2>probes — live policy</h2><div id="probes" class="meta">no probes yet</div></div>
@@ -122,20 +122,43 @@ const rid = {json.dumps(run_id)};
 const EPS = 1e-8;
 let recs = [];
 let stopEvt = null;
-function stepRecs() {{ return recs.filter(r => r.type === 'step' || (r.reward_mean != null && r.type !== 'event')); }}
+function stepRecs() {{
+  return recs.filter(r => r.type === 'step'
+    || (r.type !== 'event' && (r.reward_mean != null || r.loss != null)));
+}}
+function isSft(steps) {{
+  if (!steps.length) return false;
+  const j = steps[steps.length - 1].job;
+  if (j === 'sft' || j === 'vlm_sft') return true;
+  // legacy: SFT records have loss but no reward_mean
+  return steps[steps.length - 1].reward_mean == null
+    && steps[steps.length - 1].loss != null;
+}}
 function draw() {{
   const c = document.getElementById('chart'), ctx = c.getContext('2d');
   ctx.clearRect(0, 0, c.width, c.height);
   const steps = stepRecs();
   if (!steps.length) return;
+  const sft = isSft(steps);
+  document.getElementById('chart-title').textContent = sft
+    ? 'loss / step (blue)' + (steps.some(r => r.n_image_refs) ? ' · n_image_refs on last step' : '')
+    : 'reward_mean/step (blue) · group reward std (orange)';
   const pad = 30, W = c.width - 2*pad, H = c.height - 2*pad;
-  const vals = steps.flatMap(r => [r.reward_mean || 0, r.group_reward_std_mean || 0]);
-  const maxV = Math.max(1e-9, ...vals), minV = Math.min(0, ...vals);
+  const series = sft
+    ? [{{key:'loss', color:'#58a6ff'}}]
+    : [{{key:'reward_mean', color:'#58a6ff'}}, {{key:'group_reward_std_mean', color:'#f0883e'}}];
+  const vals = steps.flatMap(r => series.map(s => r[s.key]).filter(v => v != null));
+  if (!vals.length) return;
+  const maxV = Math.max(...vals), minV = Math.min(...vals);
+  const span = Math.max(1e-9, maxV - minV);
   const n = Math.max(steps.length - 1, 1);
-  const x = i => pad + W*i/n, y = v => pad + H*(1 - (v - minV)/(maxV - minV));
+  const x = i => pad + W*i/n, y = v => pad + H*(1 - (v - minV)/span);
   ctx.strokeStyle = '#30363d'; ctx.lineWidth = 1;
-  ctx.beginPath(); ctx.moveTo(pad, y(0)); ctx.lineTo(pad + W, y(0)); ctx.stroke();
-  for (const s of [{{key:'reward_mean', color:'#58a6ff'}}, {{key:'group_reward_std_mean', color:'#f0883e'}}]) {{
+  const zeroInRange = minV <= 0 && maxV >= 0;
+  if (zeroInRange) {{
+    ctx.beginPath(); ctx.moveTo(pad, y(0)); ctx.lineTo(pad + W, y(0)); ctx.stroke();
+  }}
+  for (const s of series) {{
     ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.beginPath();
     let started = false;
     steps.forEach((r, i) => {{
@@ -148,15 +171,25 @@ function draw() {{
   let sync = '';
   if (last.adapter_synced === true) sync = ' · adapter SYNC';
   else if (last.adapter_synced === false) sync = ' · adapter held';
-  document.getElementById('laststep').textContent =
-    'step ' + last.step + ' · reward_mean ' + last.reward_mean.toFixed(4)
-    + ' · group_std ' + last.group_reward_std_mean.toFixed(6)
-    + ' · loss ' + (last.loss == null ? '—' : last.loss.toFixed(5))
-    + (last.is_mean_ratio != null ? ' · IS ratio ' + last.is_mean_ratio.toFixed(4) : '')
-    + sync
+  let meta = 'step ' + last.step
+    + (last.job ? ' · ' + last.job : '')
+    + ' · loss ' + (last.loss == null ? '—' : Number(last.loss).toFixed(5));
+  if (!sft) {{
+    meta += ' · reward_mean ' + (last.reward_mean == null ? '—' : Number(last.reward_mean).toFixed(4))
+      + ' · group_std ' + (last.group_reward_std_mean == null ? '—' : Number(last.group_reward_std_mean).toFixed(6));
+  }} else {{
+    if (last.n_image_refs != null) meta += ' · n_image_refs ' + last.n_image_refs;
+    if (last.n_tokens != null) meta += ' · n_tokens ' + last.n_tokens;
+    if (last.wall_time_s != null) meta += ' · wall ' + Number(last.wall_time_s).toFixed(3) + 's';
+  }}
+  if (last.is_mean_ratio != null) meta += ' · IS ratio ' + Number(last.is_mean_ratio).toFixed(4);
+  meta += sync
     + (last.sample_endpoint ? ' · sample ' + last.sample_endpoint : '')
     + (stopEvt ? ' · EARLY STOP ' + (stopEvt.reason || '') : '');
-  document.getElementById('trip').style.display = (last.group_reward_std_mean < EPS) ? '' : 'none';
+  document.getElementById('laststep').textContent = meta;
+  const collapsed = !sft && last.group_reward_std_mean != null
+    && last.group_reward_std_mean < EPS;
+  document.getElementById('trip').style.display = collapsed ? '' : 'none';
   document.getElementById('stop').style.display = stopEvt ? '' : 'none';
   if (stopEvt) document.getElementById('stop').textContent =
     '■ EARLY STOP — ' + (stopEvt.reason || 'dead signal') + ' at step ' + stopEvt.step
@@ -428,7 +461,7 @@ def create_app() -> FastAPI:
 
     @app.get("/api/observe")
     def observe_runs() -> dict[str, Any]:
-        """List disk observe runs (productized GRPO writes here).
+        """List disk observe runs (GRPO + SFT/VLM metrics.jsonl).
 
         Each entry includes last metrics step when available so the control-plane
         UI can deep-link without polling every metrics file twice.
@@ -502,25 +535,35 @@ def create_app() -> FastAPI:
 
     @app.get("/observe", response_class=HTMLResponse)
     def observe_index() -> str:
-        """Landing page for live RL debugger runs on disk."""
+        """Landing page for live post-training runs on disk (GRPO + SFT/VLM)."""
         data = observe_runs()
         rows = []
         for r in data["runs"]:
             last = r.get("last") or {}
+            job = last.get("job") or ""
             rew = last.get("reward_mean")
-            rew_s = f"{rew:.3f}" if isinstance(rew, (int, float)) else "—"
+            loss = last.get("loss")
+            if isinstance(rew, (int, float)):
+                signal_s = f"r={rew:.3f}"
+            elif isinstance(loss, (int, float)):
+                signal_s = f"loss={loss:.4f}"
+            else:
+                signal_s = "—"
+            if job:
+                signal_s = f"{job} · {signal_s}"
             step = last.get("step") if last else None
             step_s = str(step) if step is not None else "—"
             rows.append(
                 f'<tr><td><a href="{r["observe_url"]}">{r["run_id"]}</a></td>'
-                f'<td class="mono">{step_s}</td><td class="mono">{rew_s}</td>'
+                f'<td class="mono">{step_s}</td><td class="mono">{signal_s}</td>'
                 f'<td class="mono">{r["n_steps"]}</td></tr>'
             )
         body = (
             "\n".join(rows)
             if rows
             else '<tr><td colspan="4" class="meta">no runs yet — start '
-            "<code>scripts/grpo_observe_demo.py</code> with this "
+            "<code>scripts/grpo_observe_demo.py</code> or "
+            "<code>scripts/vlm_smoke.py --run-id …</code> with this "
             f"ANVIL_OBSERVE_ROOT ({data['root']})</td></tr>"
         )
         return f"""<!doctype html>
@@ -534,10 +577,10 @@ def create_app() -> FastAPI:
  .mono{{font-family:ui-monospace,Menlo,monospace;font-size:12px}}
  .meta{{color:#8b949e}} code{{background:#21262d;padding:2px 6px;border-radius:4px}}
 </style></head><body>
-<h1>anvil observe — live RL runs</h1>
+<h1>anvil observe — live runs</h1>
 <p class="meta">root <code>{data["root"]}</code> · auto-refresh 5s ·
 <a href="/">control plane</a></p>
-<table><thead><tr><th>run</th><th>last step</th><th>reward_mean</th><th>n_steps</th></tr></thead>
+<table><thead><tr><th>run</th><th>last step</th><th>signal</th><th>n_steps</th></tr></thead>
 <tbody>{body}</tbody></table>
 <script>setTimeout(() => location.reload(), 5000);</script>
 </body></html>"""

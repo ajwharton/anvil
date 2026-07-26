@@ -87,6 +87,7 @@ class RunMetricsWriter:
         record: dict[str, Any] = {
             "schema_version": SCHEMA_VERSION,
             "type": "step",
+            "job": "grpo",
             "ts": time.time(),
             "step": int(step),
             "reward_mean": float(reward_mean),
@@ -100,6 +101,45 @@ class RunMetricsWriter:
             "adapter_synced": adapter_synced,
             "snapshot_path": snapshot_path,
             "sample_endpoint": sample_endpoint,
+        }
+        _append_jsonl(self.metrics_path, record)
+        return record
+
+    def log_sft_step(
+        self,
+        *,
+        step: int,
+        loss: float,
+        n_datums: int,
+        n_image_refs: int = 0,
+        n_tokens: float | None = None,
+        fb_metrics: dict[str, float] | None = None,
+        wall_time_s: float | None = None,
+        job: str = "sft",
+    ) -> dict[str, Any]:
+        """SFT / VLM SFT step record for the same metrics.jsonl SSOT as GRPO.
+
+        Live sufficiency signals: loss, wall time, n_image_refs (vision),
+        optional n_tokens from the backend. No reward / advantage fields —
+        the observe UI charts loss when ``job`` is sft/vlm_sft.
+        """
+        fb = dict(fb_metrics or {})
+        if n_tokens is None and "n_tokens" in fb:
+            n_tokens = float(fb["n_tokens"])
+        if "n_image_refs" in fb and n_image_refs == 0:
+            n_image_refs = int(fb["n_image_refs"])
+        record: dict[str, Any] = {
+            "schema_version": SCHEMA_VERSION,
+            "type": "step",
+            "job": str(job),
+            "ts": time.time(),
+            "step": int(step),
+            "loss": float(loss),
+            "n_datums": int(n_datums),
+            "n_image_refs": int(n_image_refs),
+            "n_tokens": None if n_tokens is None else float(n_tokens),
+            "fb": fb,
+            "wall_time_s": wall_time_s,
         }
         _append_jsonl(self.metrics_path, record)
         return record

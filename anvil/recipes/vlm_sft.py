@@ -69,12 +69,15 @@ def run_vlm_sft(
     overrides: dict[str, Any] | None = None,
     media_store: Any | None = None,
     renderer: Any | None = None,
+    run_dir: str | None = None,
 ) -> SFTResult:
     """VLM SFT loop.
 
     - ``fake://`` / missing store: ``ToyTextRenderer`` (image refs as text placeholders).
     - ``local://`` + ``media_store``: ``HFVLMRenderer`` (processor-backed) unless
       ``renderer`` is passed explicitly.
+    - ``run_dir``: append loss / wall / n_image_refs to ``metrics.jsonl`` for
+      live ``/observe`` (P3.6 / roadmap 3.C).
     """
     card = inspect_base_model(base_model, fetch_remote=fetch_remote)
     plan = build_plan(base_model, card=card, fetch_remote=False, **(overrides or {}))
@@ -101,4 +104,6 @@ def run_vlm_sft(
         export_dir=export_dir,
         plan=plan,
         renderer=renderer,
+        run_dir=run_dir,
+        job="vlm_sft",
     )

@@ -160,7 +160,7 @@ def test_observe_endpoints(tmp_path, monkeypatch):
 
     r = client.get("/observe")
     assert r.status_code == 200
-    assert "live RL" in r.text
+    assert "live runs" in r.text
     assert "r1" in r.text
 
     r = client.get("/api/observe/r1/metrics")

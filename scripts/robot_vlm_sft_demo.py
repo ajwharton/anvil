@@ -234,10 +234,36 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--jsonl", default=None, help="path for --source jsonl")
     p.add_argument("--rank", type=int, default=16)
+    p.add_argument(
+        "--run-id",
+        default=None,
+        help="observe run id → ANVIL_OBSERVE_ROOT/<run-id>/metrics.jsonl",
+    )
+    p.add_argument(
+        "--observe-root",
+        default=None,
+        help="override ANVIL_OBSERVE_ROOT (default: env or ~/.anvil/observe)",
+    )
     args = p.parse_args(argv)
 
     from anvil.media import LocalMediaStore
     from anvil.recipes.vlm_sft import run_vlm_sft
+
+    run_dir = None
+    if args.run_id:
+        import os
+        import re
+
+        if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,80}", args.run_id):
+            raise SystemExit(f"bad run-id {args.run_id!r}")
+        root = Path(
+            args.observe_root
+            or os.environ.get("ANVIL_OBSERVE_ROOT")
+            or (Path.home() / ".anvil" / "observe")
+        )
+        run_dir = root / args.run_id
+        run_dir.mkdir(parents=True, exist_ok=True)
+        print(f"observe → /observe/{args.run_id}  (root={root})")
 
     store = LocalMediaStore(args.media_root)
     if args.source == "jsonl":
@@ -266,6 +292,7 @@ def main(argv: list[str] | None = None) -> int:
         fetch_remote=False,
         media_store=store,
         overrides={"rank": args.rank},
+        run_dir=str(run_dir) if run_dir is not None else None,
     )
     print(
         f"steps={result.steps_run} adapter={result.adapter_id} "
@@ -282,6 +309,9 @@ def main(argv: list[str] | None = None) -> int:
             print("status: learning signal OK (loss dropped)")
         else:
             print("status: weak/flat loss — check pixels + freeze policy")
+    if run_dir is not None:
+        print(f"metrics: {run_dir / 'metrics.jsonl'}")
+        print(f"LIVE UI: /observe/{args.run_id}")
     return 0
 
 
