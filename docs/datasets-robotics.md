@@ -86,7 +86,7 @@ vision must not lag text GRPO.
 | Lab corpus on NVMe in Anvil shape (Bridge / OXE subsample / Robo2VLM) | 3.B |
 | Production convert pipeline (RLDS/LeRobot → CAS + JSONL, resumable) | 3.B |
 | Scale ladder 1k → 5k → 50k+ exercised on forge | 3.B |
-| VLM/SFT `metrics.jsonl` + live `/observe` (+ vision probes) | 3.C / P.Sufficiency |
+| VLM/SFT `metrics.jsonl` + live `/observe` (**done**); vision probes still open | 3.C / P.Sufficiency |
 | Checkpoint/resume + multi-hour VLM job ops | 3.D / P.Ops |
 | Offline robot RL + action tokenization + vision on-policy RL | Phase 4 |
 
@@ -97,6 +97,7 @@ vision must not lag text GRPO.
 - [x] Media store put/get for PNG/JPEG on forge (lab demos)  
 - [x] 1 JSONL/synthetic row → `run_vlm_sft` fake:// then local://  
 - [x] Qwen2.5-VL-3B LoRA smoke, encoder frozen by default  
+- [x] `run_vlm_sft(run_dir=…)` → `metrics.jsonl` + `/observe` loss curve (toy)  
 - [~] Export PEFT; qualitative sample (smoke only; real corpus TBD)  
 
 ### Product corpus (required)

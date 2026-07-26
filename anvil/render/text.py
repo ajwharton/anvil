@@ -73,5 +73,8 @@ class ToyTextRenderer:
             loss_fn_inputs={
                 "target_tokens": target_tokens,
                 "weights": target_weights,
+                # Same key as HFVLMRenderer so observe can count vision refs
+                # even on the toy path (fake:// smoke without a processor).
+                "image_refs": list(example.image_refs()),
             },
         )

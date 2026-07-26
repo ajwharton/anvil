@@ -22,11 +22,11 @@ These goals apply to **SFT, preference, GRPO, VLM, robot offline**—any job tha
 
 - [x] GRPO/RL: `metrics.jsonl` + probes + SSE `/observe` + advantage-collapse tripwire  
 - [x] GRPO early-stop on dead signal (ceiling/floor/collapse) + recipe queue advance  
-- [ ] **SFT / VLM SFT** emit the same observe SSOT (`RunMetricsWriter`: loss, step, wall, n_tokens / n_image_refs)  
+- [x] **SFT / VLM SFT** emit the same observe SSOT (`RunMetricsWriter.log_sft_step`: loss, step, wall, n_tokens / n_image_refs)  
 - [ ] **Preference (DPO/…)** emit observe SSOT + family-specific cliffs  
 - [ ] **Probes for all methods** — fixed held-out prompts/frames sampled during the run (not only final eval)  
 - [ ] **Southward-turn detectors** — probe quality regression, reward↑ while probes↓, homogenization; machine-readable flags for agents  
-- [ ] **Live web** lists all run kinds; one control-plane UX for “is this still worth running?”  
+- [x] **Live web** lists GRPO + SFT/VLM run kinds on `/observe` (loss chart when `job` is sft/vlm_sft)
 
 ### P.Ops — Multi-hour / large-corpus jobs *(required)*
 
@@ -194,10 +194,10 @@ path. Re-open only against the high bar in the spike writeup.
 - [ ] Scale ladder 1k → 5k → 50k+ exercised on forge  
 - [ ] Real-corpus smoke checklist green (`docs/datasets-robotics.md`)  
 
-### 3.C Vision under live sufficiency *(open — required; implements P.Sufficiency for VLM)*
+### 3.C Vision under live sufficiency *(partial — required; implements P.Sufficiency for VLM)*
 
-- [ ] `run_vlm_sft` → `metrics.jsonl` (loss, step, wall, n_image_refs)  
-- [ ] Live `/observe` for vision SFT runs  
+- [x] `run_vlm_sft` → `metrics.jsonl` (loss, step, wall, n_image_refs) via `run_dir`  
+- [x] Live `/observe` for vision SFT runs (loss chart + index signal column)  
 - [ ] Held-out frame probes during VLM train  
 - [ ] Early-stop / recipe advance hooks for vision stages (share GRPO queue patterns)  
 
@@ -295,3 +295,4 @@ For a spin-off agent session:
 | 2026-07-18 | **J-Lens measurement stack:** v3 `solve` GO on answer readout (scoring artifacts fixed); J1 schema + spike bridge. Later same day: rank-resolved strong hits + 1.5B proper fit — J2 order still fails (mean 0.167). |
 | 2026-07-19 | **J-Lens spike parked:** 7B mixed fit (~4.9 h, WikiText+math) + solve → 6/6 strong answer hits, mean order **0.5**, sanity 0.95–1.0; J2 entry still not met. **Shelve J2–J5**; keep J1 + CLI. Product focus = RL debugger without J-Lens. Writeup §Fifth pass |
 | 2026-07-26 | **Live sufficiency thesis:** product.md + roadmap §P.Sufficiency / P.Ops / P.Decide — instrument all post-training mid-run; decide “enough” and shift gears; southward-turn detection; not fire-and-forget full budgets. Vision 3.B–3.D and Phase 4 robot goals inherit this SSOT |
+| 2026-07-26 | **P3.6 / 3.C (metrics):** `RunMetricsWriter.log_sft_step`; `run_sft`/`run_vlm_sft(run_dir=…)` → `metrics.jsonl` (loss, wall, n_image_refs, job=sft|vlm_sft); observe UI charts loss for SFT/VLM; `vlm_smoke`/`robot_vlm_sft_demo` `--run-id`. Probes + vision early-stop still open |
