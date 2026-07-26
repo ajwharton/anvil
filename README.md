@@ -1,21 +1,28 @@
 # Anvil
 
-**Open-source LoRA-first post-training** — SFT and RL with a tiny four-verb API, honest recipes, and a **live RL debugger**.  
+**Anvil forges sovereign domain experts from base models.**
+
+Open-source **LoRA-first post-training** (SFT + RL): tiny four-verb API, honest
+recipes, and **live observability**—so you decide *how much is enough* and
+*when to shift gears* while data is applied, not only after a failed eval.
 
 Built for **two audiences at once**:
 
 | Mode | Who | How it feels |
 |------|-----|----------------|
-| **Individual** | Researcher / roboticist + own GPUs | Recipes, web UI, run a loop, see cliffs on curves and probes |
+| **Individual** | Researcher / roboticist / org ML + own GPUs | Recipes, web UI, run a loop, see cliffs on curves and probes |
 | **Agentic** | Operator agent (you bring the model) | Same truth via **HTTP + MCP** — watch metrics/probes, pause, patch knobs, switch methods under audit |
 
-Anvil owns the **control plane, MCP tools, optional harness, and portable prompts**. You bring the **agent brain** (frontier or local), GPUs, and data. Prompt packs also drop into *your* harness if you do not use ours.
+You bring **base model, domain data, GPUs, and (optionally) the agent brain**.
+Anvil owns the **forge**: control plane, MCP tools, optional harness, portable
+prompts, and export. Prompt packs also drop into *your* harness if you do not use ours.
 
 > Originally inspired by the product shape of Thinking Machines’ Tinker API (four low-level train/sample verbs + LoRA). Anvil is independent open-source software; no affiliation, no wire compatibility.
 
 | Doc | Role |
 |-----|------|
-| **[docs/product.md](docs/product.md)** | Product thesis (cliffs, RSI-shaped ambition, dual mode) |
+| **[docs/product.md](docs/product.md)** | Product thesis (domain experts, live sufficiency, dual mode) |
+| **[docs/agent-context.md](docs/agent-context.md)** | Operator brief for agents (metrics, tools, classify→act) |
 | **[docs/agentic-control.md](docs/agentic-control.md)** | MCP/harness vs user brain; adoption paths A/B/C |
 | **[prompts/agent/](prompts/agent/)** | Drop-in operator prompts |
 | **[docs/roadmap.md](docs/roadmap.md)** | Phase gates |
@@ -23,9 +30,11 @@ Anvil owns the **control plane, MCP tools, optional harness, and portable prompt
 
 ## Why
 
-Democratize post-training by lowering the systems tax: you keep **data, loss, reward, environment**; Anvil handles a stable contract across **train**, **sample**, and **export** — and surfaces signals that usually only appear after a failed eval.
-
-Different methods (**DPO**, **GRPO**, **LoRA SFT**, …) hit different **cliffs**. The product job is to make those cliffs **visible and actionable**—by a human *or* by an agent that can change recipe/method in real time under policy.
+Domain expertise is the product—not a single training method. Different levers
+(**SFT**, **DPO**, **GRPO**, …) hit different **cliffs**. Anvil lowers the
+systems tax: you keep data, loss, reward, and environment; we keep a stable
+contract across **train**, **sample**, and **export**, and make cliffs
+**visible and actionable** for a human or an agent under policy.
 
 Core verbs:
 

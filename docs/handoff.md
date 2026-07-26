@@ -16,9 +16,10 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 | **Individual** | Recipes, four verbs, web UI, observe cliffs |
 | **Agentic** | Same SSOT via API/MCP; Anvil owns tools/harness/prompts; **user brings the brain** |
 
-**Thesis:** live sufficiency — instrument **while** data is applied; decide **how much is enough** / **when to shift gears** before the model turns southward. Not fire-and-forget full budgets then eval. See `docs/product.md`.
+**Purpose:** Anvil forges **sovereign domain experts** from base models.  
+**Mechanism:** live sufficiency — instrument **while** data is applied; decide **how much is enough** / **when to shift gears** before the model turns southward. Not fire-and-forget full budgets then eval. See `docs/product.md`.
 
-## Where we are (2026-07-26, main @ live-sufficiency docs)
+## Where we are (2026-07-26)
 
 | Done | Open (next) |
 |------|-------------|
