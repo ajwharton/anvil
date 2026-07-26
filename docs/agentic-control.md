@@ -1,6 +1,6 @@
 # Agentic control — what Anvil owns vs what you bring
 
-**Related:** [`product.md`](product.md) (thesis) · [`roadmap.md`](roadmap.md)  
+**Related:** [`agent-context.md`](agent-context.md) (operator brief — **load first**) · [`product.md`](product.md) (thesis) · [`roadmap.md`](roadmap.md)  
 **Date:** 2026-07-17  
 **Status:** product note — design intent for the agent surface
 
@@ -97,6 +97,8 @@ should ship **versioned, boring, high-quality prompts** that people can:
 - **copy into** Cursor / Claude Code / custom orchestrators / multi-agent
   graphs that already talk MCP or HTTP.
 
+**Operator brief (metrics, MCP names, classify→act):** [`agent-context.md`](agent-context.md).
+
 Prompt pack goals:
 
 | Prompt | Role |
@@ -107,9 +109,9 @@ Prompt pack goals:
 | `safety_policy.md` | No silent force; log overrides; don’t export secrets; stop on human interrupt |
 
 Prompts must reference **tool names and artifact schemas** that match Anvil
-(so they stay accurate). When APIs change, prompts ship in the same PR.
+(so they stay accurate). When APIs change, **agent-context + prompts** ship in the same PR.
 
-Location (target): `prompts/agent/` in-repo, linked from this doc.
+Location: `prompts/agent/` + `docs/agent-context.md`.
 
 ---
 

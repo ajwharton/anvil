@@ -40,7 +40,7 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 | Vision slices | `docs/phase3-vision.md` |
 | Robotics corpora | `docs/datasets-robotics.md` |
 | Lab smokes / cron | `docs/lab-smokes.md`, `scripts/run_lab_smokes.sh` |
-| Agent control | `docs/agentic-control.md`, `anvil/agent/` |
+| Agent control | `docs/agent-context.md` (session brief), `docs/agentic-control.md`, `anvil/agent/` |
 | Design | `docs/design.md` |
 | PR process | `docs/development-process.md` |
 
