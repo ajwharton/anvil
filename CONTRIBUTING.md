@@ -20,6 +20,10 @@ pytest -q
 CI (GitHub Actions) runs the same `pytest` suite on every PR and push to `main`.  
 Do not merge green-looking demos without a green test run — lab GPU smokes are extra, not a substitute for unit tests.
 
+**Lab live smokes** (forge/hammer, optional cron): `scripts/lab_smokes.py` /
+`scripts/run_lab_smokes.sh` — see [`docs/lab-smokes.md`](docs/lab-smokes.md).
+**Never** wire these into GitHub Actions (weights + GPU + long wall time).
+
 Optional: `[mcp]` for `anvil mcp`, `[local]` / `[hf]` for GPU/VLM paths.  
 `fake://` powers many unit tests without a GPU.
 

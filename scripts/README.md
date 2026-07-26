@@ -8,8 +8,33 @@
 | `vlm_smoke.py` | **P3.3** VLM SFT smoke: CAS frame + `run_vlm_sft` (`fake://` or `local://`) |
 | `robot_vlm_sft_demo.py` | Short LoRA SFT on Qwen2.5-VL-3B with synthetic tabletop or **LeRobot** frames (ffmpeg) |
 | `grpo_observe_demo.py` | **Productized GRPO** → `ANVIL_OBSERVE_ROOT/<run_id>/metrics.jsonl`; live charts at `/observe/<run_id>` |
+| `grpo_recipe_queue.py` | Multi-stage RL curriculum; advances on early-stop |
+| `lab_smokes.py` | **Lab live smoke suite** (not GitHub CI) — quick / nightly / full |
+| `run_lab_smokes.sh` | Forge/cron entrypoint for `lab_smokes.py` |
 
 Weights stay on lab hosts and out of git. Default vision pull: Qwen2.5-VL-3B. See [docs/models.md](../docs/models.md).
+
+## Lab live smokes (periodic, not CI)
+
+```bash
+# laptop — seconds, no GPU
+python scripts/lab_smokes.py --profile quick
+
+# forge — real GRPO early-stop + 2-stage queue
+./scripts/run_lab_smokes.sh nightly
+
+# weekly / release
+./scripts/run_lab_smokes.sh full
+```
+
+Reports: `/mnt/data/anvil-runs/lab-smokes/latest.json`. Full notes: [`docs/lab-smokes.md`](../docs/lab-smokes.md).
+
+Cron (forge example)::
+
+```cron
+15 3 * * * /mnt/data/anvil/scripts/run_lab_smokes.sh nightly >>/mnt/data/anvil-runs/lab-smokes/cron.log 2>&1
+```
+
 
 ## Vision SFT on forge (smoke)
 
