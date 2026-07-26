@@ -126,6 +126,17 @@ def main(argv: list[str] | None = None) -> int:
         default=0.0,
         help="seconds to wait after creating run_dir before training (for SSE attach)",
     )
+    p.add_argument(
+        "--early-stop-patience",
+        type=int,
+        default=8,
+        help="consecutive dead-signal steps before abandoning (0 disables)",
+    )
+    p.add_argument(
+        "--no-early-stop",
+        action="store_true",
+        help="disable early stop (burn full --steps even if reward flatlines)",
+    )
     args = p.parse_args(argv)
 
     observe_root = Path(args.observe_root) if args.observe_root else _default_observe_root()
@@ -149,6 +160,9 @@ def main(argv: list[str] | None = None) -> int:
 
     from anvil.recipes.grpo import run_grpo
 
+    early_stop = not args.no_early_stop and args.early_stop_patience > 0
+    patience = max(1, args.early_stop_patience) if early_stop else 8
+
     if args.endpoint.startswith("fake://"):
         prompts = [list(range(10, 26)), list(range(20, 36)), list(range(30, 46))]
         probes = [list(range(10, 18)), list(range(20, 28))]
@@ -163,6 +177,8 @@ def main(argv: list[str] | None = None) -> int:
             probe_every=args.probe_every,
             detokenize=lambda toks: f"<{len(list(toks))} toks>",
             overrides={"rank": args.rank, "max_tokens": args.max_tokens},
+            early_stop=early_stop,
+            early_stop_patience=patience,
         )
     else:
         tok = _load_tokenizer(args.model)
@@ -194,11 +210,18 @@ def main(argv: list[str] | None = None) -> int:
                 # 0.9 often collapsed every sample to the same wrong answer.
                 "temperature": 1.1,
             },
+            early_stop=early_stop,
+            early_stop_patience=patience,
         )
 
     print(
         f"steps={result.steps_run} adapter={result.adapter_id} "
         f"final_reward={result.mean_reward[-1] if result.mean_reward else None}"
+        + (
+            f" early_stop={result.early_stop_reason}"
+            if result.early_stop_reason
+            else ""
+        )
     )
     print("reward_mean:", [round(r, 3) for r in result.mean_reward])
     print("losses:", [round(x, 4) for x in result.losses])

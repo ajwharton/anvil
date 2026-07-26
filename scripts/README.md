@@ -47,14 +47,17 @@ python scripts/grpo_observe_demo.py \
   --steps 40 --group-size 8 \
   --attach-wait 8
 # hard default = 15*8+7=127 (partial hit rate on 1.5B; not already saturated)
+# Early stop (default): abandon after 8 consecutive dead-signal steps
+# (reward ceiling/floor + group_std≈0) so overnight runs don't burn power flatlined.
 
 # terminal B — same observe root, control plane + SSE
 ANVIL_OBSERVE_ROOT=/mnt/data/anvil-observe anvil-web --host 0.0.0.0 --port 7600
 # open http://<host>:7600/observe          (index)
-# open http://<host>:7600/observe/grpo-arith-demo  (live reward / probes)
+# open http://<host>:7600/observe/grpo-hard-demo  (live reward / probes)
 ```
 
 Control-plane home also lists disk observe runs and links into the SSE debugger.
+Observe UI shows an **EARLY STOP** banner when `metrics.jsonl` gets an `early_stop` event.
 
 ## J-Lens lab deps (optional / parked)
 

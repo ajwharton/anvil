@@ -104,6 +104,29 @@ class RunMetricsWriter:
         _append_jsonl(self.metrics_path, record)
         return record
 
+    def log_event(
+        self,
+        *,
+        step: int,
+        event: str,
+        reason: str | None = None,
+        **extra: Any,
+    ) -> dict[str, Any]:
+        """Non-step event (e.g. early_stop) written to metrics.jsonl for the UI."""
+        record: dict[str, Any] = {
+            "schema_version": SCHEMA_VERSION,
+            "type": "event",
+            "event": str(event),
+            "ts": time.time(),
+            "step": int(step),
+            "reason": reason,
+        }
+        for k, v in extra.items():
+            if k not in record:
+                record[k] = v
+        _append_jsonl(self.metrics_path, record)
+        return record
+
     def log_probe(
         self,
         *,
