@@ -6,6 +6,7 @@
 | `jlens_spike.py` | J-Lens forge CLI — fit/apply Jacobian lens; protocol `solve` + digit/rank scoring; emits `jlens.jsonl`. **Spike parked** 2026-07-19 (see [docs/spikes/jlens-math.md](../docs/spikes/jlens-math.md)). |
 | `run_jlens_7b_mixed.sh` | Overnight recipe: fit 7B lens with **mixed WikiText+math** then `solve` apply (resume helper; needs `datasets` + `jlens` on the lab venv) |
 | `vlm_smoke.py` | **P3.3/P3.6** VLM SFT smoke: CAS frame + `run_vlm_sft`; `--run-id` → live `/observe` |
+| `convert_robotics_corpus.py` | **P3.5 / 3.B** episode_pack or path JSONL → CAS + Anvil JSONL (resume, subsample) |
 | `robot_vlm_sft_demo.py` | Short LoRA SFT on Qwen2.5-VL-3B; synthetic/LeRobot; optional `--run-id` observe |
 | `grpo_observe_demo.py` | **Productized GRPO** → `ANVIL_OBSERVE_ROOT/<run_id>/metrics.jsonl`; live charts at `/observe/<run_id>` |
 | `grpo_recipe_queue.py` | Multi-stage RL curriculum; advances on early-stop |
