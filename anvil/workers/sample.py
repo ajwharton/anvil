@@ -34,8 +34,8 @@ from anvil.protocol.types import (
     LossFn,
     ModelInput,
     OptimStepOutput,
-    SampleResult,
     SampledSequence,
+    SampleResult,
     SamplingParams,
     TrainConfig,
 )

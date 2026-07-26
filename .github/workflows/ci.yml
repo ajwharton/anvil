@@ -18,10 +18,9 @@ jobs:
       - name: Install
         run: |
           python -m pip install -U pip
+          # Core CI: no torch/peft (GPU extras). LocalBackend tests importorskip.
           pip install -e ".[dev,web]"
       - name: Pytest
         run: pytest -q --tb=short
-      - name: Ruff (changed surface)
-        run: |
-          pip install ruff
-          ruff check anvil tests scripts
+      - name: Ruff
+        run: ruff check anvil tests scripts

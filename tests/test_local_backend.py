@@ -143,6 +143,29 @@ def test_snapshot_and_sample(backend: LocalBackend, adapter_id) -> None:
         )
 
 
+def test_group_sample_uses_distinct_seeds(backend: LocalBackend, adapter_id, monkeypatch) -> None:
+    """GRPO groups must not be G clones of one generate() call."""
+    seen: list[tuple[int | None, int, bool]] = []
+    real = LocalBackend._seed_for_sample
+
+    def spy(torch, seed, index, do_sample):  # noqa: ANN001
+        seen.append((seed, index, do_sample))
+        return real(torch, seed, index, do_sample)
+
+    monkeypatch.setattr(LocalBackend, "_seed_for_sample", staticmethod(spy))
+    prompt = ModelInput.from_ints(ToyTextRenderer().encode("hi"))
+    out = backend.sample(
+        base_model=TINY,
+        adapter_id=adapter_id,
+        prompt=prompt,
+        sampling_params=SamplingParams(max_tokens=4, temperature=1.0, seed=7),
+        num_samples=4,
+    )
+    assert len(out.sequences) == 4
+    assert [s[1] for s in seen] == [0, 1, 2, 3]
+    assert all(s[0] == 7 and s[2] is True for s in seen)
+
+
 def test_compute_logprobs(backend: LocalBackend, adapter_id) -> None:
     prompt = ModelInput.from_ints(ToyTextRenderer().encode("hello"))
     lps = backend.compute_logprobs(base_model=TINY, adapter_id=adapter_id, prompt=prompt)

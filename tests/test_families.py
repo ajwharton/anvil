@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from anvil.recipes.catalog import RECIPES, _BY_ID, list_recipes
+from anvil.recipes.catalog import _BY_ID, RECIPES, list_recipes
 from anvil.recipes.families import FAMILIES, lookup_family
 from anvil.recipes.profiles import ModelShape, plan_recipe
 

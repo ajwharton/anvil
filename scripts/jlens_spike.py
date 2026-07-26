@@ -41,7 +41,6 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Mapping, Sequence
 
-
 # ---------------------------------------------------------------------------
 # Math probe set
 # ---------------------------------------------------------------------------

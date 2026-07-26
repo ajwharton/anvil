@@ -8,8 +8,8 @@ pytest.importorskip("fastapi")
 
 from fastapi.testclient import TestClient
 
-from anvil.web.app import create_app
 from anvil.web import state as state_mod
+from anvil.web.app import create_app
 
 
 @pytest.fixture()

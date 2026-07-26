@@ -26,7 +26,6 @@ from anvil.observe.metrics import (
     PROBES_FILENAME,
     read_jsonl,
 )
-
 from anvil.recipes import (
     gate_recipe,
     inspect_base_model,

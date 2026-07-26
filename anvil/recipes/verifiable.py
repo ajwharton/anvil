@@ -70,18 +70,21 @@ def detokenize_via_tokenizer(tokenizer: object) -> DetokenizeFn:
     return detokenize
 
 
-# Harder single-problem demos for productized observe (base 1.5B often misses).
+# Calibrated on forge 2026-07-26 against Qwen2.5-1.5B-Instruct (n=16, T=1.0).
+# Prefer *partial* hit rate so GRPO groups have reward variance (not all-0 / all-1).
+#   15*8+7 → ~10/16  |  9*9+9 → ~7/16  |  56+78-19 → ~8/16
+# Avoid pure 2+2 / 17+28 (already 16/16 — flat reward, advantage collapse).
 DEFAULT_HARD_PROBLEMS: tuple[tuple[str, str], ...] = (
     (
-        "What is 17+28? Reply with only the number, no words.",
-        "45",
+        "What is 15*8+7? Reply with only the number, no words.",
+        "127",
     ),
     (
-        "What is 36+47? Reply with only the number, no words.",
-        "83",
+        "What is 9*9+9? Reply with only the number, no words.",
+        "90",
     ),
     (
-        "What is 19*4? Reply with only the number, no words.",
-        "76",
+        "What is 56+78-19? Reply with only the number, no words.",
+        "115",
     ),
 )

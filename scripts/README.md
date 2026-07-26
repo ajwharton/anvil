@@ -46,6 +46,7 @@ python scripts/grpo_observe_demo.py \
   --run-id grpo-hard-demo \
   --steps 40 --group-size 8 \
   --attach-wait 8
+# hard default = 15*8+7=127 (partial hit rate on 1.5B; not already saturated)
 
 # terminal B — same observe root, control plane + SSE
 ANVIL_OBSERVE_ROOT=/mnt/data/anvil-observe anvil-web --host 0.0.0.0 --port 7600

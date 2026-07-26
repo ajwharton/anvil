@@ -20,6 +20,7 @@ from __future__ import annotations
 
 import json
 import os
+import secrets
 import uuid
 import warnings
 from dataclasses import dataclass, field
@@ -34,8 +35,8 @@ from anvil.protocol.types import (
     ExportFormat,
     ExportResult,
     ForwardBackwardOutput,
-    LossFn,
     LoraTargets,
+    LossFn,
     ModelInput,
     OptimStepOutput,
     SampledSequence,
@@ -727,6 +728,13 @@ class LocalBackend:
         num_samples: int = 1,
         include_prompt_logprobs: bool = False,
     ) -> SampleResult:
+        """Sample one or more completions.
+
+        GRPO needs *independent* group members. A single
+        ``generate(..., num_return_sequences=G)`` on PEFT/Qwen often returns G
+        identical strings (no effective RNG split). We therefore run G separate
+        single-sequence generates with distinct seeds.
+        """
         torch, transformers, _ = _deps()
         stop_strings = tuple(s for s in (sampling_params.stop or ()) if s)
         model, tokenizer = self._model_for_sample(base_model, adapter_id)
@@ -734,11 +742,7 @@ class LocalBackend:
         prompt_ids = prompt.token_ids()
         if not prompt_ids:
             raise ValueError("empty prompt")
-        input_ids = torch.tensor([prompt_ids], dtype=torch.long, device=self.device)
         prompt_len = len(prompt_ids)
-
-        if sampling_params.seed is not None:
-            torch.manual_seed(sampling_params.seed)
 
         do_sample = sampling_params.temperature > 0
         if not do_sample and num_samples != 1:
@@ -746,16 +750,83 @@ class LocalBackend:
                 "greedy sampling (temperature<=0) returns a single sequence; "
                 "set temperature>0 for num_samples>1"
             )
+        if num_samples < 1:
+            raise ValueError(f"num_samples must be >= 1, got {num_samples}")
+
+        was_training = model.training
+        model.eval()
+        sequences: list[SampledSequence] = []
+        prompt_lps = None
+        try:
+            with torch.no_grad():
+                if include_prompt_logprobs:
+                    input_ids = torch.tensor(
+                        [prompt_ids], dtype=torch.long, device=self.device
+                    )
+                    prompt_lps = self._prompt_logprobs(model, input_ids)
+                for i in range(num_samples):
+                    self._seed_for_sample(torch, sampling_params.seed, i, do_sample)
+                    sequences.append(
+                        self._generate_one(
+                            model,
+                            tokenizer,
+                            transformers,
+                            prompt_ids=prompt_ids,
+                            prompt_len=prompt_len,
+                            sampling_params=sampling_params,
+                            do_sample=do_sample,
+                            stop_strings=stop_strings,
+                        )
+                    )
+        finally:
+            if was_training:
+                model.train()
+        return SampleResult(sequences=tuple(sequences), prompt_logprobs=prompt_lps)
+
+    @staticmethod
+    def _seed_for_sample(
+        torch: Any, seed: int | None, index: int, do_sample: bool
+    ) -> None:
+        """Seed each group member differently so completions are not clones."""
+        if not do_sample:
+            if seed is not None:
+                torch.manual_seed(seed)
+                if torch.cuda.is_available():
+                    torch.cuda.manual_seed_all(seed)
+            return
+        if seed is not None:
+            s = int(seed) + int(index) * 1_000_003
+        else:
+            # OS entropy — do not use torch.randint (would couple members).
+            s = secrets.randbelow(2**31 - 1)
+        torch.manual_seed(s)
+        if torch.cuda.is_available():
+            torch.cuda.manual_seed_all(s)
+
+    def _generate_one(
+        self,
+        model: Any,
+        tokenizer: Any,
+        transformers: Any,
+        *,
+        prompt_ids: list[int],
+        prompt_len: int,
+        sampling_params: SamplingParams,
+        do_sample: bool,
+        stop_strings: tuple[str, ...],
+    ) -> SampledSequence:
+        torch, _, _ = _deps()
+        input_ids = torch.tensor([prompt_ids], dtype=torch.long, device=self.device)
         gen_kwargs: dict[str, Any] = {
             "max_new_tokens": sampling_params.max_tokens,
             "do_sample": do_sample,
-            "num_return_sequences": num_samples,
+            "num_return_sequences": 1,
             "output_logits": True,
             "return_dict_in_generate": True,
             "pad_token_id": tokenizer.pad_token_id,
         }
         if do_sample:
-            gen_kwargs["temperature"] = sampling_params.temperature
+            gen_kwargs["temperature"] = max(float(sampling_params.temperature), 1e-5)
             if sampling_params.top_p < 1.0:
                 gen_kwargs["top_p"] = sampling_params.top_p
             if sampling_params.top_k is not None:
@@ -765,51 +836,37 @@ class LocalBackend:
                 transformers, tokenizer, prompt_len, stop_strings
             )
 
-        was_training = model.training
-        model.eval()
-        with torch.no_grad():
-            out = model.generate(input_ids, **gen_kwargs)
-            prompt_lps = None
-            if include_prompt_logprobs:
-                prompt_lps = self._prompt_logprobs(model, input_ids)
-        if was_training:
-            model.train()
-
+        out = model.generate(input_ids, **gen_kwargs)
         eos_id = tokenizer.eos_token_id
-        sequences: list[SampledSequence] = []
-        for i in range(out.sequences.shape[0]):
-            new_tokens = out.sequences[i][prompt_len:]
-            toks = [int(t) for t in new_tokens]
-            lps: list[float] = []
-            if out.logits:
-                # RAW logits (pre-temperature/top-p/top-k), not scores: the
-                # per-token logprob must be the model's true policy probability
-                # — the IS/PPO ratio compares it against a plain full-softmax
-                # forward. scores would be the warped sampling distribution.
-                for t, lg in enumerate(out.logits):
-                    if t >= len(toks):
-                        break
-                    lp = torch.log_softmax(lg[i].float(), dim=-1)
-                    lps.append(float(lp[toks[t]]))
-            stop_reason = "length"
-            if stop_strings:
-                toks, hit_stop = _truncate_at_stop(tokenizer, toks, stop_strings)
-                lps = lps[: len(toks)]
-                if hit_stop:
-                    stop_reason = "stop"
-            if (
-                stop_reason == "length"
-                and eos_id is not None
-                and toks
-                and toks[-1] == eos_id
-            ):
-                stop_reason = "eos"
-            sequences.append(
-                SampledSequence(
-                    tokens=tuple(toks), logprobs=tuple(lps), stop_reason=stop_reason
-                )
-            )
-        return SampleResult(sequences=tuple(sequences), prompt_logprobs=prompt_lps)
+        new_tokens = out.sequences[0][prompt_len:]
+        toks = [int(t) for t in new_tokens]
+        lps: list[float] = []
+        if out.logits:
+            # RAW logits (pre-temperature/top-p/top-k), not scores: the
+            # per-token logprob must be the model's true policy probability
+            # — the IS/PPO ratio compares it against a plain full-softmax
+            # forward. scores would be the warped sampling distribution.
+            for t, lg in enumerate(out.logits):
+                if t >= len(toks):
+                    break
+                lp = torch.log_softmax(lg[0].float(), dim=-1)
+                lps.append(float(lp[toks[t]]))
+        stop_reason = "length"
+        if stop_strings:
+            toks, hit_stop = _truncate_at_stop(tokenizer, toks, stop_strings)
+            lps = lps[: len(toks)]
+            if hit_stop:
+                stop_reason = "stop"
+        if (
+            stop_reason == "length"
+            and eos_id is not None
+            and toks
+            and toks[-1] == eos_id
+        ):
+            stop_reason = "eos"
+        return SampledSequence(
+            tokens=tuple(toks), logprobs=tuple(lps), stop_reason=stop_reason
+        )
 
     def _prompt_logprobs(self, model: Any, input_ids: Any) -> tuple[float | None, ...]:
         torch, _, _ = _deps()
