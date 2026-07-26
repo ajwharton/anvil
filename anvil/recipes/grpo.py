@@ -215,6 +215,9 @@ def run_grpo(
     early_stop_group_std_eps: float = DEFAULT_GROUP_STD_EPS,
     early_stop_reward_hi: float = DEFAULT_REWARD_HI,
     early_stop_reward_lo: float = DEFAULT_REWARD_LO,
+    service_client: ServiceClient | None = None,
+    training_client: Any | None = None,
+    close_clients: bool = True,
 ) -> GRPOResult:
     """Run the GRPO/IS loop.
 
@@ -231,6 +234,10 @@ def run_grpo(
     Early stop (default on): if advantage signal is dead for
     ``early_stop_patience`` consecutive steps — reward ceiling, floor, or
     homogenized mid rewards — abandon the run instead of burning power.
+
+    Client reuse (recipe queue): pass ``service_client`` + ``training_client``
+    to continue the same LoRA across stages; set ``close_clients=False`` so the
+    queue owns teardown.
     """
     if sync_every < 1:
         raise ValueError(f"sync_every must be >= 1, got {sync_every}")
@@ -241,17 +248,21 @@ def run_grpo(
 
     plan = plan or build_plan(base_model, **(overrides or {}))
     k = plan.as_knobs()
-    svc = ServiceClient(endpoint=endpoint)
-    tc = svc.create_lora_training_client(
-        base_model=plan.base_model,
-        rank=k["rank"],
-        modalities=k["modalities"],
-        lora_targets=LoraTargets(
-            language=k["language_lora"],
-            vision_encoder=k["vision_encoder_lora"],
-            mm_projector=k["mm_projector_lora"],
-        ),
-    )
+    owns_svc = service_client is None
+    svc = service_client if service_client is not None else ServiceClient(endpoint=endpoint)
+    if training_client is not None:
+        tc = training_client
+    else:
+        tc = svc.create_lora_training_client(
+            base_model=plan.base_model,
+            rank=k["rank"],
+            modalities=k["modalities"],
+            lora_targets=LoraTargets(
+                language=k["language_lora"],
+                vision_encoder=k["vision_encoder_lora"],
+                mm_projector=k["mm_projector_lora"],
+            ),
+        )
     reward_fn = reward_fn or _exact_match_toy
     prompts = list(prompts) if prompts else [list(range(10, 26))]
     writer = RunMetricsWriter(run_dir) if run_dir else None
@@ -429,7 +440,8 @@ def run_grpo(
     finally:
         if sample_svc is not None:
             sample_svc.close()
-        svc.close()
+        if close_clients and owns_svc:
+            svc.close()
 
     return GRPOResult(
         plan=plan,
