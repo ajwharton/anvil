@@ -105,12 +105,14 @@ def _observe_html(run_id: str) -> str:
  h2{{font-size:13px;color:#8b949e;text-transform:uppercase;letter-spacing:.05em;margin:0 0 10px}}
  .card{{background:#161b22;border:1px solid #30363d;border-radius:8px;padding:16px;margin:0 0 16px}}
  #trip{{display:none;background:#3d1d1d;border:1px solid #f85149;color:#f85149;padding:8px 12px;border-radius:6px;margin-bottom:16px;font-weight:600}}
+ #stop{{display:none;background:#1d2a3d;border:1px solid #58a6ff;color:#58a6ff;padding:8px 12px;border-radius:6px;margin-bottom:16px;font-weight:600}}
  .probe{{border-top:1px solid #30363d;padding:8px 0;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px;white-space:pre-wrap;word-break:break-word}}
  .meta{{color:#8b949e;font-size:12px;margin-top:8px}}
  canvas{{width:100%;background:#0d1117;border:1px solid #21262d;border-radius:4px}}
 </style></head><body>
 <h1>anvil observe — {run_id}</h1>
 <div id="trip">&#9888; ADVANTAGE COLLAPSED — group reward std &asymp; 0, gradient signal dead</div>
+<div id="stop">&#9632; EARLY STOP — run abandoned (dead signal streak); no more power burn</div>
 <div class="card"><h2>reward_mean/step (blue) &middot; group reward std (orange)</h2>
 <canvas id="chart" width="900" height="220"></canvas>
 <div class="meta" id="laststep">waiting for first step&hellip;</div></div>
@@ -119,27 +121,30 @@ def _observe_html(run_id: str) -> str:
 const rid = {json.dumps(run_id)};
 const EPS = 1e-8;
 let recs = [];
+let stopEvt = null;
+function stepRecs() {{ return recs.filter(r => r.type === 'step' || (r.reward_mean != null && r.type !== 'event')); }}
 function draw() {{
   const c = document.getElementById('chart'), ctx = c.getContext('2d');
   ctx.clearRect(0, 0, c.width, c.height);
-  if (!recs.length) return;
+  const steps = stepRecs();
+  if (!steps.length) return;
   const pad = 30, W = c.width - 2*pad, H = c.height - 2*pad;
-  const vals = recs.flatMap(r => [r.reward_mean || 0, r.group_reward_std_mean || 0]);
+  const vals = steps.flatMap(r => [r.reward_mean || 0, r.group_reward_std_mean || 0]);
   const maxV = Math.max(1e-9, ...vals), minV = Math.min(0, ...vals);
-  const n = Math.max(recs.length - 1, 1);
+  const n = Math.max(steps.length - 1, 1);
   const x = i => pad + W*i/n, y = v => pad + H*(1 - (v - minV)/(maxV - minV));
   ctx.strokeStyle = '#30363d'; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(pad, y(0)); ctx.lineTo(pad + W, y(0)); ctx.stroke();
   for (const s of [{{key:'reward_mean', color:'#58a6ff'}}, {{key:'group_reward_std_mean', color:'#f0883e'}}]) {{
     ctx.strokeStyle = s.color; ctx.lineWidth = 2; ctx.beginPath();
     let started = false;
-    recs.forEach((r, i) => {{
+    steps.forEach((r, i) => {{
       const v = r[s.key]; if (v == null) return;
       if (started) ctx.lineTo(x(i), y(v)); else {{ ctx.moveTo(x(i), y(v)); started = true; }}
     }});
     ctx.stroke();
   }}
-  const last = recs[recs.length - 1];
+  const last = steps[steps.length - 1];
   let sync = '';
   if (last.adapter_synced === true) sync = ' · adapter SYNC';
   else if (last.adapter_synced === false) sync = ' · adapter held';
@@ -149,8 +154,13 @@ function draw() {{
     + ' · loss ' + (last.loss == null ? '—' : last.loss.toFixed(5))
     + (last.is_mean_ratio != null ? ' · IS ratio ' + last.is_mean_ratio.toFixed(4) : '')
     + sync
-    + (last.sample_endpoint ? ' · sample ' + last.sample_endpoint : '');
+    + (last.sample_endpoint ? ' · sample ' + last.sample_endpoint : '')
+    + (stopEvt ? ' · EARLY STOP ' + (stopEvt.reason || '') : '');
   document.getElementById('trip').style.display = (last.group_reward_std_mean < EPS) ? '' : 'none';
+  document.getElementById('stop').style.display = stopEvt ? '' : 'none';
+  if (stopEvt) document.getElementById('stop').textContent =
+    '■ EARLY STOP — ' + (stopEvt.reason || 'dead signal') + ' at step ' + stopEvt.step
+    + ' (abandoned; no further train steps)';
 }}
 function loadProbes() {{
   fetch('/api/observe/' + rid + '/probes?tail=24').then(r => r.ok ? r.json() : null).then(d => {{
@@ -167,7 +177,12 @@ function loadProbes() {{
   }});
 }}
 const es = new EventSource('/api/observe/' + rid + '/metrics/stream');
-es.onmessage = ev => {{ recs.push(JSON.parse(ev.data)); draw(); }};
+es.onmessage = ev => {{
+  const rec = JSON.parse(ev.data);
+  recs.push(rec);
+  if (rec.type === 'event' && rec.event === 'early_stop') stopEvt = rec;
+  draw();
+}};
 loadProbes(); setInterval(loadProbes, 4000);
 </script></body></html>"""
 

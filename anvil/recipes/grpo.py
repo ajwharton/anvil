@@ -94,14 +94,14 @@ class GRPOResult:
     losses: list[float]
     adapter_id: str
     sync_count: int = 0
+    early_stop_reason: str | None = None
 
 
-def build_plan(base_model: str, **overrides: Any) -> RecipePlan:
-    return plan_recipe(
-        base_model=base_model,
-        pattern=JobPattern.RL_VERIFIABLE,
-        overrides=overrides or None,
-    )
+# Default: after this many consecutive dead-signal steps, abandon the run.
+DEFAULT_EARLY_STOP_PATIENCE = 8
+DEFAULT_GROUP_STD_EPS = 1e-8
+DEFAULT_REWARD_HI = 0.99
+DEFAULT_REWARD_LO = 0.01
 
 
 def group_advantages(rewards: Sequence[float]) -> list[float]:
@@ -110,6 +110,62 @@ def group_advantages(rewards: Sequence[float]) -> list[float]:
         return []
     mean = sum(rewards) / len(rewards)
     return [float(r) - mean for r in rewards]
+
+
+def classify_dead_step(
+    *,
+    reward_mean: float,
+    group_reward_std_mean: float,
+    group_std_eps: float = DEFAULT_GROUP_STD_EPS,
+    reward_hi: float = DEFAULT_REWARD_HI,
+    reward_lo: float = DEFAULT_REWARD_LO,
+) -> str | None:
+    """Return a short reason if this step has no useful GRPO signal, else None.
+
+    - ``ceiling``: reward saturated AND within-group std ~0 (all correct)
+    - ``floor``: reward ~0 AND within-group std ~0 (all wrong the same way)
+    - ``collapsed``: within-group std ~0 with mid reward (homogenized scores)
+    """
+    std = float(group_reward_std_mean)
+    r = float(reward_mean)
+    if std >= group_std_eps:
+        return None
+    if r >= reward_hi:
+        return "ceiling"
+    if r <= reward_lo:
+        return "floor"
+    return "collapsed"
+
+
+def early_stop_reason(
+    step_signals: Sequence[str | None],
+    *,
+    patience: int = DEFAULT_EARLY_STOP_PATIENCE,
+) -> str | None:
+    """If the last ``patience`` steps share the same dead-signal label, stop.
+
+    Different labels (e.g. floor then ceiling) reset the streak — only a
+    *stable* dead pattern abandons the run.
+    """
+    if patience < 1:
+        return None
+    if len(step_signals) < patience:
+        return None
+    window = list(step_signals[-patience:])
+    if any(s is None for s in window):
+        return None
+    label = window[0]
+    if label is None or any(s != label for s in window):
+        return None
+    return f"{label}_x{patience}"
+
+
+def build_plan(base_model: str, **overrides: Any) -> RecipePlan:
+    return plan_recipe(
+        base_model=base_model,
+        pattern=JobPattern.RL_VERIFIABLE,
+        overrides=overrides or None,
+    )
 
 
 def push_adapter_snapshot(
@@ -154,6 +210,11 @@ def run_grpo(
     sample_backend: Backend | None = None,
     sync_every: int = 1,
     sample_adapter_id: str | None = None,
+    early_stop: bool = True,
+    early_stop_patience: int = DEFAULT_EARLY_STOP_PATIENCE,
+    early_stop_group_std_eps: float = DEFAULT_GROUP_STD_EPS,
+    early_stop_reward_hi: float = DEFAULT_REWARD_HI,
+    early_stop_reward_lo: float = DEFAULT_REWARD_LO,
 ) -> GRPOResult:
     """Run the GRPO/IS loop.
 
@@ -166,11 +227,17 @@ def run_grpo(
     ``sample_backend``. Every ``sync_every`` steps the live LoRA is written
     via ``snapshot_for_sample`` and pushed with ``load_snapshot``. Leave both
     unset for Tier-0 in-process sampling from the train backend.
+
+    Early stop (default on): if advantage signal is dead for
+    ``early_stop_patience`` consecutive steps — reward ceiling, floor, or
+    homogenized mid rewards — abandon the run instead of burning power.
     """
     if sync_every < 1:
         raise ValueError(f"sync_every must be >= 1, got {sync_every}")
     if probe_every < 1:
         raise ValueError(f"probe_every must be >= 1, got {probe_every}")
+    if early_stop_patience < 1:
+        raise ValueError(f"early_stop_patience must be >= 1, got {early_stop_patience}")
 
     plan = plan or build_plan(base_model, **(overrides or {}))
     k = plan.as_knobs()
@@ -205,6 +272,8 @@ def run_grpo(
     mean_rewards: list[float] = []
     sync_count = 0
     last_ref: CheckpointRef | None = None
+    dead_signals: list[str | None] = []
+    stopped_reason: str | None = None
 
     try:
         for step_ix in range(steps):
@@ -295,28 +364,68 @@ def run_grpo(
                         reward=reward_fn("", toks),
                     )
 
-            fb = tc.forward_backward(batch, loss_fn=plan.loss_fn).result()
-            tc.optim_step(AdamParams(learning_rate=plan.learning_rate)).result()
-            losses.append(fb.loss)
-            mean_rewards.append(sum(step_rewards) / max(len(step_rewards), 1))
+            reward_mean = sum(step_rewards) / max(len(step_rewards), 1)
+            group_std_mean = (
+                sum(group_stds) / len(group_stds) if group_stds else 0.0
+            )
+            signal = classify_dead_step(
+                reward_mean=reward_mean,
+                group_reward_std_mean=group_std_mean,
+                group_std_eps=early_stop_group_std_eps,
+                reward_hi=early_stop_reward_hi,
+                reward_lo=early_stop_reward_lo,
+            )
+            dead_signals.append(signal)
+
+            # Skip optim when signal is already dead this step — saves a bit of
+            # power; we still log then check patience.
+            if signal is None:
+                fb = tc.forward_backward(batch, loss_fn=plan.loss_fn).result()
+                tc.optim_step(AdamParams(learning_rate=plan.learning_rate)).result()
+                step_loss = fb.loss
+                fb_metrics = dict(fb.metrics)
+            else:
+                step_loss = 0.0
+                fb_metrics = {
+                    "skipped_optim": 1.0,
+                    "dead_signal": 1.0,
+                }
+
+            losses.append(step_loss)
+            mean_rewards.append(reward_mean)
             if writer is not None:
                 writer.log_step(
                     step=step_ix,
-                    reward_mean=mean_rewards[-1],
+                    reward_mean=reward_mean,
                     reward_std=(
                         statistics.pstdev(step_rewards) if len(step_rewards) > 1 else 0.0
                     ),
-                    group_reward_std_mean=(
-                        sum(group_stds) / len(group_stds) if group_stds else 0.0
-                    ),
-                    loss=fb.loss,
+                    group_reward_std_mean=group_std_mean,
+                    loss=step_loss,
                     n_datums=len(batch),
-                    fb_metrics=dict(fb.metrics),
+                    fb_metrics=fb_metrics,
                     wall_time_s=time.monotonic() - t0,
                     adapter_synced=adapter_synced if resolved_sample is not None else None,
                     snapshot_path=snap_path,
                     sample_endpoint=sample_ep_label if resolved_sample is not None else None,
                 )
+
+            if early_stop:
+                reason = early_stop_reason(
+                    dead_signals, patience=early_stop_patience
+                )
+                if reason is not None:
+                    stopped_reason = reason
+                    if writer is not None:
+                        writer.log_event(
+                            step=step_ix,
+                            event="early_stop",
+                            reason=reason,
+                            reward_mean=reward_mean,
+                            group_reward_std_mean=group_std_mean,
+                            patience=early_stop_patience,
+                        )
+                    break
     finally:
         if sample_svc is not None:
             sample_svc.close()
@@ -329,6 +438,7 @@ def run_grpo(
         losses=losses,
         adapter_id=str(tc.adapter_id),
         sync_count=sync_count,
+        early_stop_reason=stopped_reason,
     )
 
 
