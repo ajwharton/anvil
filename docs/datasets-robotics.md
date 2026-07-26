@@ -20,8 +20,11 @@ Example JSONL  or  Trajectory JSON
 recipes: vlm_sft / (later) robot_offline RL
 ```
 
-Helpers: `anvil.data.ingest` (`examples_from_vlm_jsonl`, `put_images_from_paths`),
-`anvil.protocol.trajectory.Trajectory.to_vlm_sft_examples`.
+Helpers:
+
+- `anvil.data.convert` / `scripts/convert_robotics_corpus.py` — **episode pack or path JSONL → CAS + Anvil JSONL** (resumable, subsample)
+- `anvil.data.ingest` (`examples_from_vlm_jsonl`, `put_images_from_paths`)
+- `anvil.protocol.trajectory.Trajectory.to_vlm_sft_examples`
 
 ## Recommended open corpora
 
@@ -50,19 +53,60 @@ Licenses vary by subset (Apache / CC-BY / non-commercial). Check each source bef
 
 Never commit frames or multi‑GB shards to the Anvil git tree.
 
-## Suggested conversion path (Bridge / OXE smoke)
+## Conversion pipeline (3.B)
 
-1. Extract a **tiny** episode set (e.g. 10–100 trajectories) with RGB frames + language instruction + action summary text.  
-2. `LocalMediaStore("/mnt/data/anvil-media").put_path(frame.jpg)` per frame.  
-3. Emit JSONL:
+### Episode pack intermediate (recommended)
+
+Raw Bridge/OXE/RLDS is multi‑GB and TF-heavy. On the lab host, materialize a
+small **episode pack** (or use an existing path JSONL), then run Anvil’s
+converter (no TensorFlow required):
+
+```text
+source/
+  ep_0001/
+    meta.json          # language_instruction, actions[], optional license
+    frames/0000.jpg
+  ep_0002/
+    ...
+```
+
+```bash
+# synthetic smoke (CI / laptop)
+python scripts/convert_robotics_corpus.py --demo --max-rows 100 \
+  --media-root /tmp/anvil-media \
+  --output /tmp/anvil_jsonl/demo.jsonl
+
+# lab — Bridge-like pack → 1k rows (resume-safe)
+python scripts/convert_robotics_corpus.py \
+  --source /mnt/data/datasets/bridge_v2/episode_pack \
+  --media-root /mnt/data/anvil-media \
+  --output /mnt/data/datasets/anvil_jsonl/bridge_1k.jsonl \
+  --dataset bridge_v2 \
+  --license "BridgeData V2 — check RAIL terms before redistribute" \
+  --max-rows 1000 \
+  --frames-per-episode 4
+
+# train
+python scripts/robot_vlm_sft_demo.py --source jsonl \
+  --jsonl /mnt/data/datasets/anvil_jsonl/bridge_1k.jsonl \
+  --media-root /mnt/data/anvil-media \
+  --run-id bridge-1k-sft --steps 50
+```
+
+Output row shape:
 
 ```json
-{"instruction": "pick up the blue cube", "images": ["cas://sha256/…"], "response": "close gripper; lift", "dataset": "bridge_v2", "episode_id": "ep0"}
+{"instruction": "pick up the blue cube", "images": ["cas://sha256/…"], "response": "0.10 0.00 …", "dataset": "bridge_v2", "episode_id": "ep0", "license": "…"}
 ```
+
+Knobs: `--max-rows`, `--max-episodes`, `--frames-per-episode`, `--row-mode per_frame|keyframe`,
+`--no-resume` (default **resumes** via `<output>.state.json`).
+
+Path JSONL with local image paths: `--kind path_jsonl --source rows.jsonl`.
 
 Or build `Trajectory` objects in Python and call `to_vlm_sft_examples()`.
 
-4. `examples_from_vlm_jsonl(...)` → `run_vlm_sft(..., examples=...)` on forge with Qwen2.5-VL-3B + LoRA (encoder frozen by default).
+`examples_from_vlm_jsonl(...)` → `run_vlm_sft(..., examples=...)` on forge with Qwen2.5-VL-3B + LoRA (encoder frozen by default).
 
 ## RL vs SFT
 
@@ -83,9 +127,9 @@ vision must not lag text GRPO.
 
 | Goal | Roadmap |
 |------|---------|
-| Lab corpus on NVMe in Anvil shape (Bridge / OXE subsample / Robo2VLM) | 3.B |
-| Production convert pipeline (RLDS/LeRobot → CAS + JSONL, resumable) | 3.B |
-| Scale ladder 1k → 5k → 50k+ exercised on forge | 3.B |
+| Lab corpus on NVMe in Anvil shape (Bridge / OXE subsample / Robo2VLM) | 3.B (operator fills pack; converter shipped) |
+| Production convert pipeline (episode_pack / path JSONL → CAS + JSONL, resumable) | 3.B **done** |
+| Scale ladder 1k → 5k → 50k+ exercised on forge | 3.B (lab; CLI supports `--max-rows`) |
 | VLM/SFT `metrics.jsonl` + live `/observe` (**done**); vision probes still open | 3.C / P.Sufficiency |
 | Checkpoint/resume + multi-hour VLM job ops | 3.D / P.Ops |
 | Offline robot RL + action tokenization + vision on-policy RL | Phase 4 |
@@ -102,8 +146,9 @@ vision must not lag text GRPO.
 
 ### Product corpus (required)
 
-- [ ] Bridge/Robo2VLM slice → `anvil_jsonl` + CAS on lab NVMe  
-- [ ] Documented converter CLI (subsample, resume, license)  
+- [x] Documented converter CLI (`scripts/convert_robotics_corpus.py`: subsample, resume, license)  
+- [x] Synthetic episode_pack → `anvil_jsonl` + CAS (CI + `--demo`)  
+- [ ] Bridge/Robo2VLM slice extracted to episode_pack on lab NVMe  
 - [ ] `run_vlm_sft` on ≥1k real rows with **observe** loss curve  
 - [ ] Held-out qualitative sample after export  
 - [ ] Multi-hour resume test  

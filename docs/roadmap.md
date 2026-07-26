@@ -187,10 +187,11 @@ path. Re-open only against the high bar in the spike writeup.
 - [x] VLM SFT recipe wiring (`run_vlm_sft` + renderer); **real frames on forge** (P3.3 + pixel fusion + LeRobot demo, 2026-07-25)  
 - [x] Freeze/LoRA knobs for encoder vs projector vs LM — recipe plans + LocalBackend enforce  
 
-### 3.B Robotics data at product scale *(open — required)*
+### 3.B Robotics data at product scale *(partial — required)*
 
-- [ ] Lab corpus on disk in Anvil shape (Bridge / OXE subsample / Robo2VLM → `anvil_jsonl` + CAS)  
-- [ ] Production conversion pipeline (RLDS/LeRobot → frames + language/action text; resumable; subsample; licenses)  
+- [x] Production conversion pipeline (`anvil.data.convert` + `scripts/convert_robotics_corpus.py`: episode_pack / path JSONL → CAS + JSONL; resumable; subsample; license field)  
+- [x] Documented lab layout + Bridge-first path (`docs/datasets-robotics.md`)  
+- [ ] Lab corpus on disk in Anvil shape (operator extracts Bridge/OXE → episode_pack, then convert)  
 - [ ] Scale ladder 1k → 5k → 50k+ exercised on forge  
 - [ ] Real-corpus smoke checklist green (`docs/datasets-robotics.md`)  
 
@@ -296,3 +297,4 @@ For a spin-off agent session:
 | 2026-07-19 | **J-Lens spike parked:** 7B mixed fit (~4.9 h, WikiText+math) + solve → 6/6 strong answer hits, mean order **0.5**, sanity 0.95–1.0; J2 entry still not met. **Shelve J2–J5**; keep J1 + CLI. Product focus = RL debugger without J-Lens. Writeup §Fifth pass |
 | 2026-07-26 | **Live sufficiency thesis:** product.md + roadmap §P.Sufficiency / P.Ops / P.Decide — instrument all post-training mid-run; decide “enough” and shift gears; southward-turn detection; not fire-and-forget full budgets. Vision 3.B–3.D and Phase 4 robot goals inherit this SSOT |
 | 2026-07-26 | **P3.6 / 3.C (metrics):** `RunMetricsWriter.log_sft_step`; `run_sft`/`run_vlm_sft(run_dir=…)` → `metrics.jsonl` (loss, wall, n_image_refs, job=sft|vlm_sft); observe UI charts loss for SFT/VLM; `vlm_smoke`/`robot_vlm_sft_demo` `--run-id`. Probes + vision early-stop still open |
+| 2026-07-26 | **P3.5 / 3.B (convert):** `anvil.data.convert` + `scripts/convert_robotics_corpus.py` — episode_pack / path_jsonl → CAS + Anvil JSONL; resume state; max-rows / frames-per-episode; license field; `--demo` synthetic pack. Lab Bridge extract + 1k train still operator/forge |
