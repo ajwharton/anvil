@@ -14,8 +14,11 @@ Thanks for helping democratize post-training—and for keeping it **operable by 
 ```bash
 python3 -m venv .venv && source .venv/bin/activate
 pip install -e ".[dev,web]"
-pytest
+pytest -q
 ```
+
+CI (GitHub Actions) runs the same `pytest` suite on every PR and push to `main`.  
+Do not merge green-looking demos without a green test run — lab GPU smokes are extra, not a substitute for unit tests.
 
 Optional: `[mcp]` for `anvil mcp`, `[local]` / `[hf]` for GPU/VLM paths.  
 `fake://` powers many unit tests without a GPU.

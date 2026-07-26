@@ -6,21 +6,24 @@ Writes ``metrics.jsonl`` / ``probes.jsonl`` under
 hosts, else ``~/.anvil/observe``). Point anvil-web at the same root and open
 ``/observe/<run_id>`` — reward curves and probes stream via SSE.
 
+Verifiable rewards live in ``anvil.recipes.verifiable`` (unit-tested). Default
+``--problem hard`` uses multi-digit arithmetic so small bases are not already
+saturated at reward=1 (unlike ``2+2``).
+
 Examples::
 
   # laptop / CI (fake backend — proves observe wiring)
   python scripts/grpo_observe_demo.py --endpoint fake:// --steps 5
 
-  # forge — real LoRA GRPO on Qwen2.5-1.5B arithmetic
+  # forge — real LoRA GRPO on Qwen2.5-1.5B
   python scripts/grpo_observe_demo.py \\
     --endpoint local:// \\
     --model /mnt/data/models/qwen2.5-1.5b-instruct \\
-    --steps 30 --group-size 4 \\
-    --run-id grpo-arith-demo
+    --problem hard --steps 40 --group-size 8 \\
+    --run-id grpo-hard-demo
 
-  # then (same host or Mac with shared FS / ssh tunnel):
   ANVIL_OBSERVE_ROOT=/mnt/data/anvil-observe anvil-web --host 0.0.0.0 --port 7600
-  # open http://forge:7600/observe/grpo-arith-demo
+  # open http://forge:7600/observe/grpo-hard-demo
 """
 
 from __future__ import annotations
@@ -28,9 +31,14 @@ from __future__ import annotations
 import argparse
 import os
 import re
-import sys
 import time
 from pathlib import Path
+
+from anvil.recipes.verifiable import (
+    DEFAULT_HARD_PROBLEMS,
+    detokenize_via_tokenizer,
+    exact_integer_reward,
+)
 
 
 def _default_observe_root() -> Path:
@@ -62,67 +70,19 @@ def _chat_prompt_ids(tok, user_text: str) -> list[int]:
     return [int(t) for t in tok.encode(user_text, add_special_tokens=True)]
 
 
-def _arith_problems() -> list[tuple[str, str]]:
-    """(user prompt, canonical answer digits). Small verifiable set."""
-    pairs = [
+def _easy_problems() -> list[tuple[str, str]]:
+    return [
         ("What is 2+2? Reply with only the number.", "4"),
         ("What is 3+5? Reply with only the number.", "8"),
-        ("What is 7-2? Reply with only the number.", "5"),
-        ("What is 4*3? Reply with only the number.", "12"),
-        ("What is 9+1? Reply with only the number.", "10"),
-        ("What is 6/2? Reply with only the number.", "3"),
-        ("What is 5+5? Reply with only the number.", "10"),
-        ("What is 8-3? Reply with only the number.", "5"),
     ]
-    return pairs
 
 
-def _make_reward_and_detok(tok, answer_by_prompt_key: dict[str, str]):
-    """Reward: 1.0 if first integer in completion matches gold, else 0.0."""
-
-    def detokenize(tokens) -> str:
-        return tok.decode(list(tokens), skip_special_tokens=True)
-
-    def reward_fn(_text: str, tokens) -> float:
-        # prompt identity is not passed by run_grpo — score by answer pattern only
-        # when a single global answer set is used we match ANY gold (loose) or
-        # extract first integer and check membership. For product demo we use
-        # per-completion: first integer in text must equal one of the golds
-        # that appear as a full match preference.
-        text = detokenize(tokens).strip()
-        m = re.search(r"-?\d+", text)
-        if not m:
-            return 0.0
-        got = m.group(0)
-        # Prefer exact gold set membership
-        if got in answer_by_prompt_key.values():
-            return 1.0
-        return 0.0
-
-    return reward_fn, detokenize
-
-
-def _make_exact_answer_reward(tok, gold: str):
-    """Verifiable reward for a *single* gold answer (completion-only API).
-
-    Stock ``run_grpo`` only passes completion tokens into ``reward_fn``, so a
-    multi-prompt gold *set* is too loose (any correct number from any problem
-    scores 1). Use one problem per run for a clean reward curve, or extend
-    run_grpo later to pass prompt identity.
-    """
-
-    def detokenize(tokens) -> str:
-        return tok.decode(list(tokens), skip_special_tokens=True)
-
-    def reward_fn(_text: str, tokens) -> float:
-        text = detokenize(tokens).strip()
-        # First integer in the completion must equal gold exactly.
-        m = re.search(r"-?\d+", text)
-        if not m:
-            return 0.0
-        return 1.0 if m.group(0) == gold else 0.0
-
-    return reward_fn, detokenize
+def select_problem(kind: str, index: int) -> tuple[str, str]:
+    """Return (user_prompt, gold) for ``easy`` / ``hard`` problem banks."""
+    bank = list(DEFAULT_HARD_PROBLEMS) if kind == "hard" else _easy_problems()
+    if not bank:
+        raise ValueError("empty problem bank")
+    return bank[index % len(bank)]
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -138,6 +98,18 @@ def main(argv: list[str] | None = None) -> int:
     p.add_argument("--rank", type=int, default=16)
     p.add_argument("--max-tokens", type=int, default=16)
     p.add_argument(
+        "--problem",
+        choices=("hard", "easy"),
+        default="hard",
+        help="hard = multi-digit (default); easy = 2+2-style (often already solved)",
+    )
+    p.add_argument(
+        "--problem-index",
+        type=int,
+        default=0,
+        help="which problem in the bank (mod length)",
+    )
+    p.add_argument(
         "--observe-root",
         default=None,
         help="override ANVIL_OBSERVE_ROOT (metrics parent dir)",
@@ -149,11 +121,6 @@ def main(argv: list[str] | None = None) -> int:
     )
     p.add_argument("--probe-every", type=int, default=1)
     p.add_argument(
-        "--print-url",
-        action="store_true",
-        help="print observe URL path and sleep so web can attach first",
-    )
-    p.add_argument(
         "--attach-wait",
         type=float,
         default=0.0,
@@ -163,12 +130,10 @@ def main(argv: list[str] | None = None) -> int:
 
     observe_root = Path(args.observe_root) if args.observe_root else _default_observe_root()
     run_id = args.run_id or f"grpo-{time.strftime('%Y%m%d-%H%M%S')}"
-    # Safe id: alnum + dash only (web _SAFE_RUN_ID)
     if not re.fullmatch(r"[A-Za-z0-9][A-Za-z0-9._-]{0,80}", run_id):
         raise SystemExit(f"bad run-id {run_id!r}")
     run_dir = observe_root / run_id
     run_dir.mkdir(parents=True, exist_ok=True)
-    # Touch empty metrics so /observe/{id} 200s before first step
     metrics_path = run_dir / "metrics.jsonl"
     if not metrics_path.exists():
         metrics_path.touch()
@@ -185,7 +150,6 @@ def main(argv: list[str] | None = None) -> int:
     from anvil.recipes.grpo import run_grpo
 
     if args.endpoint.startswith("fake://"):
-        # Fake path: integer prompts + toy even-token reward (unit-test shape)
         prompts = [list(range(10, 26)), list(range(20, 36)), list(range(30, 46))]
         probes = [list(range(10, 18)), list(range(20, 28))]
         result = run_grpo(
@@ -202,16 +166,14 @@ def main(argv: list[str] | None = None) -> int:
         )
     else:
         tok = _load_tokenizer(args.model)
-        # Single verifiable problem so completion-only reward stays meaningful.
-        # (Multi-prompt needs prompt-aware reward_fn in run_grpo — later.)
-        user, gold = _arith_problems()[0]
+        user, gold = select_problem(args.problem, args.problem_index)
         prompt_ids = _chat_prompt_ids(tok, user)
-        # Repeat the same prompt so each step has a small "batch" of groups.
         prompts = [list(prompt_ids) for _ in range(4)]
         probes = [list(prompt_ids)]
-        reward_fn, detokenize = _make_exact_answer_reward(tok, gold)
+        detok = detokenize_via_tokenizer(tok)
+        reward_fn = exact_integer_reward(detok, gold)
         print(
-            f"problem={user!r} gold={gold!r} "
+            f"problem={user!r} gold={gold!r} bank={args.problem} "
             f"prompt_groups={len(prompts)} group_size={args.group_size} steps={args.steps}"
         )
         result = run_grpo(
@@ -224,7 +186,7 @@ def main(argv: list[str] | None = None) -> int:
             run_dir=str(run_dir),
             probes=probes,
             probe_every=args.probe_every,
-            detokenize=detokenize,
+            detokenize=detok,
             overrides={
                 "rank": args.rank,
                 "max_tokens": args.max_tokens,
