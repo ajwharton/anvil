@@ -224,26 +224,27 @@ work inside our harness *or* drop into yours.
 
 Detail: [`agentic-control.md`](agentic-control.md) · prompts: [`prompts/agent/`](../prompts/agent/).
 
-## Implications for the roadmap (guidance, not a new phase list)
+## Implications for the roadmap
 
-Prioritize work that increases **live sufficiency** and **agent operability**
-for **all** post-training jobs (text and vision):
+Prioritize the **Expert ladder** in [`roadmap.md`](roadmap.md) — not open
+historical phase checkboxes alone:
+
+| Ladder | Product bar |
+|--------|-------------|
+| **Expert-v0** | Ship one specialist: place data → train under observe → export |
+| **Expert-v1** | Method ladder + cliffs agents can act on |
+| **Expert-v2** | Multi-hour / large-corpus / org-scale ops |
+
+Supporting priorities (live sufficiency + agent operability) map into that ladder:
 
 1. **SSOT APIs** — every web panel has a stable JSON/SSE counterpart.  
-2. **Observe for every train path** — SFT/VLM/preference emit metrics + probes
-   the way GRPO already does; one `/observe` SSOT.  
-3. **Cliff library** — per-method tripwires (advantage collapse, IS drift,
-   probe regression, preference collapse, SFT probe worsening).  
-4. **Early-stop + recipe queue** — abandon dead stages; tee up the next stage
-   or method without burning power (already landing for GRPO; extend to SFT/VLM).  
-5. **Long-job ops** — checkpoint/resume, batching notes, multi-hour lab smokes
-   for any large corpus (not vision-only).  
-6. **MCP + live control** — pause, patch knobs, hot-swap sample adapter, method
-   switch without process death where possible.  
-7. **Recipe graph** — “if cliff X, try recipe Y” edges agents can follow
-   (human-editable, not hardcoded magic).  
-8. **Vision/robot data paths** — convert pipelines + scale ladder; same
-   observe/sufficiency loop as text.
+2. **Observe for every train path** — SFT/VLM done for metrics; probes + DPO → v0/v1.  
+3. **Cliff library** — per-method tripwires → **v1**.  
+4. **Early-stop + recipe queue** — GRPO done; SFT/VLM + method switch → **v1**.  
+5. **Long-job ops** — checkpoint/resume, multi-hour → **v2**.  
+6. **MCP + live control** — pause/patch/export; exercise watch→act → **v0/v1**.  
+7. **Recipe graph** — “if cliff X, try Y” → **v1**.  
+8. **Vision/robot paths** — convert done; lab corpus + probes → **v0**; robot RL/edge → **Path**.
 
 Human UI remains essential for trust and debugging. It should be a client of
 the same control plane, not a separate parallel system.
