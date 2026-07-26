@@ -8,7 +8,7 @@
 
 **Outcome default:** advance the next roadmap phase gate without expanding scope.  
 **Track:** Lab / OSS product (not mia-rl Ship coach).  
-**Current:** Phase 3 vision + agent control plane v0 (MCP/harness).
+**Current:** Phase 3 vision **productization** (robotics data + VLM observe + long jobs) after core VLM platform; agent control plane v0 (MCP/harness).
 
 State: `Track: anvil | Outcome: <one line>`
 

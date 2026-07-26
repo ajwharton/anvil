@@ -74,12 +74,35 @@ Or build `Trajectory` objects in Python and call `to_vlm_sft_examples()`.
 
 OpenVLA-style **action tokenization** is a recipe concern (how `response` is spelled), not a change to the four verbs.
 
+## Product goals (roadmap §3.B–3.D)
+
+These are **explicit Anvil product goals**, not nice-to-haves:
+
+| Goal | Roadmap |
+|------|---------|
+| Lab corpus on NVMe in Anvil shape (Bridge / OXE subsample / Robo2VLM) | 3.B |
+| Production convert pipeline (RLDS/LeRobot → CAS + JSONL, resumable) | 3.B |
+| Scale ladder 1k → 5k → 50k+ exercised on forge | 3.B |
+| VLM/SFT `metrics.jsonl` + live `/observe` (+ vision probes) | 3.C |
+| Checkpoint/resume + multi-hour VLM job ops | 3.D |
+| Offline robot RL + action tokenization + vision on-policy RL | Phase 4 |
+
 ## Smoke checklist
 
-- [ ] Media store put/get for PNG/JPEG on forge  
-- [ ] 1 JSONL row with 1 frame → `run_vlm_sft` fake:// then local://  
-- [ ] Qwen2.5-VL-3B LoRA, `vision_encoder_lora=False`, projector+LM on  
-- [ ] Export PEFT; qualitative sample on a held-out frame  
+### Platform (toy / synthetic — largely done)
+
+- [x] Media store put/get for PNG/JPEG on forge (lab demos)  
+- [x] 1 JSONL/synthetic row with 1 frame → `run_vlm_sft` fake:// then local://  
+- [x] Qwen2.5-VL-3B LoRA, `vision_encoder_lora=False`, projector+LM on (smoke)  
+- [~] Export PEFT; qualitative sample on a held-out frame (smoke only; real corpus TBD)  
+
+### Product corpus (required before “large robotics set under Anvil”)
+
+- [ ] BridgeData V2 (or Robo2VLM) **slice** converted to `anvil_jsonl` + CAS on lab NVMe  
+- [ ] Documented converter CLI (inputs, subsample, resume, license note)  
+- [ ] `run_vlm_sft` on ≥1k real rows with **observe** loss curve  
+- [ ] Held-out frame/episode qualitative sample after export  
+- [ ] Multi-hour resume test (kill mid-run → continue)  
 
 ## Out of scope (for now)
 

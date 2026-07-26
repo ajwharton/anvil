@@ -139,28 +139,65 @@ the base never changes, only the LoRA adapter does, and that is megabytes):
 **Non-goals:** per-token J-lens on rollouts; J-Lens as load-bearing product
 path. Re-open only against the high bar in the spike writeup.
 
-## Phase 3 — Vision first-class *(current)*
+## Phase 3 — Vision first-class *(current — core done; productization open)*
 
 **Working plan:** [`docs/phase3-vision.md`](phase3-vision.md) · **datasets:** [`docs/datasets-robotics.md`](datasets-robotics.md)
 
-**Exit criteria**
+**Product bar:** take a ~3–4B VLM (e.g. Qwen2.5-VL-3B), fine-tune on a **real robotics corpus** (not toy frames), and **watch the run live** on Anvil the same way we watch GRPO — then scale toward large sets without one-off scripts.
+
+### 3.A Core platform *(done)*
 
 - [x] Media store (content-addressed refs) — `LocalMediaStore` + `put_path` / path resolve  
 - [x] Multimodal message schema + serde — `Example`/`Message` public JSON; **Trajectory** for robot demos  
-- [x] JSONL / path ingest — `anvil.data.ingest` (Bridge/OXE convert *into* this shape)  
+- [x] JSONL / path ingest helpers — `anvil.data.ingest` (shape only; bulk converters still open below)  
 - [x] Multimodal **renderer** (processor-backed `HFVLMRenderer`) + train/sample prefix tests  
-
 - [x] VLM SFT recipe wiring (`run_vlm_sft` + renderer); **real frames on forge** (P3.3 + pixel fusion + LeRobot demo, 2026-07-25)  
-- [x] Freeze/LoRA knobs for encoder vs projector vs LM — recipe plans + LocalBackend enforce
+- [x] Freeze/LoRA knobs for encoder vs projector vs LM — recipe plans + LocalBackend enforce  
 
-**Near-term test sources:** BridgeData V2, OXE subsample, LeRobot hub sets, Robo2VLM — see datasets doc.
+### 3.B Robotics data at product scale *(open — required)*
 
-## Phase 4 — Robot / Jetson edge loop
+- [ ] **Lab corpus on disk in Anvil shape** — BridgeData V2 and/or OXE subsample (and optional Robo2VLM) pulled to lab NVMe as `anvil_jsonl/` + `LocalMediaStore` CAS frames (not just docs layout)  
+- [ ] **Production conversion pipeline** — scripted OXE / Bridge / RLDS / LeRobot → RGB frames + language instruction + action (or VQA) text → `cas://` + Example JSONL; resumable, subsample flags, license notes; **not** one-off notebook convert  
+- [ ] **Scale ladder** — documented + exercised: 1k → 5k → 50k+ rows (or trajectory-equivalent) on forge without hand-editing JSONL  
+- [ ] **Smoke checklist closed** — items in `docs/datasets-robotics.md` (media put/get, JSONL → `run_vlm_sft`, PEFT export, held-out qualitative sample) all green on a **real** corpus slice  
+
+### 3.C Watch vision train like RL *(open — required)*
+
+- [ ] **VLM/SFT observability SSOT** — `run_vlm_sft` / SFT loop emit `metrics.jsonl` (loss, step, wall time, n_image_refs, optional samples) via `RunMetricsWriter` under `ANVIL_OBSERVE_ROOT`  
+- [ ] **Live web for vision runs** — same `/observe/{run_id}` (or shared panel) streams SFT curves; control-plane lists vision runs next to GRPO  
+- [ ] **Probes for VLM** — fixed held-out frames sampled periodically (greedy caption / instruction response) into `probes.jsonl` so eyes catch collapse before export  
+
+### 3.D Multi-hour / large-job ops *(open — required)*
+
+- [ ] **Checkpoint + resume** — mid-run PEFT/adapter + optimizer step; restart without replaying the full corpus  
+- [ ] **Batching & throughput** — sensible default batch/accum for 3B VLM LoRA on Spark; documented expected tokens/frames/hour  
+- [ ] **Long-run lab smoke** — `lab_smokes` (or sibling) profile that runs multi-hour VLM SFT against a real robotics slice and leaves an observe report  
+- [ ] **Optional multi-worker path** — train/sample split for vision when single-process is the wall (may share Phase 2 vLLM sample worker)  
+
+**Near-term data sources (product):** BridgeData V2 first; OXE subsample / Robo2VLM / LeRobot as converters land — see datasets doc.
+
+## Phase 4 — Robot policy + Jetson edge loop
+
+**Product bar:** offline (then on-policy) robot learning under the four verbs, with action recipes and edge export — not text-only forever.
 
 **Exit criteria**
 
-- [ ] Offline trajectory format (obs/action/reward + frame refs)  
-- [ ] Export path documented (ONNX and/or TRT and/or GGUF as applicable)  
+### 4.A Offline robot learning *(open — required)*
+
+- [ ] Offline trajectory format productized (obs/action/reward + frame refs) — schema exists; **trainer + recipe** (`robot_offline`) must land  
+- [ ] **Action tokenization recipe** — document and implement how continuous / discrete actions become assistant `response` tokens (OpenVLA-style string actions OK for v1; no claim of proprietary API compatibility)  
+- [ ] Offline trajectory SFT/RL loop on a real robotics subset with observe metrics  
+- [ ] Eval harness: held-out episodes / success proxies logged next to train metrics  
+
+### 4.B On-policy vision RL *(open — required)*
+
+- [ ] Multimodal sample path for vision rollouts (image refs in GRPO/sample loop)  
+- [ ] Vision-aware verifiable or rubric rewards (e.g. instruction success, format, grasp rubric)  
+- [ ] Recipe queue support for vision stages (early-stop + next robot task)  
+
+### 4.C Edge / Jetson *(open — required for dual product thesis)*
+
+- [ ] Export path documented (ONNX and/or TRT and/or GGUF / PEFT merge as applicable)  
 - [ ] Distill or small-student path for edge FPS/power notes  
 - [ ] Optional `backend=jetson` sample stub (may be remote process)  
 
@@ -226,3 +263,5 @@ For a spin-off agent session:
 | 2026-07-18 | Docs dual-focus pass: README/start/handoff/governance/design/CONTRIBUTING/Agents/prompts/pyproject/GH description — individual + agentic control facing narrative |
 | 2026-07-18 | **J-Lens measurement stack:** v3 `solve` GO on answer readout (scoring artifacts fixed); J1 schema + spike bridge. Later same day: rank-resolved strong hits + 1.5B proper fit — J2 order still fails (mean 0.167). |
 | 2026-07-19 | **J-Lens spike parked:** 7B mixed fit (~4.9 h, WikiText+math) + solve → 6/6 strong answer hits, mean order **0.5**, sanity 0.95–1.0; J2 entry still not met. **Shelve J2–J5**; keep J1 + CLI. Product focus = RL debugger without J-Lens. Writeup §Fifth pass |
+| 2026-07-25–26 | Phase 3 **core** VLM path closed (pixel fusion, LeRobot smoke); productized text GRPO + observe + early-stop + RL recipe queue + lab smokes |
+| 2026-07-26 | **Roadmap productization goals locked:** Phase 3.B robotics corpus + convert pipeline + scale ladder; 3.C VLM/SFT live observe + probes; 3.D multi-hour checkpoint/resume; Phase 4 offline robot RL, action tokenization, vision on-policy RL, Jetson export — explicit required goals, not optional stretch |
