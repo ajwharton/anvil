@@ -2,47 +2,166 @@
 
 Status legend: **todo** · **doing** · **done** · **blocked**
 
-## North star
+**How to use this file:** prioritize **Expert-v0 → v1 → v2** (product bar).  
+Historical **Phases 0–5** below are the build archive (what shipped when). Map
+open work into the Expert ladder first; do not start net-new work only because
+a Phase 3/4 checkbox is open if it does not close an Expert gap.
 
-**Purpose:** forge **sovereign domain experts** from base models (see `docs/product.md`).  
-Mechanics: four verbs, LoRA-first, train/sample consistency, vision in the data model, export to lab serve and **Jetson/edge**—**usable by individuals, optimized for agent control**.
-
-**Live sufficiency:** instrument every post-training job **while** data is applied (metrics, probes, cliffs)—not only after the budget ends—so operators and agents can decide **how much training is enough** and **when to shift gears** before the model turns southward.
-
-Success looks like: a researcher, roboticist, or **their agent** can SFT/RL a small LLM/VLM on own GPUs, **see cliffs and diminishing (or negative) returns as they form**, stop or advance recipes early, and change method without rewriting infrastructure.
-
-Product thesis: [`docs/product.md`](product.md) (esp. *The idea most people skip* + *Live sufficiency*).
+Product thesis: [`product.md`](product.md) · design workflow: [`design.md`](design.md) §1.0 · agent brief: [`agent-context.md`](agent-context.md)
 
 ---
 
-## Platform goal — Live post-training sufficiency *(cross-cutting; not vision-only)*
+## North star
 
-These goals apply to **SFT, preference, GRPO, VLM, robot offline**—any job that spends a corpus or on-policy steps. Vision/robotics slices in Phase 3–4 **inherit** this SSOT; they do not own it alone.
+**Purpose:** Anvil forges **sovereign domain experts** from base models.  
+**Mechanism:** live sufficiency — instrument every post-training job **while**
+data is applied so operators and agents decide **how much is enough** and
+**when to shift gears** before the model turns southward.
 
-### P.Sufficiency — Observe every train path *(required)*
+**Success:** a researcher, roboticist, org, or **their agent** can take a base
+model + domain data on **owned GPUs**, train under live metrics/probes, stop or
+switch methods with evidence, and **export an adapter they own**.
+
+```text
+  base + domain data (you)
+           │
+           ▼
+  place → recipe ladder → train under observe → decide enough / switch → export
+           │
+           ├── Expert-v0   ship one specialist (near-term bar)
+           ├── Expert-v1   method ladder + cliffs for agents
+           └── Expert-v2   scale ops (hours, large corpora, big bases)
+                    │
+                    ├── Path: robotics / edge
+                    ├── Path: org self-host
+                    └── Path: agent operator maturity
+```
+
+Mechanics stay: four verbs, LoRA-first, train/sample consistency, vision in the
+data model, export to lab serve and Jetson/edge — usable by individuals,
+optimized for agent control.
+
+---
+
+## Expert-v0 — Ship one specialist *(current bar)*
+
+**Exit:** documented path — domain data placed → SFT or VLM SFT (and/or GRPO when
+rewards exist) with live `/observe` → stop with evidence → PEFT export.  
+Not every method; **one** end-to-end expert smoke a human or agent can repeat.
+
+### Already landed (foundation)
+
+- [x] Phases 0–2.5 core — four verbs, local train, GRPO, vLLM sample, observe SSOT for RL  
+- [x] GRPO metrics + probes + early-stop + recipe queue  
+- [x] SFT / VLM SFT → `metrics.jsonl` + `/observe` loss charts (`log_sft_step`)  
+- [x] Convert pipeline — episode_pack / path JSONL → CAS + Anvil JSONL (CLI + resume)  
+- [x] Vision core — media CAS, VLM renderer, freeze defaults, forge VLM smoke  
+- [x] Agent control v0 — MCP/HTTP + [`agent-context.md`](agent-context.md) + prompt pack  
+
+### Open gaps (close these next)
+
+| Gap | Maps from historical | Notes |
+|-----|----------------------|--------|
+| [ ] Lab domain slice on NVMe (e.g. Bridge → episode_pack → 1k `anvil_jsonl` + CAS) | 3.B | Operator extract; converter exists |
+| [ ] Train that slice with **observe** + export PEFT | 3.B / 3.C | `run_vlm_sft(run_dir=…)` + demo scripts |
+| [ ] Held-out **probes** during SFT / VLM (not only final sample) | P.Sufficiency / 3.C | Text + frames |
+| [ ] **Expert smoke checklist** doc (data → train → observe → export) | new | Thin checklist in datasets or lab-smokes |
+| [ ] Agent can watch observe runs via MCP without HTML scrape | P.Decide (partial) | Tools exist; exercise end-to-end |
+
+**Recommended next Outcome:**  
+`Expert-v0 — lab Bridge (or demo pack) → 1k rows → VLM SFT + observe + export`  
+(or: held-out frame probes on VLM SFT)
+
+---
+
+## Expert-v1 — Method ladder under live judgment
+
+**Exit:** operator can sequence methods (SFT ↔ preference ↔ GRPO) using live
+cliffs, not a fixed pre-run schedule; agents get machine-readable tripwires.
+
+- [ ] Preference (DPO/…) observe SSOT + family-specific cliffs  
+- [ ] Probes for **all** methods (held-out prompts/frames mid-run)  
+- [ ] Southward-turn detectors (probe↓ while reward↑, homogenization, …) as flags  
+- [ ] Method-switch recipes (“if cliff X → try Y”) with **audit** trail  
+- [ ] SFT curricula / data-stage advance (same pattern as RL recipe queue)  
+- [ ] Early-stop / stage advance for vision SFT stages  
+- [ ] Agent/MCP watch → decide → act loop exercised on a multi-stage ladder  
+
+Historical homes: P.Sufficiency open items, P.Decide open items, 3.C remainder.
+
+---
+
+## Expert-v2 — Scale ops
+
+**Exit:** multi-hour / large-corpus jobs without full replay; documented
+throughput; org-scale bases treated as an **ops profile**, not a separate product.
+
+- [ ] Checkpoint + resume (adapter + step) for long SFT/RL  
+- [ ] Batching / throughput defaults per shape (dense text, VLM, …)  
+- [ ] Scale ladder 1k → 5k → 50k+ exercised on forge  
+- [ ] Multi-hour lab smokes (`lab_smokes` + report)  
+- [ ] Optional multi-worker train/sample when single-process is the wall  
+- [ ] Org self-host notes (governance, no secrets, multi-GPU reality)  
+
+Historical homes: P.Ops, 3.D, part of 3.B scale ladder.
+
+---
+
+## Paths *(not equal north stars)*
+
+Same forge; different delivery.
+
+| Path | When it is load-bearing | Open work (historical) | Parked / demote |
+|------|-------------------------|--------------------------|-----------------|
+| **Robotics / VLM** | Domain is vision/action; lab first-class | 3.B lab corpus, 3.C probes, Phase 4 offline/on-policy robot | Full OXE pretrain day one |
+| **Edge / Jetson** | Export is how the expert ships to the robot | 4.C export / distill / sample stub | Train 30B+ on device |
+| **Org self-host** | Internal corpus → specialist on owned HW | Expert-v2 ops; Phase 5 multi-tenant optional | Hosted multi-tenant cloud as default |
+| **Agent operator** | Scale experimentation under policy | Expert-v1 decide loop; harness maturity | “Anvil’s private brain” |
+| **J-Lens** | Research only | J1 schema + CLI kept | Permanent panel (shelved 2026-07-19) |
+
+---
+
+## Platform goals (detail map)
+
+Cross-cutting goals still apply to every job type. They are **re-homed** above:
+
+| Goal | Expert home |
+|------|-------------|
+| P.Sufficiency (observe every path) | v0 (GRPO + SFT metrics done) · **v1** (DPO, probes-all, detectors) |
+| P.Ops (multi-hour / large corpus) | **v2** |
+| P.Decide (gear-shift as product) | v0 (GRPO early-stop/queue) · **v1** (method switch + agent act) |
+
+### P.Sufficiency — Observe every train path
 
 - [x] GRPO/RL: `metrics.jsonl` + probes + SSE `/observe` + advantage-collapse tripwire  
-- [x] GRPO early-stop on dead signal (ceiling/floor/collapse) + recipe queue advance  
-- [x] **SFT / VLM SFT** emit the same observe SSOT (`RunMetricsWriter.log_sft_step`: loss, step, wall, n_tokens / n_image_refs)  
-- [ ] **Preference (DPO/…)** emit observe SSOT + family-specific cliffs  
-- [ ] **Probes for all methods** — fixed held-out prompts/frames sampled during the run (not only final eval)  
-- [ ] **Southward-turn detectors** — probe quality regression, reward↑ while probes↓, homogenization; machine-readable flags for agents  
-- [x] **Live web** lists GRPO + SFT/VLM run kinds on `/observe` (loss chart when `job` is sft/vlm_sft)
+- [x] GRPO early-stop on dead signal + recipe queue advance  
+- [x] SFT / VLM SFT observe SSOT (`log_sft_step`)  
+- [x] Live web lists GRPO + SFT/VLM on `/observe`  
+- [ ] Preference (DPO/…) observe SSOT + family-specific cliffs → **v1**  
+- [ ] Probes for all methods → **v0 gap (SFT/VLM)** then **v1**  
+- [ ] Southward-turn detectors → **v1**  
 
-### P.Ops — Multi-hour / large-corpus jobs *(required)*
+### P.Ops — Multi-hour / large-corpus jobs → **v2**
 
-- [ ] Checkpoint + resume (adapter + step) for long SFT/RL without full replay  
-- [ ] Batching / throughput defaults documented per shape (dense text, VLM, …)  
-- [ ] Lab smoke profiles for multi-hour runs (`lab_smokes` + report.json)  
-- [ ] Optional multi-worker train/sample when single-process is the wall  
+- [ ] Checkpoint + resume  
+- [ ] Batching / throughput docs  
+- [ ] Multi-hour lab smoke profiles  
+- [ ] Optional multi-worker train/sample  
 
-### P.Decide — Gear-shift as product *(required)*
+### P.Decide — Gear-shift as product
 
-- [x] Early-stop abandons dead GRPO stages (no power burn on flat charts)  
-- [x] RL recipe queue tees up next stage on same adapter  
-- [ ] Method-switch recipes (“if cliff X → try Y”) with audit trail  
-- [ ] Data-mixture / stage advance for SFT curricula (same pattern as RL queue)  
-- [ ] Agent/MCP can watch → decide → act (pause, stop, advance, switch) without HTML scraping  
+- [x] GRPO early-stop + RL recipe queue  
+- [ ] Method-switch recipes with audit → **v1**  
+- [ ] SFT data-stage advance → **v1**  
+- [ ] Agent/MCP full watch→decide→act without HTML scrape → **v0 exercise / v1**  
+
+---
+
+## Historical phases (archive)
+
+Build history and detailed exit criteria. Prefer Expert-v* for prioritization.
+Checkbox status here remains authoritative for *what shipped*; open items
+should be tracked under Expert-v* above when planning Outcomes.
 
 ## Phase 0 — Spec & stubs *(complete)*
 
@@ -173,11 +292,11 @@ the base never changes, only the LoRA adapter does, and that is megabytes):
 **Non-goals:** per-token J-lens on rollouts; J-Lens as load-bearing product
 path. Re-open only against the high bar in the spike writeup.
 
-## Phase 3 — Vision first-class *(current — core done; productization open)*
+## Phase 3 — Vision first-class *(archive — core done; open items → Expert-v0/v1 + robotics path)*
 
 **Working plan:** [`docs/phase3-vision.md`](phase3-vision.md) · **datasets:** [`docs/datasets-robotics.md`](datasets-robotics.md)
 
-**Product bar:** ~3–4B VLM + **real robotics corpus** + **live sufficiency** (same observe/decide SSOT as text GRPO). Observe/ops goals here **specialize** [Platform goal — Live post-training sufficiency](#platform-goal--live-post-training-sufficiency-cross-cutting-not-vision-only); they are not a second product.
+**Product bar (re-homed):** Expert-v0/v1 for VLM + **robotics path**. Same observe/decide SSOT as text GRPO.
 
 ### 3.A Core platform *(done)*
 
@@ -211,9 +330,9 @@ path. Re-open only against the high bar in the spike writeup.
 
 **Near-term data sources:** BridgeData V2 first; OXE / Robo2VLM / LeRobot as converters land.
 
-## Phase 4 — Robot policy + Jetson edge loop
+## Phase 4 — Robot policy + Jetson edge loop *(archive — Path: robotics / edge)*
 
-**Product bar:** offline (then on-policy) robot learning under four verbs + edge export; **live sufficiency** still applies.
+**Product bar:** offline (then on-policy) robot learning under four verbs + edge export; live sufficiency still applies. Prioritize after Expert-v0 unless the domain *is* the robot.
 
 ### 4.A Offline robot learning *(open — required)*
 
@@ -255,8 +374,8 @@ path. Re-open only against the high bar in the spike writeup.
 For a spin-off agent session:
 
 1. `read start.md`  
-2. Outcome: e.g. “Phase 0 OpenAPI + fake backend golden test”  
-3. Pull-on-miss: `docs/design.md`, this file  
+2. Outcome against **Expert-v0** (or v1/v2) gap — see Recommended Outcome above  
+3. Pull-on-miss: `docs/design.md` §1.0, this file, `docs/agent-context.md`  
 4. No mia-rl Ship work in this repo  
 
 ## Changelog (project-level)
@@ -299,3 +418,5 @@ For a spin-off agent session:
 | 2026-07-26 | **Live sufficiency thesis:** product.md + roadmap §P.Sufficiency / P.Ops / P.Decide — instrument all post-training mid-run; decide “enough” and shift gears; southward-turn detection; not fire-and-forget full budgets. Vision 3.B–3.D and Phase 4 robot goals inherit this SSOT |
 | 2026-07-26 | **P3.6 / 3.C (metrics):** `RunMetricsWriter.log_sft_step`; `run_sft`/`run_vlm_sft(run_dir=…)` → `metrics.jsonl` (loss, wall, n_image_refs, job=sft|vlm_sft); observe UI charts loss for SFT/VLM; `vlm_smoke`/`robot_vlm_sft_demo` `--run-id`. Probes + vision early-stop still open |
 | 2026-07-26 | **P3.5 / 3.B (convert):** `anvil.data.convert` + `scripts/convert_robotics_corpus.py` — episode_pack / path_jsonl → CAS + Anvil JSONL; resume state; max-rows / frames-per-episode; license field; `--demo` synthetic pack. Lab Bridge extract + 1k train still operator/forge |
+| 2026-07-26 | **Facing:** purpose one-liner — sovereign domain experts from base models (`product.md`, README, start, …) |
+| 2026-07-26 | **Roadmap re-slice:** Expert-v0 / v1 / v2 + Paths prioritize over historical Phases 0–5 (archive retained); map P.Sufficiency/Ops/Decide and Phase 3–4 open items into Expert ladder |

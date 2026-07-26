@@ -125,14 +125,14 @@ Robotics data is one **application** of Anvil’s **live sufficiency** thesis
 Observe/ops goals are **platform-wide** (roadmap §P.Sufficiency / §P.Ops);
 vision must not lag text GRPO.
 
-| Goal | Roadmap |
-|------|---------|
-| Lab corpus on NVMe in Anvil shape (Bridge / OXE subsample / Robo2VLM) | 3.B (operator fills pack; converter shipped) |
-| Production convert pipeline (episode_pack / path JSONL → CAS + JSONL, resumable) | 3.B **done** |
-| Scale ladder 1k → 5k → 50k+ exercised on forge | 3.B (lab; CLI supports `--max-rows`) |
-| VLM/SFT `metrics.jsonl` + live `/observe` (**done**); vision probes still open | 3.C / P.Sufficiency |
-| Checkpoint/resume + multi-hour VLM job ops | 3.D / P.Ops |
-| Offline robot RL + action tokenization + vision on-policy RL | Phase 4 |
+| Goal | Roadmap (Expert ladder) |
+|------|-------------------------|
+| Lab corpus on NVMe in Anvil shape (Bridge / OXE subsample / Robo2VLM) | **Expert-v0** (converter shipped; operator extract) |
+| Production convert pipeline (episode_pack / path JSONL → CAS + JSONL, resumable) | **done** (historical 3.B) |
+| Scale ladder 1k → 5k → 50k+ exercised on forge | **Expert-v2** (CLI supports `--max-rows`) |
+| VLM/SFT `metrics.jsonl` + live `/observe` (**done**); vision probes still open | **Expert-v0** probes gap |
+| Checkpoint/resume + multi-hour VLM job ops | **Expert-v2** |
+| Offline robot RL + action tokenization + vision on-policy RL | **Path: robotics** (historical Phase 4) |
 
 ## Smoke checklist
 

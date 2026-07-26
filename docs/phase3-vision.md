@@ -1,8 +1,8 @@
 # Phase 3 — Vision first-class (working plan)
 
-**Status:** core platform **done**; **productization open** (2026-07-26)  
-**Exit criteria:** `docs/roadmap.md` §Phase 3 (3.A–3.D)  
-**Cross-cutting SSOT:** `docs/roadmap.md` §Platform goal — Live post-training sufficiency  
+**Status:** core platform **done**; open items re-homed under **Expert-v0/v1** + robotics path (2026-07-26)  
+**Exit criteria:** `docs/roadmap.md` Expert ladder + historical §Phase 3 archive  
+**Cross-cutting SSOT:** `docs/roadmap.md` Expert-v0/v1 (live sufficiency)  
 **Datasets:** `docs/datasets-robotics.md` · **Product thesis:** `docs/product.md`
 
 ## Product goal
@@ -15,10 +15,10 @@ A researcher, roboticist, or **their agent** can SFT (and later RL) a **~3–4B 
 |-------|-------------|--------|
 | **P3.0–P3.3b** | Media, schema, renderer, pixel fusion, forge VLM/LeRobot smoke | **done** |
 | **P3.4** | Classifier / rubric recipe; web knobs for vision freeze | **open** |
-| **P3.5** | Production robotics convert (CLI shipped); lab Bridge extract still open | **partial** |
-| **P3.6** | VLM/SFT observe SSOT (metrics.jsonl + /observe); probes still open | **partial** |
-| **P3.7** | Multi-hour VLM jobs (roadmap 3.D / P.Ops) | **open** |
-| **P4** | Offline robot RL, action tokens, vision RL, Jetson | **open** |
+| **P3.5** | Convert CLI shipped; lab Bridge extract → Expert-v0 | **partial** |
+| **P3.6** | VLM metrics + /observe done; probes → Expert-v0/v1 | **partial** |
+| **P3.7** | Multi-hour VLM → Expert-v2 | **open** |
+| **P4** | Robot offline/on-policy + Jetson → Path: robotics / edge | **open** |
 
 ## Invariants
 

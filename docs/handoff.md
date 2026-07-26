@@ -17,32 +17,36 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 | **Agentic** | Same SSOT via API/MCP; Anvil owns tools/harness/prompts; **user brings the brain** |
 
 **Purpose:** Anvil forges **sovereign domain experts** from base models.  
-**Mechanism:** live sufficiency — instrument **while** data is applied; decide **how much is enough** / **when to shift gears** before the model turns southward. Not fire-and-forget full budgets then eval. See `docs/product.md`.
+**Mechanism:** live sufficiency — instrument **while** data is applied; decide **how much is enough** / **when to shift gears** before the model turns southward. See `docs/product.md`.
+
+**Prioritize:** Expert-v0 → v1 → v2 in `docs/roadmap.md` (historical Phases 0–5 are archive).
 
 ## Where we are (2026-07-26)
 
 | Done | Open (next) |
 |------|-------------|
-| Phases 0–2.5 (text SFT/RL, GRPO observe, early-stop, recipe queue, agent MCP v0) | **P.Sufficiency:** held-out probes + southward-turn for SFT/VLM |
-| Phase 3.A vision core (renderer, pixel fusion, 3B forge smoke, LeRobot tiny) | **3.B lab:** extract Bridge → episode_pack → 1k `anvil_jsonl` on forge |
-| **P3.6 metrics:** `run_vlm_sft(run_dir=)` → `/observe` loss curve | **3.C probes / early-stop** + **3.D** multi-hour |
-| **P3.5 convert CLI:** `convert_robotics_corpus.py` (episode_pack → CAS/JSONL) | **Phase 4:** offline robot RL, action tokens, Jetson |
-| Lab smokes `scripts/lab_smokes.py` (not GitHub CI) | |
+| Phases 0–2.5 foundation (SFT/RL, GRPO observe, early-stop, queue, MCP v0) | **Expert-v0 gaps** |
+| Vision core + VLM/SFT metrics on `/observe` | Lab domain slice → 1k train + export |
+| Convert CLI (episode_pack → CAS/JSONL) | Held-out probes (SFT/VLM) |
+| Agent-context brief + facing purpose one-liner | Expert smoke checklist doc |
+| | **Later:** Expert-v1 method ladder · v2 scale ops · Path: robot/edge |
 
 **Recommended next Outcome:**  
-`3.B lab — Bridge episode_pack → 1k rows + VLM SFT observe`  
+`Expert-v0 — lab domain pack → 1k rows → VLM SFT + observe + export`  
 (or: held-out frame probes during VLM SFT)
 
 ## Pull-on-miss only
 
 | Topic | Where |
 |-------|--------|
-| Product / live sufficiency | `docs/product.md` |
-| Phases + P.Sufficiency/P.Ops/P.Decide | `docs/roadmap.md` |
+| Product / purpose | `docs/product.md` |
+| Expert-v0/v1/v2 + archive phases | `docs/roadmap.md` |
+| Primary workflow | `docs/design.md` §1.0 |
+| Agent operator brief | `docs/agent-context.md` |
 | Vision slices | `docs/phase3-vision.md` |
 | Robotics corpora | `docs/datasets-robotics.md` |
 | Lab smokes / cron | `docs/lab-smokes.md`, `scripts/run_lab_smokes.sh` |
-| Agent control | `docs/agent-context.md` (session brief), `docs/agentic-control.md`, `anvil/agent/` |
+| Agent control ownership | `docs/agentic-control.md`, `anvil/agent/` |
 | Design | `docs/design.md` |
 | PR process | `docs/development-process.md` |
 
@@ -59,4 +63,4 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 
 ## Done looks like
 
-PR opened against a **roadmap checkbox** (3.B / 3.C / 3.D / P.Sufficiency / Phase 4), tests green, ready for human merge — or a clear blocked note.
+PR opened against an **Expert-v0/v1/v2** (or Path) checkbox, tests green, ready for human merge — or a clear blocked note.

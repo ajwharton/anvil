@@ -6,9 +6,9 @@
 > Do **not** open other docs unless this file’s pull-on-miss table says so.
 > Thin harness: `~/.grok/docs/thin-harness.md`
 
-**Outcome default:** advance the next roadmap phase gate without expanding scope.  
+**Outcome default:** close the next **Expert-v0** (then v1/v2) gap without expanding scope.  
 **Track:** Lab / OSS product (not mia-rl Ship coach).  
-**Current:** **Sovereign domain experts** from base models; live sufficiency (observe mid-run → enough / shift gears); Phase 3 vision + agent control v0.
+**Current:** **Sovereign domain experts** from base models; prioritize Expert-v0 (ship one specialist under live observe); historical phases archive in `docs/roadmap.md`.
 
 State: `Track: anvil | Outcome: <one line>`
 

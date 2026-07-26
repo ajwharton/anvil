@@ -2,17 +2,52 @@
 
 **Project:** [Anvil](https://github.com/ajwharton/anvil) (this repo)  
 **Status:** Design SSOT  
-**Outcome:** Democratized RL+SFT with a small four-verb API, own hardware (lab GPU → dual DGX Spark → Jetson edge), **vision** first-class, live RL observability, and an **agent-operable control plane** (HTTP/MCP; user-supplied brain).  
-**Date:** 2026-07-16 (de-brand 2026-07-17; agent dual-focus 2026-07-18)
+**Outcome:** Forge **sovereign domain experts** from base models — small four-verb API, own hardware (lab GPU → dual DGX Spark → Jetson edge), **vision** first-class, live observability, **agent-operable** control plane (HTTP/MCP; user-supplied brain).  
+**Date:** 2026-07-16 (de-brand 2026-07-17; agent dual-focus 2026-07-18; expert workflow 2026-07-26)
 
 Inspiration / non-affiliation one-liner: see `README.md` (only public place we name prior product art).  
-Product thesis: [`product.md`](product.md) · agent split: [`agentic-control.md`](agentic-control.md).
+Product thesis: [`product.md`](product.md) · roadmap ladder: [`roadmap.md`](roadmap.md) (Expert-v0/v1/v2) · agent split: [`agentic-control.md`](agentic-control.md) · operator brief: [`agent-context.md`](agent-context.md).
 
 Related personal lab context (private): dual-Spark serve, starwatch agents, Jetson robot — not required to use Anvil.
 
 ---
 
 ## 1. Product shape
+
+### 1.0 Primary workflow (domain expert forge)
+
+Stable product loop — independent of whether the substrate is today’s transformers
+or a later algorithm behind the same verbs:
+
+```text
+  domain data (you)          base model (you)
+         │                          │
+         ▼                          ▼
+  place: CAS / JSONL / trajectories + recipe plan + gates
+         │
+         ▼
+  train: four verbs + named losses (SFT / preference / GRPO / …)
+         │
+         ▼
+  observe: metrics.jsonl + probes  ──►  classify healthy|noisy|cliff|broken
+         │                                        │
+         │         ┌── stop / export expert ◄─────┤
+         │         ├── patch knobs / resume       │
+         └────────►└── switch method / next stage ┘
+                      (audited; human policy)
+```
+
+| Step | Anvil owns | You own |
+|------|------------|---------|
+| Place | Convert helpers, media store, Example/Trajectory schemas | Corpus, licenses, rewards |
+| Plan | Recipes, architecture gates, knobs | Choice of base + pattern (or agent under policy) |
+| Train | Backends, LoRA, train/sample consistency | GPUs, data iteration |
+| Observe | `RunMetricsWriter`, `/observe`, SSE, tripwires | Judgment of “enough” (or agent) |
+| Act | Pause/patch/export/queue APIs + MCP | Policy, force limits, spend |
+| Export | PEFT/path adapters | Where the expert runs next |
+
+**Profiles** (same workflow): robotics/edge VLM · org self-host large base · solo lab.  
+**Prioritization:** Expert-v0/v1/v2 in [`roadmap.md`](roadmap.md) — not “fill every kit checkbox.”
 
 ### 1.1 Layering
 
