@@ -68,3 +68,23 @@ suggest_for_model("Qwen/Qwen2.5-VL-3B-Instruct")
 ## Design rule
 
 Shape comes from the **HF model card**; the **catalog** maps shape → recipe boundaries; **research** (TRL / GRPO / PEFT cookbooks) supplies loop families; **we** still fine-tune on our data.
+
+## RL curriculum queue (productized GRPO)
+
+When a stage's reward **flatlines** (early-stop ceiling/collapse), the next stage starts on the **same LoRA** so power goes to the next hard task:
+
+```bash
+python scripts/grpo_recipe_queue.py \
+  --endpoint local:// \
+  --model /mnt/data/models/qwen2.5-1.5b-instruct \
+  --recipe recipes/arith_curriculum_v1.json \
+  --observe-root /mnt/data/anvil-observe \
+  --run-prefix grpo-curric
+```
+
+| Artifact | Where |
+|----------|--------|
+| Stage events | `/observe/<prefix>-queue` |
+| Per-stage curves | `/observe/<prefix>-<stage-id>` |
+
+JSON fields: `advance_on`, `stop_queue_on`, per-stage `max_steps` / `gold` / `prompt`. See `anvil/recipes/rl_queue.py`.
