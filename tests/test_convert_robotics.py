@@ -102,12 +102,12 @@ def test_keyframe_mode(tmp_path):
 
 
 def test_path_jsonl_convert(tmp_path):
+    from anvil.data.convert import write_solid_png
+
     img_dir = tmp_path / "imgs"
     img_dir.mkdir()
-    from PIL import Image
-
     p0 = img_dir / "a.png"
-    Image.new("RGB", (16, 16), (1, 2, 3)).save(p0)
+    write_solid_png(p0, rgb=(1, 2, 3), size=8)
     src = tmp_path / "in.jsonl"
     src.write_text(
         json.dumps(

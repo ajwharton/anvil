@@ -495,19 +495,49 @@ def convert_corpus(cfg: ConvertConfig) -> ConvertResult:
     return convert_path_jsonl(cfg, store, state)
 
 
+def write_solid_png(path: Path, rgb: tuple[int, int, int] = (40, 120, 200), size: int = 8) -> None:
+    """Write a solid RGB PNG with no third-party deps (stdlib zlib only).
+
+    CI does not install Pillow; convert tests and ``--demo`` must stay dep-light.
+    """
+    import struct
+    import zlib
+
+    path = Path(path)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    w = h = int(size)
+    r, g, b = (int(rgb[0]) & 255, int(rgb[1]) & 255, int(rgb[2]) & 255)
+    # raw image: each row is filter_byte(0) + RGB pixels
+    raw = b"".join(b"\x00" + bytes([r, g, b]) * w for _ in range(h))
+    compressed = zlib.compress(raw, 9)
+
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        return (
+            struct.pack(">I", len(data))
+            + tag
+            + data
+            + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+        )
+
+    ihdr = struct.pack(">IIBBBBB", w, h, 8, 2, 0, 0, 0)  # 8-bit RGB
+    png = (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", ihdr)
+        + chunk(b"IDAT", compressed)
+        + chunk(b"IEND", b"")
+    )
+    path.write_bytes(png)
+
+
 def write_demo_episode_pack(
     root: Path,
     *,
     n_episodes: int = 3,
     frames_per: int = 2,
 ) -> Path:
-    """Create a tiny synthetic episode_pack for tests / lab smoke (no deps beyond Pillow optional)."""
+    """Create a tiny synthetic episode_pack for tests / lab smoke (stdlib only)."""
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
-    try:
-        from PIL import Image
-    except ImportError as e:
-        raise ImportError("Pillow required to write demo frames") from e
 
     for i in range(n_episodes):
         ep = root / f"ep_{i:04d}"
@@ -515,7 +545,7 @@ def write_demo_episode_pack(
         frames.mkdir(parents=True, exist_ok=True)
         rgb = (40 + i * 40, 80, 160)
         for j in range(frames_per):
-            Image.new("RGB", (64, 64), rgb).save(frames / f"{j:04d}.png")
+            write_solid_png(frames / f"{j:04d}.png", rgb=rgb, size=8)
         meta = {
             "language_instruction": f"pick up object {i}",
             "actions": [[0.1 * i, 0.0, 0.05 * j, 0.0, 0.0, 0.0, 1.0] for j in range(frames_per)],
@@ -533,4 +563,5 @@ __all__ = [
     "format_action_text",
     "iter_episode_pack",
     "write_demo_episode_pack",
+    "write_solid_png",
 ]
