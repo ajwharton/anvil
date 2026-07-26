@@ -8,31 +8,33 @@
 
 **Outcome default:** advance the next roadmap phase gate without expanding scope.  
 **Track:** Lab / OSS product (not mia-rl Ship coach).  
-**Current:** **Live sufficiency** for all post-training (observe mid-run → enough / shift gears); Phase 3 vision productization + agent control v0.
+**Current:** **Sovereign domain experts** from base models; live sufficiency (observe mid-run → enough / shift gears); Phase 3 vision + agent control v0.
 
 State: `Track: anvil | Outcome: <one line>`
 
 ## What this is
 
-**Anvil** = open-source **LoRA-first post-training platform** (SFT/RL) with a dual product focus:
+**Anvil forges sovereign domain experts from base models.**  
+Open-source **LoRA-first post-training** (SFT/RL) with a dual product focus:
 
 | Focus | Meaning |
 |-------|---------|
 | **Individual** | Recipes, four verbs, web UI, live debugger on your GPUs |
 | **Agentic** | Same SSOT via HTTP + **MCP**; optional harness; portable prompts; **you bring the brain** |
 
-**Thesis:** do not fire-and-forget a full post-training set then eval after. Instrument **while** data is applied (metrics, probes, cliffs); detect when returns go **southward**; stop or change recipe/method. Applies to text **and** vision.
+**Purpose:** turn base + domain data into an expert **you own**.  
+**Mechanism:** do not fire-and-forget a full post-training set then eval after. Instrument **while** data is applied (metrics, probes, cliffs); detect when returns go **southward**; stop or change recipe/method. Text **and** vision.
 
 Mechanics:
 
 - Four verbs: `forward_backward`, `optim_step`, `sample`, `save_state`
 - LoRA-first adapters; train/sample consistency; vision + edge (Jetson) path
 - Backends: local GPU → dual DGX Spark → export to edge
-- **Live debugger**: `anvil-web`, metrics, probes, cliffs; early-stop + recipe queue (GRPO); extend to SFT/VLM
-- **Agent control**: `AnvilControlClient`, `anvil mcp`, `anvil agent`, `prompts/agent/`
+- **Live debugger**: `anvil-web`, metrics, probes, cliffs; early-stop + recipe queue (GRPO); SFT/VLM metrics on same SSOT
+- **Agent control**: `AnvilControlClient`, `anvil mcp`, `anvil agent`, `docs/agent-context.md`, `prompts/agent/`
 
-Product thesis: [`docs/product.md`](docs/product.md) · agent split: [`docs/agentic-control.md`](docs/agentic-control.md).  
-Not a full MoE train stack on day one. Inspiration one-liner lives in `README.md` only.
+Product thesis: [`docs/product.md`](docs/product.md) · agent brief: [`docs/agent-context.md`](docs/agent-context.md) · agent split: [`docs/agentic-control.md`](docs/agentic-control.md).  
+Not a full MoE train stack on day one.
 
 ## Red lines
 

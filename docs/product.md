@@ -1,19 +1,48 @@
 # Anvil product note
 
 **Audience:** humans building with Anvil, and agents that will *run* it.  
-**Date:** 2026-07-26 (thesis expanded)  
+**Date:** 2026-07-26 (sovereign domain expert facing)  
 **Status:** product thesis (SSOT for “why”)
 
 This note is the short “what is this for?” document. Architecture detail stays in
 [`design.md`](design.md); phase gates stay in [`roadmap.md`](roadmap.md).
+Operator brief for agents: [`agent-context.md`](agent-context.md).
 
 ---
 
 ## One sentence
 
-Anvil is a **LoRA-first post-training platform** (SFT + RL) with a tiny stable
-API, good default recipes, and **live observability**—usable by a single
-operator, but built so it **shines under agent control**.
+**Anvil forges sovereign domain experts from base models.**
+
+You bring the base, the domain data (and optional rewards), and the GPUs. Anvil
+is the forge: place data, run post-training levers (SFT, preference, GRPO, …),
+**instrument while data is applied**, decide how much is enough and when to
+shift gears, and export an adapter **you own**.
+
+Mechanics today are **LoRA-first** with a tiny four-verb API and live
+observability—usable by a single operator, built so it **shines under agent
+control**. The substrate may change (post-Transformer included); the product
+job does not: **domain expert from base, under sovereign control**.
+
+---
+
+## Primary use case
+
+| You bring | Anvil provides |
+|-----------|----------------|
+| Base model (small VLM/SLM up through self-hosted large models) | Recipes, gates, train/sample/export contract |
+| Domain data / preferences / verifiable rewards | Placement (CAS, JSONL, trajectories), convert paths |
+| Compute you control | Local/lab backends, observe artifacts, web + MCP |
+| Policy + optional agent brain | Live metrics/probes, early-stop, method switch, audit |
+
+**Profiles** (same forge, different scale):
+
+- **Robotics / edge** — small VLM, real frames, freeze defaults, later Jetson export  
+- **Org self-host** — internal corpus → specialist adapters on owned hardware  
+- **Solo researcher** — recipes + curves + probes without a platform team  
+
+“Done” is rarely a single step count. It is a **sliding judgment**: probes on
+domain tasks, no active cliff, exportable expert, transcript of why you stopped.
 
 ---
 
@@ -34,7 +63,7 @@ Anvil’s product bet is the opposite:
 
 That applies to **every** post-training job—text SFT, DPO, GRPO, VLM/robot
 LoRA—not only robotics. Robotics is a first-class *path*; live sufficiency is
-the *platform*.
+the *mechanism*; **sovereign domain experts** are the *purpose*.
 
 In a long run there is often a moment where returns go **southward**: loss still
 moves, a proxy still climbs, but probes, held-out quality, or group-relative
@@ -45,13 +74,14 @@ under human policy, optionally executed by an agent.
 
 Lenses, metrics, and probes applied **during** the pass over data are not
 decorative dashboards. They are the control signal for sufficiency.
+
 ---
 
 ## Two modes of use
 
 | Mode | Who | How Anvil should feel |
 |------|-----|------------------------|
-| **Individual** | Researcher / roboticist on a laptop + lab GPUs | Small recipes, honest knobs, web UI, “run this loop and see the curves” |
+| **Individual** | Researcher / roboticist / org ML on own GPUs | Small recipes, honest knobs, web UI, “run this loop and see the curves” |
 | **Agentic** | An autonomous (or semi-autonomous) training agent | **Everything is machine-readable**: runs, metrics, probes, recipes, gates, audits—via **HTTP API and/or MCP**—so the agent can *watch*, *decide*, and *act* without a human staring at plots |
 
 Individuals must never be second-class. The same surfaces that power the web UI
@@ -175,12 +205,13 @@ models) that improve training procedures by observing outcomes and changing
 recipes, data mixtures, and stop conditions—always under human governance.
 
 That is **not** a near-term phase gate and **not** a claim Anvil “is RSI.”
-It is the direction of the product: **instrumented, controllable, LoRA-first
-post-training that agents can operate**.
+It is the direction of a forge that agents can operate at scale under human
+governance.
 
-Nearer-term success remains concrete: a researcher or roboticist (or their
-agent) can SFT/RL a small LLM/VLM on own GPUs, see cliffs as they form, and
-switch methods without rewriting infrastructure.
+Nearer-term success remains concrete: a researcher, roboticist, or org (or
+their agent) can turn a base model into a **domain specialist they own**—on
+their GPUs, with live cliffs, method switches, and export—without rewriting
+infrastructure.
 
 ---
 

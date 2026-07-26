@@ -4,7 +4,8 @@ Status legend: **todo** · **doing** · **done** · **blocked**
 
 ## North star
 
-An open post-training toolkit: four verbs, LoRA-first, train/sample consistency, vision in the data model, export to lab serve and **Jetson/edge**—**usable by individuals, optimized for agent control**.
+**Purpose:** forge **sovereign domain experts** from base models (see `docs/product.md`).  
+Mechanics: four verbs, LoRA-first, train/sample consistency, vision in the data model, export to lab serve and **Jetson/edge**—**usable by individuals, optimized for agent control**.
 
 **Live sufficiency:** instrument every post-training job **while** data is applied (metrics, probes, cliffs)—not only after the budget ends—so operators and agents can decide **how much training is enough** and **when to shift gears** before the model turns southward.
 

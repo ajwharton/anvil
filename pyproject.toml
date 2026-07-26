@@ -1,7 +1,7 @@
 [project]
 name = "anvil-train"
 version = "0.0.2"
-description = "LoRA-first post-training (SFT/RL): four verbs, live RL debugger, agent MCP/API control — you bring the brain"
+description = "Forge sovereign domain experts from base models — LoRA-first post-training (SFT/RL), live observe, agent MCP/API; you bring data, GPUs, and the brain"
 readme = "README.md"
 requires-python = ">=3.11"
 license = { text = "Apache-2.0" }
