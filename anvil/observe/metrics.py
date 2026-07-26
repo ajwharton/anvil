@@ -175,7 +175,14 @@ class RunMetricsWriter:
         tokens: Iterable[int],
         text: str | None = None,
         reward: float | None = None,
+        target: str | None = None,
+        job: str | None = None,
     ) -> dict[str, Any]:
+        """Append a live-policy probe (GRPO reward score or SFT sample + optional match).
+
+        For SFT/VLM, ``reward`` may be a simple match score (0/1) against ``target``;
+        ``text`` is the greedy completion under the live adapter.
+        """
         record: dict[str, Any] = {
             "schema_version": SCHEMA_VERSION,
             "type": "probe",
@@ -185,6 +192,8 @@ class RunMetricsWriter:
             "tokens": [int(t) for t in tokens],
             "text": text,
             "reward": None if reward is None else float(reward),
+            "target": target,
+            "job": job,
         }
         _append_jsonl(self.probes_path, record)
         return record

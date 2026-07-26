@@ -105,7 +105,7 @@ Records are JSON lines in `metrics.jsonl` (`type: "step"` or `"event"`). GRPO an
 | `wall_time_s` | Step time | Pathological slowdown |
 | `job` | `sft` or `vlm_sft` | — |
 
-**Probes (when present):** held-out prompts/frames. Vision probes are still maturing (roadmap 3.C); if no probes file, use held-out sample/export checks and loss + `n_image_refs`.
+**Probes:** pass held-out Examples into `run_sft` / `run_vlm_sft` (`probes=`, `probe_every=`) → `probes.jsonl` with greedy `text`, optional `target` + match `reward`. See [`expert-v0-smoke.md`](expert-v0-smoke.md).
 
 **Default acts:** stop or lower LR on probe garbage; check renderer train/sample consistency; freeze policy (vision encoder usually frozen); data labels / CAS refs.
 

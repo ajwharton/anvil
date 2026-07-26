@@ -40,6 +40,13 @@ class ToyTextRenderer:
         text = "".join(pieces)
         return ModelInput.from_ints(self.encode(text))
 
+    def render_prompt(self, messages: Sequence[Message]) -> ModelInput:
+        """Prompt-only render (drop trailing assistant) for sample/probes."""
+        msgs = list(messages)
+        if msgs and msgs[-1].role == "assistant":
+            msgs = msgs[:-1]
+        return self.render_messages(msgs)
+
     def render_example_for_sft(self, example: Example) -> Datum:
         """Build Datum with CE weights: 0 on prompt/user, 1 on assistant tokens."""
         all_tokens: list[int] = []
