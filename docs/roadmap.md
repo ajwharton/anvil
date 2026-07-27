@@ -58,19 +58,19 @@ Not every method; **one** end-to-end expert smoke a human or agent can repeat.
 - [x] Vision core — media CAS, VLM renderer, freeze defaults, forge VLM smoke  
 - [x] Agent control v0 — MCP/HTTP + [`agent-context.md`](agent-context.md) + prompt pack  
 
-### Open gaps (close these next)
+### Open / partial gaps
 
-| Gap | Maps from historical | Notes |
-|-----|----------------------|--------|
-| [ ] Lab domain slice on NVMe (e.g. Bridge → episode_pack → 1k `anvil_jsonl` + CAS) | 3.B | Operator extract; converter exists |
-| [ ] Train that slice with **observe** + export PEFT | 3.B / 3.C | `run_vlm_sft(run_dir=…)` + demo scripts |
-| [ ] Held-out **probes** during SFT / VLM (not only final sample) | P.Sufficiency / 3.C | Text + frames |
-| [ ] **Expert smoke checklist** doc (data → train → observe → export) | new | Thin checklist in datasets or lab-smokes |
-| [ ] Agent can watch observe runs via MCP without HTML scrape | P.Decide (partial) | Tools exist; exercise end-to-end |
+| Gap | Status | Notes |
+|-----|--------|--------|
+| Train under **observe** + export PEFT (repeatable path) | **done** | `scripts/expert_v0_smoke.py` + `run_vlm_sft(run_dir=, export_dir=, probes=)` |
+| Held-out **probes** during SFT / VLM | **done** | `probes=` → `probes.jsonl` (greedy sample + match score) |
+| **Expert smoke checklist** | **done** | [`docs/expert-v0-smoke.md`](expert-v0-smoke.md) |
+| Agent watch via MCP (no HTML scrape) | **done** (doc + tools) | Checklist §MCP; `anvil_observe_*` |
+| Lab domain slice on NVMe (Bridge → 1k rows) | **open** | Operator extract; converter + smoke accept real pack |
 
 **Recommended next Outcome:**  
-`Expert-v0 — lab Bridge (or demo pack) → 1k rows → VLM SFT + observe + export`  
-(or: held-out frame probes on VLM SFT)
+`Expert-v0 lab — Bridge episode_pack → 1k rows → expert_v0_smoke on forge`  
+(or: Expert-v1 preference observe / method ladder)
 
 ---
 
@@ -138,7 +138,8 @@ Cross-cutting goals still apply to every job type. They are **re-homed** above:
 - [x] SFT / VLM SFT observe SSOT (`log_sft_step`)  
 - [x] Live web lists GRPO + SFT/VLM on `/observe`  
 - [ ] Preference (DPO/…) observe SSOT + family-specific cliffs → **v1**  
-- [ ] Probes for all methods → **v0 gap (SFT/VLM)** then **v1**  
+- [x] Probes for SFT/VLM mid-run → **v0** (`run_sft`/`run_vlm_sft` probes=)  
+- [ ] Probes for preference / remaining methods → **v1**  
 - [ ] Southward-turn detectors → **v1**  
 
 ### P.Ops — Multi-hour / large-corpus jobs → **v2**
@@ -420,3 +421,4 @@ For a spin-off agent session:
 | 2026-07-26 | **P3.5 / 3.B (convert):** `anvil.data.convert` + `scripts/convert_robotics_corpus.py` — episode_pack / path_jsonl → CAS + Anvil JSONL; resume state; max-rows / frames-per-episode; license field; `--demo` synthetic pack. Lab Bridge extract + 1k train still operator/forge |
 | 2026-07-26 | **Facing:** purpose one-liner — sovereign domain experts from base models (`product.md`, README, start, …) |
 | 2026-07-26 | **Roadmap re-slice:** Expert-v0 / v1 / v2 + Paths prioritize over historical Phases 0–5 (archive retained); map P.Sufficiency/Ops/Decide and Phase 3–4 open items into Expert ladder |
+| 2026-07-26 | **Expert-v0 path:** `run_sft`/`run_vlm_sft` held-out `probes=` → `probes.jsonl`; `scripts/expert_v0_smoke.py` place→train→observe→export; `docs/expert-v0-smoke.md`. Lab Bridge 1k still operator |

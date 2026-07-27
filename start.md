@@ -78,6 +78,7 @@ README.md                    # public front door
 | `docs/product.md` | Why Anvil; cliffs; API/MCP; RSI-shaped ambition |
 | `docs/agentic-control.md` | Harness/MCP ownership; adoption paths A/B/C |
 | `docs/agent-context.md` | **Agent session brief:** tools, metrics loops, classify→act |
+| `docs/expert-v0-smoke.md` | Expert-v0 place→train→observe→export checklist |
 | `prompts/agent/` | Operator prompts for Anvil or foreign harnesses |
 | `anvil/agent/` | Control client, MCP server, harness code |
 | `docs/design.md` | API/backend/vision/Jetson design detail |

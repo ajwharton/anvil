@@ -70,6 +70,8 @@ def run_vlm_sft(
     media_store: Any | None = None,
     renderer: Any | None = None,
     run_dir: str | None = None,
+    probes: Sequence[Example] | None = None,
+    probe_every: int = 1,
 ) -> SFTResult:
     """VLM SFT loop.
 
@@ -78,6 +80,7 @@ def run_vlm_sft(
       ``renderer`` is passed explicitly.
     - ``run_dir``: append loss / wall / n_image_refs to ``metrics.jsonl`` for
       live ``/observe`` (P3.6 / roadmap 3.C).
+    - ``probes``: held-out Examples sampled every ``probe_every`` steps → ``probes.jsonl``.
     """
     card = inspect_base_model(base_model, fetch_remote=fetch_remote)
     plan = build_plan(base_model, card=card, fetch_remote=False, **(overrides or {}))
@@ -106,4 +109,6 @@ def run_vlm_sft(
         renderer=renderer,
         run_dir=run_dir,
         job="vlm_sft",
+        probes=probes,
+        probe_every=probe_every,
     )

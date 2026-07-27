@@ -25,21 +25,20 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 
 | Done | Open (next) |
 |------|-------------|
-| Phases 0–2.5 foundation (SFT/RL, GRPO observe, early-stop, queue, MCP v0) | **Expert-v0 gaps** |
-| Vision core + VLM/SFT metrics on `/observe` | Lab domain slice → 1k train + export |
-| Convert CLI (episode_pack → CAS/JSONL) | Held-out probes (SFT/VLM) |
-| Agent-context brief + facing purpose one-liner | Expert smoke checklist doc |
-| | **Later:** Expert-v1 method ladder · v2 scale ops · Path: robot/edge |
+| Phases 0–2.5 foundation + Expert-v0 **path** (smoke + probes) | **Expert-v0 lab:** Bridge → 1k on forge |
+| Convert + VLM metrics + held-out SFT/VLM probes | Expert-v1 method ladder |
+| `docs/expert-v0-smoke.md` + `scripts/expert_v0_smoke.py` | Expert-v2 scale ops · Path: robot/edge |
 
 **Recommended next Outcome:**  
-`Expert-v0 — lab domain pack → 1k rows → VLM SFT + observe + export`  
-(or: held-out frame probes during VLM SFT)
+`Expert-v0 lab — Bridge episode_pack → 1k + expert_v0_smoke on forge`  
+(or: Expert-v1 preference observe)
 
 ## Pull-on-miss only
 
 | Topic | Where |
 |-------|--------|
 | Product / purpose | `docs/product.md` |
+| Expert-v0 checklist | `docs/expert-v0-smoke.md` |
 | Expert-v0/v1/v2 + archive phases | `docs/roadmap.md` |
 | Primary workflow | `docs/design.md` §1.0 |
 | Agent operator brief | `docs/agent-context.md` |

@@ -16,7 +16,7 @@ A researcher, roboticist, or **their agent** can SFT (and later RL) a **~3–4B 
 | **P3.0–P3.3b** | Media, schema, renderer, pixel fusion, forge VLM/LeRobot smoke | **done** |
 | **P3.4** | Classifier / rubric recipe; web knobs for vision freeze | **open** |
 | **P3.5** | Convert CLI shipped; lab Bridge extract → Expert-v0 | **partial** |
-| **P3.6** | VLM metrics + /observe done; probes → Expert-v0/v1 | **partial** |
+| **P3.6** | VLM metrics + /observe + held-out probes (Expert-v0) | **done** |
 | **P3.7** | Multi-hour VLM → Expert-v2 | **open** |
 | **P4** | Robot offline/on-policy + Jetson → Path: robotics / edge | **open** |
 
