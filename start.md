@@ -76,6 +76,7 @@ README.md                    # public front door
 | Path | When |
 |------|------|
 | `docs/product.md` | Why Anvil; cliffs; API/MCP; RSI-shaped ambition |
+| `docs/recipes.md` | Recipes, meta-recipes, personal recipe book |
 | `docs/agentic-control.md` | Harness/MCP ownership; adoption paths A/B/C |
 | `docs/agent-context.md` | **Agent session brief:** tools, metrics loops, classify→act |
 | `docs/expert-v0-smoke.md` | Expert-v0 place→train→observe→export checklist |

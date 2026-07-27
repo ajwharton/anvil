@@ -1,12 +1,13 @@
 # Anvil product note
 
 **Audience:** humans building with Anvil, and agents that will *run* it.  
-**Date:** 2026-07-26 (sovereign domain expert facing)  
+**Date:** 2026-07-27 (recipe book differentiator)  
 **Status:** product thesis (SSOT for “why”)
 
 This note is the short “what is this for?” document. Architecture detail stays in
 [`design.md`](design.md); phase gates stay in [`roadmap.md`](roadmap.md).
-Operator brief for agents: [`agent-context.md`](agent-context.md).
+Operator brief for agents: [`agent-context.md`](agent-context.md).  
+**Recipes / personal book:** [`recipes.md`](recipes.md).
 
 ---
 
@@ -30,10 +31,11 @@ job does not: **domain expert from base, under sovereign control**.
 
 | You bring | Anvil provides |
 |-----------|----------------|
-| Base model (small VLM/SLM up through self-hosted large models) | Recipes, gates, train/sample/export contract |
+| Base model (small VLM/SLM up through self-hosted large models) | Recipes + gates; train/sample/export contract |
 | Domain data / preferences / verifiable rewards | Placement (CAS, JSONL, trajectories), convert paths |
 | Compute you control | Local/lab backends, observe artifacts, web + MCP |
 | Policy + optional agent brain | Live metrics/probes, early-stop, method switch, audit |
+| Post-training judgment (over time) | **Personal recipe book** — promote runs into reusable recipes/meta-recipes you own |
 
 **Profiles** (same forge, different scale):
 
@@ -96,8 +98,8 @@ should power agents. Agents are not a bolt-on chat wrapper; they are a
 
 1. **Mechanisms** — four verbs (`forward_backward`, `optim_step`, `sample`,
    `save_state`), named losses, LoRA adapters, train/sample consistency.  
-2. **Recipes** — architecture-aware starting points (SFT, GRPO/IS/PPO, VLM,
-   freeze policies) with explicit gates (recommended / stretch / blocked).  
+2. **Recipes & meta-recipes** — first-class control objects: starting plans,
+   stage graphs, cliff→next edges; architecture gates; **shipped atlas + personal book**.  
 3. **Places for data** — multimodal examples, trajectories, media refs, run
    artifacts (`metrics.jsonl`, `probes.jsonl`, exports)—not black-box “upload
    and hope.”  
@@ -113,7 +115,30 @@ should power agents. Agents are not a bolt-on chat wrapper; they are a
 - A single mega-`train()` that hides the policy loop.  
 - A fire-and-forget full-dataset pass with evaluation only at the end.  
 - A proprietary hosted cloud (you bring GPUs).  
-- A claim that any one method (DPO, GRPO, SFT, …) always wins.
+- A claim that any one method (DPO, GRPO, SFT, …) always wins.  
+- A closed catalog only we may extend—**your forge must be able to grow its own book**.
+
+---
+
+## Differentiator — recipe book (shipped + personal)
+
+Most stacks treat “recipe” as docs or a one-shot config. Anvil treats recipes as
+**product surface**:
+
+| Layer | Who | Role |
+|-------|-----|------|
+| **Shipped atlas** | Anvil | Family/shape priors, gates, dogfooded patterns |
+| **Personal book** | Operator / org | Learnings from *their* data and runs—versioned, local, sovereign |
+| **Meta-recipes** | Either | Ladders and cliff→next policies over recipes (queue, recovery, domain packs) |
+
+Recipes **bind to pattern + shape/family**, not only one model snapshot—so a
+habit learned on Qwen2.5-VL-3B can ride the family to a sibling base, subject
+to gates. Experience (plateau patience, probe cadence, stage order) is more
+**art than science** today; calibration overshoot and production early-stop are
+both legitimate—see [`recipes.md`](recipes.md).
+
+**Agents** plan and switch using the same recipe objects humans edit. That is
+how operator judgment scales without a second, HTML-only brain.
 ---
 
 ## Why agent control matters
@@ -232,19 +257,20 @@ historical phase checkboxes alone:
 | Ladder | Product bar |
 |--------|-------------|
 | **Expert-v0** | Ship one specialist: place data → train under observe → export |
-| **Expert-v1** | Method ladder + cliffs agents can act on |
-| **Expert-v2** | Multi-hour / large-corpus / org-scale ops |
+| **Expert-v1** | Method ladder + cliffs + **meta-recipes** agents can act on |
+| **Expert-v2** | Scale ops + **personal recipe book** maturity (org packs, experience→defaults) |
+| **P.Recipes** | Cross-cutting: shipped atlas + personal book + promote-from-run (see roadmap) |
 
-Supporting priorities (live sufficiency + agent operability) map into that ladder:
+Supporting priorities map into that ladder:
 
 1. **SSOT APIs** — every web panel has a stable JSON/SSE counterpart.  
 2. **Observe for every train path** — SFT/VLM done for metrics; probes + DPO → v0/v1.  
 3. **Cliff library** — per-method tripwires → **v1**.  
-4. **Early-stop + recipe queue** — GRPO done; SFT/VLM + method switch → **v1**.  
+4. **Early-stop + recipe / meta-recipe queue** — GRPO done; SFT/VLM + method switch → **v1**.  
 5. **Long-job ops** — checkpoint/resume, multi-hour → **v2**.  
-6. **MCP + live control** — pause/patch/export; exercise watch→act → **v0/v1**.  
-7. **Recipe graph** — “if cliff X, try Y” → **v1**.  
-8. **Vision/robot paths** — convert done; lab corpus + probes → **v0**; robot RL/edge → **Path**.
+6. **MCP + live control** — pause/patch/export; recipe list/promote → **v0/v1**.  
+7. **Recipe book** — personal promote, family-scoped experience, meta-recipes → **P.Recipes / v1–v2**.  
+8. **Vision/robot paths** — convert done; lab corpus → **v0**; robot RL/edge → **Path**.
 
 Human UI remains essential for trust and debugging. It should be a client of
 the same control plane, not a separate parallel system.

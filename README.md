@@ -2,9 +2,10 @@
 
 **Anvil forges sovereign domain experts from base models.**
 
-Open-source **LoRA-first post-training** (SFT + RL): tiny four-verb API, honest
-recipes, and **live observability**—so you decide *how much is enough* and
-*when to shift gears* while data is applied, not only after a failed eval.
+Open-source **LoRA-first post-training** (SFT + RL): tiny four-verb API,
+**first-class recipes** (shipped atlas + your personal recipe book), and
+**live observability**—so you decide *how much is enough* and *when to shift
+gears* while data is applied, not only after a failed eval.
 
 Built for **two audiences at once**:
 
@@ -22,6 +23,7 @@ prompts, and export. Prompt packs also drop into *your* harness if you do not us
 | Doc | Role |
 |-----|------|
 | **[docs/product.md](docs/product.md)** | Product thesis (domain experts, live sufficiency, dual mode) |
+| **[docs/recipes.md](docs/recipes.md)** | Recipes, meta-recipes, personal recipe book (differentiator) |
 | **[docs/agent-context.md](docs/agent-context.md)** | Operator brief for agents (metrics, tools, classify→act) |
 | **[docs/agentic-control.md](docs/agentic-control.md)** | MCP/harness vs user brain; adoption paths A/B/C |
 | **[prompts/agent/](prompts/agent/)** | Drop-in operator prompts |
@@ -47,6 +49,7 @@ forward_backward · optim_step · sample · save_state
 | Surface | What it is |
 |---------|------------|
 | **Four-verb client** | Typed train/sample API; `fake://`, `local://` (torch+PEFT), remote HTTP, vLLM sample worker |
+| **Recipes / recipe book** | Shipped catalog + gates; personal book + meta-recipes (roadmap P.Recipes) |
 | **Web control plane** | `anvil-web` (:7600) — recipes, knobs, runs, gates, observe charts |
 | **RL observability** | `metrics.jsonl` (reward, group-std / advantage-collapse, IS ratio, loss) + SSE |
 | **Live inference probes** | Fixed prompts from the *current* policy every K steps — eyes before final eval |
