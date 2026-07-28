@@ -215,6 +215,8 @@ def run_grpo(
     early_stop_group_std_eps: float = DEFAULT_GROUP_STD_EPS,
     early_stop_reward_hi: float = DEFAULT_REWARD_HI,
     early_stop_reward_lo: float = DEFAULT_REWARD_LO,
+    stop_on_southward: bool | None = None,
+    southward_min_steps: int = 5,
     service_client: ServiceClient | None = None,
     training_client: Any | None = None,
     close_clients: bool = True,
@@ -266,6 +268,8 @@ def run_grpo(
     reward_fn = reward_fn or _exact_match_toy
     prompts = list(prompts) if prompts else [list(range(10, 26))]
     writer = RunMetricsWriter(run_dir) if run_dir else None
+    if stop_on_southward is None:
+        stop_on_southward = bool(early_stop and run_dir)
 
     sample_svc: ServiceClient | None = None
     resolved_sample: Backend | None = sample_backend
@@ -435,6 +439,28 @@ def run_grpo(
                             reward_mean=reward_mean,
                             group_reward_std_mean=group_std_mean,
                             patience=early_stop_patience,
+                        )
+                    break
+
+            if stop_on_southward and run_dir:
+                from anvil.observe.southward import maybe_stop_on_southward
+
+                sw = maybe_stop_on_southward(
+                    run_dir,
+                    step=step_ix,
+                    enabled=True,
+                    min_steps=southward_min_steps,
+                )
+                if sw is not None:
+                    stopped_reason = sw
+                    if writer is not None:
+                        writer.log_event(
+                            step=step_ix,
+                            event="early_stop",
+                            reason=sw,
+                            reward_mean=reward_mean,
+                            group_reward_std_mean=group_std_mean,
+                            trigger="southward",
                         )
                     break
     finally:

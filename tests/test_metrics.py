@@ -113,7 +113,13 @@ def test_run_grpo_adapter_sync_cadence(tmp_path):
     # steps 0,2,4 → 3 syncs
     assert res.sync_count == 3
     assert res.steps_run == 5
-    steps = read_jsonl(run_dir / METRICS_FILENAME)
+    # metrics.jsonl may also hold southward / early_stop events — step rows only
+    steps = [
+        s
+        for s in read_jsonl(run_dir / METRICS_FILENAME)
+        if s.get("type") == "step"
+    ]
+    assert len(steps) == 5
     flags = [s["adapter_synced"] for s in steps]
     assert flags == [True, False, True, False, True]
     assert all(s["sample_endpoint"] for s in steps)

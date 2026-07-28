@@ -135,28 +135,42 @@ def smoke_fake_sft_early_stop(ctx: SmokeContext) -> SmokeResult:
 def smoke_fake_dpo_observe(ctx: SmokeContext) -> SmokeResult:
     t0 = time.monotonic()
     from anvil.observe.metrics import read_jsonl
-    from anvil.recipes.dpo import run_dpo
+    from anvil.recipes.dpo import PreferencePair, run_dpo
 
     run_dir = ctx.report_run / "fake-dpo"
+    hold = PreferencePair(prompt="2+2?", preferred="4", rejected="nope long")
     res = run_dpo(
         endpoint="fake://",
         steps=8,
         run_dir=str(run_dir),
         early_stop=False,
+        stop_on_southward=False,
+        probes=[hold],
+        probe_every=2,
     )
     steps = read_jsonl(run_dir / "metrics.jsonl")
+    probes = read_jsonl(run_dir / "probes.jsonl")
     ok = (
         res.steps_run == 8
         and steps
         and steps[0].get("job") == "dpo"
         and "length_bias" in steps[0]
+        and res.n_probe_records >= 1
+        and probes
     )
     return SmokeResult(
         name="fake_dpo_observe",
         ok=ok,
         duration_s=time.monotonic() - t0,
-        detail=f"steps={res.steps_run} length_bias={res.mean_length_bias}",
-        meta={"steps": res.steps_run, "length_bias": res.mean_length_bias},
+        detail=(
+            f"steps={res.steps_run} length_bias={res.mean_length_bias} "
+            f"probes={res.n_probe_records}"
+        ),
+        meta={
+            "steps": res.steps_run,
+            "length_bias": res.mean_length_bias,
+            "n_probes": res.n_probe_records,
+        },
     )
 
 

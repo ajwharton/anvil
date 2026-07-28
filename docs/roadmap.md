@@ -86,8 +86,9 @@ cliffs and **meta-recipes**, not a fixed pre-run schedule; agents get
 machine-readable tripwires and audited switches.
 
 - [x] Preference (DPO) observe SSOT (`run_dpo` → `job=dpo` metrics; length_bias)  
-- [ ] Probes for **all** methods — SFT/VLM done; DPO probes still open  
+- [x] Probes for **all** methods — SFT/VLM/DPO held-out probes → `probes.jsonl`  
 - [x] Southward-turn detectors (`anvil.observe.southward` + smoke wiring)
+- [x] Mid-train auto-stop on southward cliffs (`stop_on_southward` / SFT·VLM·DPO·GRPO)
 - [x] **Meta-recipe executor** — `run_meta_recipe` + stage events on metrics.jsonl  
 - [ ] SFT curricula / data-stage advance (same pattern as RL recipe queue)  
 - [x] SFT/VLM early-stop with **type-scoped patience** (production mode; calibration mode separate)
@@ -463,3 +464,4 @@ For a spin-off agent session:
 | 2026-07-28 | **P.Recipes wire-up:** suggest prefers personal book; HTTP/MCP book+meta; meta-recipe schema skeleton |
 | 2026-07-28 | **Expert-v1 slice:** `run_meta_recipe` executor; `run_dpo` + `log_dpo_step`; agent prompts atlas vs book |
 | 2026-07-28 | **Southward detectors** + lab_smokes quick expanded (DPO/meta/southward/expert_v0); expert_v0_smoke scans + `--run-meta` |
+| 2026-07-28 | **Southward auto-stop** mid-train (SFT/VLM/DPO/GRPO); **DPO held-out probes** |
