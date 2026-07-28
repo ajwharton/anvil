@@ -68,11 +68,15 @@ HTTP equivalents live under `/api/*` and `/api/observe/*` (same SSOT). Prefer JS
 Cycle (details in [`watch_loop.md`](../prompts/agent/watch_loop.md)):
 
 1. **Read** — status, step, recipe/loss, last N metrics, last probes, tripwires.  
-2. **Classify** — Healthy | Noisy | Cliff | Broken.  
-3. **Act or wait** — one primary change at a time; fix infra before switching methods.  
-4. **Log** — class, evidence (metric names + values), action or no-op.
+2. **Southward scan** — `anvil.observe.southward.scan_run_dir` / `scan_and_log` (or smoke default).  
+3. **Classify** — Healthy | Noisy | Cliff | Broken (southward cliffs → Cliff).  
+4. **Act or wait** — one primary change at a time; fix infra before switching methods.  
+5. **Log** — class, evidence (metric names + values), action or no-op.
 
 **Scalars lie.** If reward/loss looks good but probe text is garbage, format-hacked, or off-task → treat as **Cliff**.
+
+Detectors: `advantage_collapse`, `reward_up_probes_down`, `probe_regression`,
+`loss_flat_probes_down`, `length_bias_spike`. Events log as `event=southward`.
 
 ---
 

@@ -102,6 +102,193 @@ def _model_exists(path: str) -> bool:
 # --- individual smokes -------------------------------------------------------
 
 
+def smoke_fake_sft_early_stop(ctx: SmokeContext) -> SmokeResult:
+    t0 = time.monotonic()
+    from anvil.protocol.messages import Example, Message, TextPart
+    from anvil.recipes.sft import run_sft
+
+    ex = Example(
+        messages=(
+            Message(role="user", content=(TextPart(text="hi"),)),
+            Message(role="assistant", content=(TextPart(text="yo"),)),
+        )
+    )
+    run_dir = ctx.report_run / "fake-sft-early-stop"
+    res = run_sft(
+        endpoint="fake://",
+        examples=[ex],
+        steps=200,
+        run_dir=str(run_dir),
+        early_stop_mode="production",
+        early_stop_patience=15,
+    )
+    ok = res.early_stop_reason is not None and res.steps_run < 200
+    return SmokeResult(
+        name="fake_sft_early_stop",
+        ok=ok,
+        duration_s=time.monotonic() - t0,
+        detail=f"steps={res.steps_run} reason={res.early_stop_reason}",
+        meta={"steps": res.steps_run, "early_stop_reason": res.early_stop_reason},
+    )
+
+
+def smoke_fake_dpo_observe(ctx: SmokeContext) -> SmokeResult:
+    t0 = time.monotonic()
+    from anvil.observe.metrics import read_jsonl
+    from anvil.recipes.dpo import run_dpo
+
+    run_dir = ctx.report_run / "fake-dpo"
+    res = run_dpo(
+        endpoint="fake://",
+        steps=8,
+        run_dir=str(run_dir),
+        early_stop=False,
+    )
+    steps = read_jsonl(run_dir / "metrics.jsonl")
+    ok = (
+        res.steps_run == 8
+        and steps
+        and steps[0].get("job") == "dpo"
+        and "length_bias" in steps[0]
+    )
+    return SmokeResult(
+        name="fake_dpo_observe",
+        ok=ok,
+        duration_s=time.monotonic() - t0,
+        detail=f"steps={res.steps_run} length_bias={res.mean_length_bias}",
+        meta={"steps": res.steps_run, "length_bias": res.mean_length_bias},
+    )
+
+
+def smoke_fake_meta_exec(ctx: SmokeContext) -> SmokeResult:
+    t0 = time.monotonic()
+    from anvil.recipes.meta import MetaEdge, MetaRecipe, MetaStage
+    from anvil.recipes.meta_exec import StageRunResult, run_meta_recipe
+
+    meta = MetaRecipe(
+        id="lab-smoke-meta",
+        title="lab",
+        stages=[
+            MetaStage(id="a", recipe_id="r0"),
+            MetaStage(id="b", recipe_id="r1"),
+        ],
+        edges=[MetaEdge(on="early_stop:*", from_stage="a", to_stage="b")],
+    )
+    calls: list[str] = []
+
+    def runner(stage, *, step_index: int) -> StageRunResult:
+        calls.append(stage.id)
+        if stage.id == "a":
+            return StageRunResult(signal="early_stop:loss_plateau_patience_40")
+        return StageRunResult(signal="done")
+
+    run_dir = ctx.report_run / "fake-meta"
+    res = run_meta_recipe(meta, runner, run_dir=run_dir)
+    ok = calls == ["a", "b"] and res.stages_run == 2
+    return SmokeResult(
+        name="fake_meta_exec",
+        ok=ok,
+        duration_s=time.monotonic() - t0,
+        detail=f"stages={res.stages_run} stop={res.stopped_reason}",
+        meta={"stages_run": res.stages_run},
+    )
+
+
+def smoke_fake_southward(ctx: SmokeContext) -> SmokeResult:
+    t0 = time.monotonic()
+    from anvil.observe.metrics import RunMetricsWriter
+    from anvil.observe.southward import scan_and_log
+
+    run_dir = ctx.report_run / "fake-southward"
+    w = RunMetricsWriter(run_dir)
+    for i in range(6):
+        w.log_step(
+            step=i,
+            reward_mean=0.5,
+            reward_std=0.0,
+            group_reward_std_mean=0.0,
+            loss=0.1,
+            n_datums=4,
+        )
+    rep = scan_and_log(run_dir)
+    ok = "advantage_collapse" in rep.names and not rep.ok
+    return SmokeResult(
+        name="fake_southward",
+        ok=ok,
+        duration_s=time.monotonic() - t0,
+        detail=f"flags={rep.names}",
+        meta={"flags": rep.names},
+    )
+
+
+def smoke_fake_expert_v0(ctx: SmokeContext) -> SmokeResult:
+    """Full expert_v0_smoke path on fake:// (convert → train → southward → meta)."""
+    t0 = time.monotonic()
+    env = os.environ.copy()
+    env["PYTHONPATH"] = str(REPO) + os.pathsep + env.get("PYTHONPATH", "")
+    # Keep all artifacts under report_run so laptop smokes never touch /mnt/...
+    media = ctx.report_run / "media"
+    observe = ctx.report_run / "observe"
+    book = ctx.report_run / "recipe_book"
+    media.mkdir(parents=True, exist_ok=True)
+    observe.mkdir(parents=True, exist_ok=True)
+    book.mkdir(parents=True, exist_ok=True)
+    env["ANVIL_RECIPE_BOOK"] = str(book)
+    run_id = f"lab-expert-v0-{_now_id()}"
+    cmd = [
+        sys.executable,
+        str(REPO / "scripts" / "expert_v0_smoke.py"),
+        "--endpoint",
+        "fake://",
+        "--media-root",
+        str(media),
+        "--observe-root",
+        str(observe),
+        "--output-jsonl",
+        str(ctx.report_run / f"{run_id}.jsonl"),
+        "--export",
+        str(ctx.report_run / f"{run_id}-export"),
+        "--run-id",
+        run_id,
+        "--max-rows",
+        "8",
+        "--steps",
+        "30",
+        "--holdout",
+        "1",
+        "--early-stop-mode",
+        "production",
+        "--early-stop-patience",
+        "12",
+        "--run-meta",
+        "--promote-recipe",
+        f"lab-{run_id}",
+    ]
+    proc = subprocess.run(
+        cmd,
+        cwd=str(REPO),
+        env=env,
+        capture_output=True,
+        text=True,
+        timeout=120,
+        check=False,
+    )
+    out = (proc.stdout or "") + (proc.stderr or "")
+    ok = (
+        proc.returncode == 0
+        and "done:" in out
+        and "southward:" in out
+        and "meta_exec:" in out
+    )
+    return SmokeResult(
+        name="fake_expert_v0",
+        ok=ok,
+        duration_s=time.monotonic() - t0,
+        detail=out.replace("\n", " ")[-500:],
+        meta={"returncode": proc.returncode, "run_id": run_id},
+    )
+
+
 def smoke_fake_early_stop(ctx: SmokeContext) -> SmokeResult:
     t0 = time.monotonic()
     from anvil.recipes.grpo import run_grpo
@@ -458,24 +645,40 @@ SMOKES: dict[str, SmokeFn] = {
     "host_env": smoke_host_env,
     "observe_root_writable": smoke_observe_root_writable,
     "fake_early_stop": smoke_fake_early_stop,
+    "fake_sft_early_stop": smoke_fake_sft_early_stop,
+    "fake_dpo_observe": smoke_fake_dpo_observe,
+    "fake_meta_exec": smoke_fake_meta_exec,
+    "fake_southward": smoke_fake_southward,
     "fake_rl_queue": smoke_fake_rl_queue,
+    "fake_expert_v0": smoke_fake_expert_v0,
     "grpo_early_stop_local": smoke_grpo_early_stop_local,
     "rl_queue_local": smoke_rl_queue_local,
     "vlm_sft_local": smoke_vlm_sft_local,
 }
 
 PROFILES: dict[str, tuple[str, ...]] = {
+    # Run often: laptop / pre-push / CI-adjacent (fake only, seconds)
     "quick": (
         "host_env",
         "observe_root_writable",
         "fake_early_stop",
+        "fake_sft_early_stop",
+        "fake_dpo_observe",
+        "fake_meta_exec",
+        "fake_southward",
         "fake_rl_queue",
+        "fake_expert_v0",
     ),
     "nightly": (
         "host_env",
         "observe_root_writable",
         "fake_early_stop",
+        "fake_sft_early_stop",
+        "fake_dpo_observe",
+        "fake_meta_exec",
+        "fake_southward",
         "fake_rl_queue",
+        "fake_expert_v0",
         "grpo_early_stop_local",
         "rl_queue_local",
     ),
@@ -483,7 +686,12 @@ PROFILES: dict[str, tuple[str, ...]] = {
         "host_env",
         "observe_root_writable",
         "fake_early_stop",
+        "fake_sft_early_stop",
+        "fake_dpo_observe",
+        "fake_meta_exec",
+        "fake_southward",
         "fake_rl_queue",
+        "fake_expert_v0",
         "grpo_early_stop_local",
         "rl_queue_local",
         "vlm_sft_local",
