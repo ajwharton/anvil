@@ -5,6 +5,7 @@ from __future__ import annotations
 import json
 from pathlib import Path
 
+from anvil.client.service import ServiceClient
 from anvil.observe.metrics import read_jsonl
 from anvil.protocol.messages import Example, Message, TextPart
 from anvil.protocol.types import CheckpointRef
@@ -18,7 +19,6 @@ from anvil.recipes.checkpoint import (
 )
 from anvil.recipes.grpo import run_grpo
 from anvil.recipes.sft import run_sft
-from anvil.client.service import ServiceClient
 
 
 def _ex(user: str = "2+2?", assistant: str = "4") -> Example:
