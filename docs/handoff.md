@@ -27,12 +27,14 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 | Done | Open (next) |
 |------|-------------|
 | Expert-v0/v1 observe + southward auto-stop | meta-exec default live SFT/GRPO runners |
-| LocalBackend real DPO + DPO probes | Bridge/OXE scale (Expert-v2) |
-| Book/meta HTTP+MCP+harness surfaces | Checkpoint/resume multi-hour ops |
-| `run_vlm_queue` vision stage advance | |
+| LocalBackend real DPO + DPO probes | Bridge/OXE scale ladder (Expert-v2) |
+| Book/meta HTTP+MCP+harness surfaces | Throughput defaults / multi-hour lab smokes |
+| `run_vlm_queue` vision stage advance | Org packs + self-host notes |
 | J-lens shelved (code kept; tests optional `-m jlens`) | |
+| **Checkpoint + resume** SFT/GRPO (`run_dir/resume.json` + `save_state`) | DPO recipe resume if needed |
 
 **Habit:** `python scripts/lab_smokes.py --profile quick` often.  
+**Resume:** `run_sft` / `run_grpo` with `run_dir` + `checkpoint_every=N`, then `resume=True` (same total `steps`).  
 **J-lens:** `pytest -m jlens` or `pytest tests/jlens/ -o addopts=` (not default CI).
 
 **Recommended next Outcome:**  
