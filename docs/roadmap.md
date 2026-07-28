@@ -174,10 +174,10 @@ Cross-cutting goals still apply to every job type. They are **re-homed** above:
 - [x] GRPO early-stop on dead signal + recipe queue advance  
 - [x] SFT / VLM SFT observe SSOT (`log_sft_step`)  
 - [x] Live web lists GRPO + SFT/VLM on `/observe`  
-- [ ] Preference (DPO/…) observe SSOT + family-specific cliffs → **v1**  
+- [x] Preference (DPO/…) observe SSOT + family-specific cliffs → **v1** (`log_dpo_step`, length_bias)  
 - [x] Probes for SFT/VLM mid-run → **v0** (`run_sft`/`run_vlm_sft` probes=)  
-- [ ] Probes for preference / remaining methods → **v1**  
-- [ ] Southward-turn detectors → **v1**  
+- [x] Probes for preference / remaining methods → **v1** (`run_dpo` probes=)  
+- [x] Southward-turn detectors + mid-train auto-stop → **v1** (`maybe_stop_on_southward`)  
 
 ### P.Ops — Multi-hour / large-corpus jobs → **v2**
 
@@ -357,7 +357,7 @@ path. Re-open only against the high bar in the spike writeup.
 
 - [x] `run_vlm_sft` → `metrics.jsonl` (loss, step, wall, n_image_refs) via `run_dir`  
 - [x] Live `/observe` for vision SFT runs (loss chart + index signal column)  
-- [ ] Held-out frame probes during VLM train  
+- [x] Held-out frame probes during VLM train (`run_vlm_sft` probes= → `probes.jsonl`)  
 - [ ] Early-stop / recipe advance hooks for vision stages (share GRPO queue patterns)  
 
 ### 3.D Multi-hour VLM jobs *(open — required; implements P.Ops for vision)*

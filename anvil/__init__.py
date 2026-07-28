@@ -1,6 +1,6 @@
-"""Anvil — open-source post-training toolkit (SFT/RL, LoRA-first).
+"""Anvil — forges sovereign domain experts from base models (LoRA-first).
 
-Phase 0: typed client contract + fake backend for golden tests.
+Four verbs, live observe (metrics/probes/southward), recipes + personal book.
 """
 
 from anvil.client import SamplingClient, ServiceClient, TrainingClient
