@@ -42,13 +42,16 @@ def test_rl_uses_importance_sampling_and_lower_lr():
 
 
 def test_suggest_orders_vision_recipes_for_vlm():
-    s = suggest_for_model("Qwen/Qwen2.5-VL-3B-Instruct")
+    s = suggest_for_model(
+        "Qwen/Qwen2.5-VL-3B-Instruct", include_personal_book=False
+    )
     assert s["shape"] == "edge_student"
     assert s["default_recipe_id"] == "vlm_sft_edge"
     ids = [c["recipe_id"] for c in s["recipes"]]
     assert "vlm_sft_edge" in ids
-    # recommended recipes come first
+    # recommended recipes come first (catalog only)
     assert s["recipes"][0]["gate"]["level"] == "recommended"
+    assert s["recipes"][0].get("source", "catalog") == "catalog"
 
 
 def test_overrides_patch_knobs():

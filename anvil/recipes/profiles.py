@@ -620,13 +620,41 @@ def _next_patterns(pattern: JobPattern, shape: ModelShape) -> tuple[str, ...]:
     return (JobPattern.SFT_CHAT.value,)
 
 
+def infer_model_family(base_model: str) -> str | None:
+    """Coarse family tag for personal-book matching (not a full card oracle)."""
+    n = base_model.lower().replace("\\", "/")
+    leaf = n.rsplit("/", 1)[-1]
+    if "qwen2.5-vl" in n or "qwen2_5_vl" in n or "qwen2.5vl" in n:
+        return "Qwen2.5-VL"
+    if "qwen2.5" in n or "qwen2_5" in n:
+        return "Qwen2.5"
+    if "qwen2" in n:
+        return "Qwen2"
+    if "llama-3" in n or "llama3" in n:
+        return "Llama-3"
+    if "gemma-2" in n or "gemma2" in n:
+        return "Gemma-2"
+    if "phi-3" in n or "phi3" in n:
+        return "Phi-3"
+    if leaf:
+        # last resort: first token before version-ish digits
+        return leaf.split("-")[0][:32] or None
+    return None
+
+
 def suggest_for_model(
     base_model: str,
     *,
     fetch_remote: bool = False,
     include_blocked: bool = False,
+    include_personal_book: bool = True,
 ) -> dict[str, Any]:
-    """UI helper: card-derived shape + gated catalog recipes for a base model."""
+    """UI helper: card-derived shape + gated catalog + personal book matches.
+
+    Personal recipes that match the inferred **family** are listed first under
+    ``personal_book`` and also prefixed into ``recipes`` with
+    ``source: personal_book`` so agents can prefer local learnings.
+    """
     from anvil.recipes.catalog import (
         default_recipe_id_for_shape,
         recipes_for_shape,
@@ -644,6 +672,8 @@ def suggest_for_model(
         shape = infer_shape(base_model)
         param_count = None
         has_vision = shape in {ModelShape.DENSE_VLM, ModelShape.EDGE_STUDENT}
+
+    family = infer_model_family(base_model)
 
     gated = recipes_for_shape(
         shape,
@@ -666,6 +696,7 @@ def suggest_for_model(
             cards.append(
                 {
                     "recipe_id": row["id"],
+                    "source": "catalog",
                     "pattern": row["pattern"],
                     "title": row["title"],
                     "summary": row["summary"],
@@ -679,6 +710,7 @@ def suggest_for_model(
             cards.append(
                 {
                     "recipe_id": row["id"],
+                    "source": "catalog",
                     "pattern": row["pattern"],
                     "title": row["title"],
                     "summary": row["summary"],
@@ -688,12 +720,55 @@ def suggest_for_model(
                 }
             )
 
+    personal: list[dict[str, Any]] = []
+    book_root = None
+    if include_personal_book:
+        try:
+            from anvil.recipes.book import RecipeBook
+
+            book = RecipeBook()
+            book_root = str(book.root)
+            matches = book.prefer(family=family) if family else book.list()
+            for br in matches:
+                personal.append(
+                    {
+                        "recipe_id": br.id,
+                        "source": "personal_book",
+                        "pattern": br.pattern,
+                        "title": br.title,
+                        "summary": (br.notes or "")[:240],
+                        "group": "personal",
+                        "family": br.family,
+                        "knobs": br.knobs,
+                        "stop_policy": br.stop_policy,
+                        "gate": {
+                            "level": "recommended",
+                            "ok": True,
+                            "reasons": ["personal book match"],
+                        },
+                        "plan": None,
+                        "source_run_id": br.source_run_id,
+                    }
+                )
+        except OSError:
+            personal = []
+
+    # Prefer personal book first for agent/human operators on this forge
+    recipes_merged = personal + cards
+    default_id = default_recipe_id_for_shape(shape)
+    if personal:
+        default_id = personal[0]["recipe_id"]
+
     out: dict[str, Any] = {
         "base_model": base_model,
         "shape": shape.value,
         "shape_label": _shape_label(shape),
-        "default_recipe_id": default_recipe_id_for_shape(shape),
-        "recipes": cards,
+        "family": family,
+        "default_recipe_id": default_id,
+        "recipes": recipes_merged,
+        "catalog": cards,
+        "personal_book": personal,
+        "personal_book_root": book_root,
         "catalog_count": len(list_patterns()),  # pattern count; see list_recipes for full
     }
     if card is not None:

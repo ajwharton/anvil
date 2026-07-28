@@ -1,0 +1,2182 @@
+{
+  "schema_version": 3,
+  "spike": "jlens-math-j0-v3",
+  "model_path": "/mnt/data/models/qwen2.5-1.5b-instruct",
+  "lens_path": "/mnt/data/models/lenses/qwen2.5-1.5b-instruct-v2/jacobian_lens.pt",
+  "device": "cuda",
+  "top_k": 8,
+  "protocols": [
+    "solve"
+  ],
+  "results": [
+    {
+      "probe_id": "add_then_mul",
+      "protocol": "solve",
+      "text_preview": "Solve step by step, then give the final answer.\nProblem: First add 2 and 5, then multiply the sum by 3.\nStep 1: 2 + 5 = 7\nStep 2: 7 * 3 = 21\nAnswer: 21\n\nProblem: Start with 10, subtract 4, then subtract 1.\nStep 1: 10 - 4 = 6\nStep 2: 6 - 1 =",
+      "generated_full": "Solve step by step, then give the final answer.\nProblem: First add 2 and 5, then multiply the sum by 3.\nStep 1: 2 + 5 = 7\nStep 2: 7 * 3 = 21\nAnswer: 21\n\nProblem: Start with 10, subtract 4, then subtract 1.\nStep 1: 10 - 4 = 6\nStep 2: 6 - 1 = 5\nAnswer: 5\n\nProblem: First add 3 and 4, then multiply the sum by 2.\nStep 1: 3 + 4 = 7\nStep 2: 7 * 2 = 14\nAnswer: 14\n\nFinal problem:\nFirst divide 8 by 2, then multiply the result by 3.\n\nStep 1: 8 \u00f7 2 = ",
+      "generated_continuation": "Step 1: 3 + 4 = 7\nStep 2: 7 * 2 = 14\nAnswer: 14\n\nFinal problem:\nFirst divide 8 by 2, then multiply the result by 3.\n\nStep 1: 8 \u00f7 2 = ",
+      "answer": "14",
+      "inter": "7",
+      "emitted_answer": "14",
+      "answer_correct": true,
+      "answer_token_index": 160,
+      "inter_token_index": 141,
+      "ans_score_mode": "boundary",
+      "inter_score_mode": "value",
+      "positions": [
+        130,
+        131,
+        132,
+        133,
+        134,
+        135,
+        136,
+        137,
+        138,
+        139,
+        140,
+        141,
+        142,
+        143,
+        144,
+        145,
+        146,
+        147,
+        148,
+        149,
+        150,
+        151,
+        152,
+        153,
+        154,
+        155,
+        156,
+        157,
+        158,
+        159,
+        160,
+        161,
+        162,
+        163,
+        164,
+        165,
+        166,
+        167,
+        168,
+        169,
+        170,
+        171,
+        172,
+        173,
+        174,
+        175,
+        176,
+        177,
+        178,
+        179,
+        180,
+        181,
+        182,
+        183,
+        184,
+        185,
+        186,
+        187,
+        188,
+        189,
+        190,
+        191,
+        192,
+        193
+      ],
+      "ans_hit_layers": [
+        12,
+        13,
+        14,
+        22,
+        23,
+        24,
+        25,
+        26
+      ],
+      "inter_hit_layers": [],
+      "ans_strong_layers": [
+        22,
+        23,
+        24,
+        25,
+        26
+      ],
+      "inter_strong_layers": [],
+      "ans_digit_ranks": {
+        "0": [
+          3,
+          344
+        ],
+        "1": [
+          2,
+          101
+        ],
+        "2": [
+          2,
+          90
+        ],
+        "3": [
+          2,
+          26
+        ],
+        "4": [
+          4,
+          33
+        ],
+        "5": [
+          4,
+          28
+        ],
+        "6": [
+          4,
+          14
+        ],
+        "7": [
+          6,
+          20
+        ],
+        "8": [
+          4,
+          23
+        ],
+        "9": [
+          4,
+          10
+        ],
+        "10": [
+          14,
+          66
+        ],
+        "11": [
+          4,
+          36
+        ],
+        "12": [
+          3,
+          7
+        ],
+        "13": [
+          1,
+          6
+        ],
+        "14": [
+          1,
+          5
+        ],
+        "15": [
+          6,
+          10
+        ],
+        "16": [
+          12,
+          12
+        ],
+        "17": [
+          8,
+          11
+        ],
+        "18": [
+          66,
+          30
+        ],
+        "19": [
+          29,
+          133
+        ],
+        "20": [
+          44,
+          286
+        ],
+        "21": [
+          11,
+          71
+        ],
+        "22": [
+          1,
+          2
+        ],
+        "23": [
+          1,
+          1
+        ],
+        "24": [
+          1,
+          1
+        ],
+        "25": [
+          1,
+          1
+        ],
+        "26": [
+          1,
+          1
+        ]
+      },
+      "inter_digit_ranks": {
+        "0": [
+          8321
+        ],
+        "1": [
+          2506
+        ],
+        "2": [
+          500
+        ],
+        "3": [
+          389
+        ],
+        "4": [
+          954
+        ],
+        "5": [
+          301
+        ],
+        "6": [
+          155
+        ],
+        "7": [
+          104
+        ],
+        "8": [
+          111
+        ],
+        "9": [
+          74
+        ],
+        "10": [
+          249
+        ],
+        "11": [
+          322
+        ],
+        "12": [
+          296
+        ],
+        "13": [
+          746
+        ],
+        "14": [
+          618
+        ],
+        "15": [
+          3475
+        ],
+        "16": [
+          2991
+        ],
+        "17": [
+          27787
+        ],
+        "18": [
+          106993
+        ],
+        "19": [
+          111271
+        ],
+        "20": [
+          124455
+        ],
+        "21": [
+          18316
+        ],
+        "22": [
+          19712
+        ],
+        "23": [
+          27870
+        ],
+        "24": [
+          1649
+        ],
+        "25": [
+          983
+        ],
+        "26": [
+          669
+        ]
+      },
+      "foil_digit": "3",
+      "foil_ranks": {
+        "0": 6,
+        "1": 7,
+        "2": 6,
+        "3": 6,
+        "4": 9,
+        "5": 10,
+        "6": 7,
+        "7": 12,
+        "8": 8,
+        "9": 6,
+        "10": 14,
+        "11": 10,
+        "12": 4,
+        "13": 4,
+        "14": 6,
+        "15": 6,
+        "16": 9,
+        "17": 11,
+        "18": 90,
+        "19": 71,
+        "20": 153,
+        "21": 93,
+        "22": 148,
+        "23": 200,
+        "24": 45,
+        "25": 6,
+        "26": 4
+      },
+      "ans_d1_mean_rank": 8.9,
+      "foil_mean_rank": 35.2,
+      "answer_digitseq_hit": true,
+      "answer_digitseq_strong_hit": true,
+      "solve_order_score": null,
+      "primary_order_score": null,
+      "intermediate_order_score": null,
+      "answer_min_rank": null,
+      "sanity_top1_agreement": 0.9375,
+      "wall_time_s": 9.420507934992202
+    },
+    {
+      "probe_id": "sub_chain",
+      "protocol": "solve",
+      "text_preview": "Solve step by step, then give the final answer.\nProblem: First add 2 and 5, then multiply the sum by 3.\nStep 1: 2 + 5 = 7\nStep 2: 7 * 3 = 21\nAnswer: 21\n\nProblem: Start with 10, subtract 4, then subtract 1.\nStep 1: 10 - 4 = 6\nStep 2: 6 - 1 =",
+      "generated_full": "Solve step by step, then give the final answer.\nProblem: First add 2 and 5, then multiply the sum by 3.\nStep 1: 2 + 5 = 7\nStep 2: 7 * 3 = 21\nAnswer: 21\n\nProblem: Start with 10, subtract 4, then subtract 1.\nStep 1: 10 - 4 = 6\nStep 2: 6 - 1 = 5\nAnswer: 5\n\nProblem: Start with 20, subtract 5, then subtract 3.\nStep 1: 20 - 5 = 15\nStep 2: 15 - 3 = 12\nAnswer: 12\n\nNow that you have solved these problems, please provide me with a new set of numbers to solve. I will follow the same steps as above",
+      "generated_continuation": "Step 1: 20 - 5 = 15\nStep 2: 15 - 3 = 12\nAnswer: 12\n\nNow that you have solved these problems, please provide me with a new set of numbers to solve. I will follow the same steps as above",
+      "answer": "12",
+      "inter": "15",
+      "emitted_answer": "12",
+      "answer_correct": true,
+      "answer_token_index": 162,
+      "inter_token_index": 141,
+      "ans_score_mode": "boundary",
+      "inter_score_mode": "value",
+      "positions": [
+        129,
+        130,
+        131,
+        132,
+        133,
+        134,
+        135,
+        136,
+        137,
+        138,
+        139,
+        140,
+        141,
+        142,
+        143,
+        144,
+        145,
+        146,
+        147,
+        148,
+        149,
+        150,
+        151,
+        152,
+        153,
+        154,
+        155,
+        156,
+        157,
+        158,
+        159,
+        160,
+        161,
+        162,
+        163,
+        164,
+        165,
+        166,
+        167,
+        168,
+        169,
+        170,
+        171,
+        172,
+        173,
+        174,
+        175,
+        176,
+        177,
+        178,
+        179,
+        180,
+        181,
+        182,
+        183,
+        184,
+        185,
+        186,
+        187,
+        188,
+        189,
+        190,
+        191,
+        192
+      ],
+      "ans_hit_layers": [
+        6,
+        7,
+        9,
+        12,
+        13,
+        14,
+        15,
+        22,
+        23,
+        24,
+        25,
+        26
+      ],
+      "inter_hit_layers": [],
+      "ans_strong_layers": [
+        12,
+        22,
+        23,
+        24,
+        25,
+        26
+      ],
+      "inter_strong_layers": [],
+      "ans_digit_ranks": {
+        "0": [
+          3,
+          64
+        ],
+        "1": [
+          2,
+          16
+        ],
+        "2": [
+          2,
+          36
+        ],
+        "3": [
+          2,
+          15
+        ],
+        "4": [
+          5,
+          18
+        ],
+        "5": [
+          5,
+          11
+        ],
+        "6": [
+          5,
+          4
+        ],
+        "7": [
+          7,
+          8
+        ],
+        "8": [
+          5,
+          11
+        ],
+        "9": [
+          4,
+          6
+        ],
+        "10": [
+          26,
+          24
+        ],
+        "11": [
+          4,
+          12
+        ],
+        "12": [
+          2,
+          3
+        ],
+        "13": [
+          1,
+          5
+        ],
+        "14": [
+          1,
+          5
+        ],
+        "15": [
+          7,
+          6
+        ],
+        "16": [
+          13,
+          13
+        ],
+        "17": [
+          9,
+          1
+        ],
+        "18": [
+          94,
+          38
+        ],
+        "19": [
+          20,
+          75
+        ],
+        "20": [
+          21,
+          254
+        ],
+        "21": [
+          4,
+          111
+        ],
+        "22": [
+          1,
+          1
+        ],
+        "23": [
+          1,
+          1
+        ],
+        "24": [
+          1,
+          1
+        ],
+        "25": [
+          1,
+          1
+        ],
+        "26": [
+          1,
+          1
+        ]
+      },
+      "inter_digit_ranks": {
+        "0": [
+          1102,
+          46974
+        ],
+        "1": [
+          30,
+          1751
+        ],
+        "2": [
+          16,
+          61
+        ],
+        "3": [
+          3,
+          21
+        ],
+        "4": [
+          7,
+          46
+        ],
+        "5": [
+          6,
+          24
+        ],
+        "6": [
+          5,
+          42
+        ],
+        "7": [
+          12,
+          54
+        ],
+        "8": [
+          11,
+          75
+        ],
+        "9": [
+          4,
+          79
+        ],
+        "10": [
+          17,
+          327
+        ],
+        "11": [
+          5,
+          408
+        ],
+        "12": [
+          2,
+          105
+        ],
+        "13": [
+          3,
+          328
+        ],
+        "14": [
+          2,
+          999
+        ],
+        "15": [
+          55,
+          5931
+        ],
+        "16": [
+          106,
+          2269
+        ],
+        "17": [
+          207,
+          16859
+        ],
+        "18": [
+          3427,
+          96207
+        ],
+        "19": [
+          2708,
+          74916
+        ],
+        "20": [
+          691,
+          128568
+        ],
+        "21": [
+          250,
+          37444
+        ],
+        "22": [
+          2510,
+          25297
+        ],
+        "23": [
+          8813,
+          14898
+        ],
+        "24": [
+          236,
+          1683
+        ],
+        "25": [
+          33,
+          1223
+        ],
+        "26": [
+          16,
+          1348
+        ]
+      },
+      "foil_digit": "3",
+      "foil_ranks": {
+        "0": 6,
+        "1": 7,
+        "2": 6,
+        "3": 6,
+        "4": 9,
+        "5": 10,
+        "6": 7,
+        "7": 12,
+        "8": 7,
+        "9": 7,
+        "10": 26,
+        "11": 8,
+        "12": 4,
+        "13": 4,
+        "14": 7,
+        "15": 9,
+        "16": 11,
+        "17": 14,
+        "18": 77,
+        "19": 34,
+        "20": 52,
+        "21": 44,
+        "22": 70,
+        "23": 120,
+        "24": 43,
+        "25": 9,
+        "26": 4
+      },
+      "ans_d1_mean_rank": 9.1,
+      "foil_mean_rank": 22.7,
+      "answer_digitseq_hit": true,
+      "answer_digitseq_strong_hit": true,
+      "solve_order_score": null,
+      "primary_order_score": null,
+      "intermediate_order_score": null,
+      "answer_min_rank": null,
+      "sanity_top1_agreement": 0.8281,
+      "wall_time_s": 1.8214507859956939
+    },
+    {
+      "probe_id": "double_plus",
+      "protocol": "solve",
+      "text_preview": "Solve step by step, then give the final answer.\nProblem: First add 2 and 5, then multiply the sum by 3.\nStep 1: 2 + 5 = 7\nStep 2: 7 * 3 = 21\nAnswer: 21\n\nProblem: Start with 10, subtract 4, then subtract 1.\nStep 1: 10 - 4 = 6\nStep 2: 6 - 1 =",
+      "generated_full": "Solve step by step, then give the final answer.\nProblem: First add 2 and 5, then multiply the sum by 3.\nStep 1: 2 + 5 = 7\nStep 2: 7 * 3 = 21\nAnswer: 21\n\nProblem: Start with 10, subtract 4, then subtract 1.\nStep 1: 10 - 4 = 6\nStep 2: 6 - 1 = 5\nAnswer: 5\n\nProblem: Double 6, then add 1.\nStep 1: 6 * 2 = 12\nStep 2: 12 + 1 = 13\nAnswer: 13\n\nNow that you have solved these problems, please provide me with a set of numbers to solve. I will follow the same steps as above to ensure",
+      "generated_continuation": "Step 1: 6 * 2 = 12\nStep 2: 12 + 1 = 13\nAnswer: 13\n\nNow that you have solved these problems, please provide me with a set of numbers to solve. I will follow the same steps as above to ensure",
+      "answer": "13",
+      "inter": "12",
+      "emitted_answer": "13",
+      "answer_correct": true,
+      "answer_token_index": 155,
+      "inter_token_index": 134,
+      "ans_score_mode": "boundary",
+      "inter_score_mode": "value",
+      "positions": [
+        123,
+        124,
+        125,
+        126,
+        127,
+        128,
+        129,
+        130,
+        131,
+        132,
+        133,
+        134,
+        135,
+        136,
+        137,
+        138,
+        139,
+        140,
+        141,
+        142,
+        143,
+        144,
+        145,
+        146,
+        147,
+        148,
+        149,
+        150,
+        151,
+        152,
+        153,
+        154,
+        155,
+        156,
+        157,
+        158,
+        159,
+        160,
+        161,
+        162,
+        163,
+        164,
+        165,
+        166,
+        167,
+        168,
+        169,
+        170,
+        171,
+        172,
+        173,
+        174,
+        175,
+        176,
+        177,
+        178,
+        179,
+        180,
+        181,
+        182,
+        183,
+        184,
+        185,
+        186
+      ],
+      "ans_hit_layers": [
+        13,
+        22,
+        23,
+        24,
+        25,
+        26
+      ],
+      "inter_hit_layers": [],
+      "ans_strong_layers": [
+        22,
+        23,
+        24,
+        25,
+        26
+      ],
+      "inter_strong_layers": [],
+      "ans_digit_ranks": {
+        "0": [
+          3,
+          302
+        ],
+        "1": [
+          2,
+          113
+        ],
+        "2": [
+          2,
+          179
+        ],
+        "3": [
+          2,
+          57
+        ],
+        "4": [
+          5,
+          77
+        ],
+        "5": [
+          5,
+          53
+        ],
+        "6": [
+          5,
+          25
+        ],
+        "7": [
+          5,
+          44
+        ],
+        "8": [
+          4,
+          38
+        ],
+        "9": [
+          3,
+          14
+        ],
+        "10": [
+          17,
+          69
+        ],
+        "11": [
+          5,
+          52
+        ],
+        "12": [
+          3,
+          12
+        ],
+        "13": [
+          1,
+          7
+        ],
+        "14": [
+          1,
+          12
+        ],
+        "15": [
+          11,
+          53
+        ],
+        "16": [
+          14,
+          46
+        ],
+        "17": [
+          9,
+          17
+        ],
+        "18": [
+          93,
+          378
+        ],
+        "19": [
+          29,
+          655
+        ],
+        "20": [
+          35,
+          1057
+        ],
+        "21": [
+          10,
+          352
+        ],
+        "22": [
+          1,
+          3
+        ],
+        "23": [
+          1,
+          1
+        ],
+        "24": [
+          1,
+          1
+        ],
+        "25": [
+          1,
+          1
+        ],
+        "26": [
+          1,
+          1
+        ]
+      },
+      "inter_digit_ranks": {
+        "0": [
+          1087,
+          21093
+        ],
+        "1": [
+          32,
+          222
+        ],
+        "2": [
+          23,
+          46
+        ],
+        "3": [
+          4,
+          19
+        ],
+        "4": [
+          12,
+          39
+        ],
+        "5": [
+          10,
+          32
+        ],
+        "6": [
+          4,
+          46
+        ],
+        "7": [
+          11,
+          93
+        ],
+        "8": [
+          10,
+          156
+        ],
+        "9": [
+          4,
+          99
+        ],
+        "10": [
+          57,
+          234
+        ],
+        "11": [
+          12,
+          332
+        ],
+        "12": [
+          1,
+          327
+        ],
+        "13": [
+          3,
+          216
+        ],
+        "14": [
+          3,
+          838
+        ],
+        "15": [
+          43,
+          2554
+        ],
+        "16": [
+          241,
+          1599
+        ],
+        "17": [
+          3341,
+          6603
+        ],
+        "18": [
+          14850,
+          110346
+        ],
+        "19": [
+          1651,
+          79713
+        ],
+        "20": [
+          1849,
+          121051
+        ],
+        "21": [
+          994,
+          64566
+        ],
+        "22": [
+          921,
+          17946
+        ],
+        "23": [
+          658,
+          3840
+        ],
+        "24": [
+          53,
+          1074
+        ],
+        "25": [
+          8,
+          765
+        ],
+        "26": [
+          5,
+          501
+        ]
+      },
+      "foil_digit": "5",
+      "foil_ranks": {
+        "0": 10,
+        "1": 9,
+        "2": 7,
+        "3": 7,
+        "4": 12,
+        "5": 14,
+        "6": 13,
+        "7": 16,
+        "8": 10,
+        "9": 11,
+        "10": 41,
+        "11": 21,
+        "12": 10,
+        "13": 12,
+        "14": 10,
+        "15": 37,
+        "16": 22,
+        "17": 27,
+        "18": 170,
+        "19": 142,
+        "20": 236,
+        "21": 102,
+        "22": 825,
+        "23": 337,
+        "24": 46,
+        "25": 9,
+        "26": 5
+      },
+      "ans_d1_mean_rank": 10.0,
+      "foil_mean_rank": 80.0,
+      "answer_digitseq_hit": true,
+      "answer_digitseq_strong_hit": true,
+      "solve_order_score": null,
+      "primary_order_score": null,
+      "intermediate_order_score": null,
+      "answer_min_rank": null,
+      "sanity_top1_agreement": 0.8125,
+      "wall_time_s": 1.8322122100216802
+    },
+    {
+      "probe_id": "mul_34",
+      "protocol": "solve",
+      "text_preview": "Solve step by step, then give the final answer.\nProblem: First add 2 and 5, then multiply the sum by 3.\nStep 1: 2 + 5 = 7\nStep 2: 7 * 3 = 21\nAnswer: 21\n\nProblem: Start with 10, subtract 4, then subtract 1.\nStep 1: 10 - 4 = 6\nStep 2: 6 - 1 =",
+      "generated_full": "Solve step by step, then give the final answer.\nProblem: First add 2 and 5, then multiply the sum by 3.\nStep 1: 2 + 5 = 7\nStep 2: 7 * 3 = 21\nAnswer: 21\n\nProblem: Start with 10, subtract 4, then subtract 1.\nStep 1: 10 - 4 = 6\nStep 2: 6 - 1 = 5\nAnswer: 5\n\nProblem: First add 8 and 9, then multiply the sum by 2.\nStep 1: 8 + 9 = 17\nStep 2: 17 * 2 = 34\nAnswer: 34\n\nFinal problem:\nFirst divide 12 by 3, then multiply the result by 4.\n\nStep 1: 12 \u00f7",
+      "generated_continuation": "Step 1: 8 + 9 = 17\nStep 2: 17 * 2 = 34\nAnswer: 34\n\nFinal problem:\nFirst divide 12 by 3, then multiply the result by 4.\n\nStep 1: 12 \u00f7",
+      "answer": "34",
+      "inter": "17",
+      "emitted_answer": "34",
+      "answer_correct": true,
+      "answer_token_index": 162,
+      "inter_token_index": 141,
+      "ans_score_mode": "boundary",
+      "inter_score_mode": "value",
+      "positions": [
+        130,
+        131,
+        132,
+        133,
+        134,
+        135,
+        136,
+        137,
+        138,
+        139,
+        140,
+        141,
+        142,
+        143,
+        144,
+        145,
+        146,
+        147,
+        148,
+        149,
+        150,
+        151,
+        152,
+        153,
+        154,
+        155,
+        156,
+        157,
+        158,
+        159,
+        160,
+        161,
+        162,
+        163,
+        164,
+        165,
+        166,
+        167,
+        168,
+        169,
+        170,
+        171,
+        172,
+        173,
+        174,
+        175,
+        176,
+        177,
+        178,
+        179,
+        180,
+        181,
+        182,
+        183,
+        184,
+        185,
+        186,
+        187,
+        188,
+        189,
+        190,
+        191,
+        192,
+        193
+      ],
+      "ans_hit_layers": [
+        6,
+        9,
+        12,
+        13,
+        14,
+        16,
+        22,
+        23,
+        24,
+        25,
+        26
+      ],
+      "inter_hit_layers": [],
+      "ans_strong_layers": [
+        22,
+        23,
+        24,
+        25,
+        26
+      ],
+      "inter_strong_layers": [],
+      "ans_digit_ranks": {
+        "0": [
+          6,
+          1387
+        ],
+        "1": [
+          8,
+          512
+        ],
+        "2": [
+          6,
+          369
+        ],
+        "3": [
+          6,
+          54
+        ],
+        "4": [
+          9,
+          91
+        ],
+        "5": [
+          10,
+          25
+        ],
+        "6": [
+          6,
+          4
+        ],
+        "7": [
+          12,
+          11
+        ],
+        "8": [
+          7,
+          10
+        ],
+        "9": [
+          6,
+          5
+        ],
+        "10": [
+          13,
+          51
+        ],
+        "11": [
+          9,
+          43
+        ],
+        "12": [
+          4,
+          2
+        ],
+        "13": [
+          4,
+          2
+        ],
+        "14": [
+          6,
+          1
+        ],
+        "15": [
+          7,
+          16
+        ],
+        "16": [
+          8,
+          8
+        ],
+        "17": [
+          12,
+          4
+        ],
+        "18": [
+          134,
+          50
+        ],
+        "19": [
+          24,
+          181
+        ],
+        "20": [
+          45,
+          260
+        ],
+        "21": [
+          12,
+          30
+        ],
+        "22": [
+          1,
+          3
+        ],
+        "23": [
+          1,
+          1
+        ],
+        "24": [
+          1,
+          1
+        ],
+        "25": [
+          1,
+          1
+        ],
+        "26": [
+          1,
+          1
+        ]
+      },
+      "inter_digit_ranks": {
+        "0": [
+          1076,
+          1667
+        ],
+        "1": [
+          37,
+          841
+        ],
+        "2": [
+          19,
+          127
+        ],
+        "3": [
+          3,
+          90
+        ],
+        "4": [
+          12,
+          176
+        ],
+        "5": [
+          8,
+          91
+        ],
+        "6": [
+          5,
+          100
+        ],
+        "7": [
+          10,
+          118
+        ],
+        "8": [
+          8,
+          138
+        ],
+        "9": [
+          4,
+          116
+        ],
+        "10": [
+          20,
+          239
+        ],
+        "11": [
+          3,
+          180
+        ],
+        "12": [
+          1,
+          145
+        ],
+        "13": [
+          1,
+          227
+        ],
+        "14": [
+          3,
+          320
+        ],
+        "15": [
+          31,
+          1137
+        ],
+        "16": [
+          280,
+          1135
+        ],
+        "17": [
+          485,
+          9454
+        ],
+        "18": [
+          7279,
+          72679
+        ],
+        "19": [
+          983,
+          67628
+        ],
+        "20": [
+          1356,
+          113746
+        ],
+        "21": [
+          433,
+          14294
+        ],
+        "22": [
+          260,
+          10141
+        ],
+        "23": [
+          166,
+          16017
+        ],
+        "24": [
+          8,
+          1332
+        ],
+        "25": [
+          11,
+          942
+        ],
+        "26": [
+          6,
+          1070
+        ]
+      },
+      "foil_digit": "5",
+      "foil_ranks": {
+        "0": 9,
+        "1": 9,
+        "2": 7,
+        "3": 7,
+        "4": 11,
+        "5": 14,
+        "6": 13,
+        "7": 16,
+        "8": 10,
+        "9": 10,
+        "10": 36,
+        "11": 17,
+        "12": 8,
+        "13": 11,
+        "14": 9,
+        "15": 24,
+        "16": 15,
+        "17": 23,
+        "18": 191,
+        "19": 91,
+        "20": 128,
+        "21": 22,
+        "22": 64,
+        "23": 27,
+        "24": 13,
+        "25": 7,
+        "26": 6
+      },
+      "ans_d1_mean_rank": 13.3,
+      "foil_mean_rank": 29.6,
+      "answer_digitseq_hit": true,
+      "answer_digitseq_strong_hit": true,
+      "solve_order_score": null,
+      "primary_order_score": null,
+      "intermediate_order_score": null,
+      "answer_min_rank": null,
+      "sanity_top1_agreement": 0.9375,
+      "wall_time_s": 1.8185814899916295
+    },
+    {
+      "probe_id": "sub_25",
+      "protocol": "solve",
+      "text_preview": "Solve step by step, then give the final answer.\nProblem: First add 2 and 5, then multiply the sum by 3.\nStep 1: 2 + 5 = 7\nStep 2: 7 * 3 = 21\nAnswer: 21\n\nProblem: Start with 10, subtract 4, then subtract 1.\nStep 1: 10 - 4 = 6\nStep 2: 6 - 1 =",
+      "generated_full": "Solve step by step, then give the final answer.\nProblem: First add 2 and 5, then multiply the sum by 3.\nStep 1: 2 + 5 = 7\nStep 2: 7 * 3 = 21\nAnswer: 21\n\nProblem: Start with 10, subtract 4, then subtract 1.\nStep 1: 10 - 4 = 6\nStep 2: 6 - 1 = 5\nAnswer: 5\n\nProblem: Start with 40, subtract 6, then subtract 9.\nStep 1: 40 - 6 = 34\nStep 2: 34 - 9 = 25\nAnswer: 25\n\nNow that you have solved these problems, please provide me with a new set of numbers to solve. I will follow the same steps as above",
+      "generated_continuation": "Step 1: 40 - 6 = 34\nStep 2: 34 - 9 = 25\nAnswer: 25\n\nNow that you have solved these problems, please provide me with a new set of numbers to solve. I will follow the same steps as above",
+      "answer": "25",
+      "inter": "34",
+      "emitted_answer": "25",
+      "answer_correct": true,
+      "answer_token_index": 162,
+      "inter_token_index": 141,
+      "ans_score_mode": "boundary",
+      "inter_score_mode": "value",
+      "positions": [
+        129,
+        130,
+        131,
+        132,
+        133,
+        134,
+        135,
+        136,
+        137,
+        138,
+        139,
+        140,
+        141,
+        142,
+        143,
+        144,
+        145,
+        146,
+        147,
+        148,
+        149,
+        150,
+        151,
+        152,
+        153,
+        154,
+        155,
+        156,
+        157,
+        158,
+        159,
+        160,
+        161,
+        162,
+        163,
+        164,
+        165,
+        166,
+        167,
+        168,
+        169,
+        170,
+        171,
+        172,
+        173,
+        174,
+        175,
+        176,
+        177,
+        178,
+        179,
+        180,
+        181,
+        182,
+        183,
+        184,
+        185,
+        186,
+        187,
+        188,
+        189,
+        190,
+        191,
+        192
+      ],
+      "ans_hit_layers": [
+        22,
+        23,
+        24,
+        25,
+        26
+      ],
+      "inter_hit_layers": [],
+      "ans_strong_layers": [
+        23,
+        24,
+        25,
+        26
+      ],
+      "inter_strong_layers": [],
+      "ans_digit_ranks": {
+        "0": [
+          1,
+          597
+        ],
+        "1": [
+          1,
+          383
+        ],
+        "2": [
+          1,
+          716
+        ],
+        "3": [
+          1,
+          94
+        ],
+        "4": [
+          3,
+          418
+        ],
+        "5": [
+          1,
+          91
+        ],
+        "6": [
+          2,
+          69
+        ],
+        "7": [
+          2,
+          100
+        ],
+        "8": [
+          2,
+          130
+        ],
+        "9": [
+          2,
+          61
+        ],
+        "10": [
+          9,
+          172
+        ],
+        "11": [
+          1,
+          130
+        ],
+        "12": [
+          1,
+          25
+        ],
+        "13": [
+          2,
+          16
+        ],
+        "14": [
+          2,
+          29
+        ],
+        "15": [
+          3,
+          49
+        ],
+        "16": [
+          3,
+          60
+        ],
+        "17": [
+          3,
+          67
+        ],
+        "18": [
+          21,
+          370
+        ],
+        "19": [
+          3,
+          2178
+        ],
+        "20": [
+          17,
+          3945
+        ],
+        "21": [
+          2,
+          463
+        ],
+        "22": [
+          1,
+          4
+        ],
+        "23": [
+          1,
+          1
+        ],
+        "24": [
+          1,
+          1
+        ],
+        "25": [
+          1,
+          1
+        ],
+        "26": [
+          1,
+          1
+        ]
+      },
+      "inter_digit_ranks": {
+        "0": [
+          18580,
+          420
+        ],
+        "1": [
+          2771,
+          53
+        ],
+        "2": [
+          1061,
+          27
+        ],
+        "3": [
+          92,
+          5
+        ],
+        "4": [
+          148,
+          28
+        ],
+        "5": [
+          33,
+          6
+        ],
+        "6": [
+          19,
+          7
+        ],
+        "7": [
+          26,
+          29
+        ],
+        "8": [
+          23,
+          22
+        ],
+        "9": [
+          4,
+          10
+        ],
+        "10": [
+          30,
+          40
+        ],
+        "11": [
+          33,
+          30
+        ],
+        "12": [
+          5,
+          12
+        ],
+        "13": [
+          19,
+          36
+        ],
+        "14": [
+          4,
+          90
+        ],
+        "15": [
+          105,
+          625
+        ],
+        "16": [
+          120,
+          175
+        ],
+        "17": [
+          480,
+          590
+        ],
+        "18": [
+          11820,
+          23160
+        ],
+        "19": [
+          4629,
+          34669
+        ],
+        "20": [
+          1141,
+          102109
+        ],
+        "21": [
+          529,
+          21506
+        ],
+        "22": [
+          2693,
+          21627
+        ],
+        "23": [
+          329,
+          10027
+        ],
+        "24": [
+          35,
+          1351
+        ],
+        "25": [
+          52,
+          817
+        ],
+        "26": [
+          4,
+          600
+        ]
+      },
+      "foil_digit": "7",
+      "foil_ranks": {
+        "0": 10,
+        "1": 14,
+        "2": 10,
+        "3": 9,
+        "4": 14,
+        "5": 18,
+        "6": 21,
+        "7": 19,
+        "8": 13,
+        "9": 15,
+        "10": 40,
+        "11": 13,
+        "12": 7,
+        "13": 10,
+        "14": 10,
+        "15": 18,
+        "16": 14,
+        "17": 13,
+        "18": 77,
+        "19": 22,
+        "20": 36,
+        "21": 6,
+        "22": 17,
+        "23": 19,
+        "24": 19,
+        "25": 8,
+        "26": 9
+      },
+      "ans_d1_mean_rank": 3.3,
+      "foil_mean_rank": 17.8,
+      "answer_digitseq_hit": true,
+      "answer_digitseq_strong_hit": true,
+      "solve_order_score": null,
+      "primary_order_score": null,
+      "intermediate_order_score": null,
+      "answer_min_rank": null,
+      "sanity_top1_agreement": 0.8281,
+      "wall_time_s": 1.811445294006262
+    },
+    {
+      "probe_id": "dbl_22",
+      "protocol": "solve",
+      "text_preview": "Solve step by step, then give the final answer.\nProblem: First add 2 and 5, then multiply the sum by 3.\nStep 1: 2 + 5 = 7\nStep 2: 7 * 3 = 21\nAnswer: 21\n\nProblem: Start with 10, subtract 4, then subtract 1.\nStep 1: 10 - 4 = 6\nStep 2: 6 - 1 =",
+      "generated_full": "Solve step by step, then give the final answer.\nProblem: First add 2 and 5, then multiply the sum by 3.\nStep 1: 2 + 5 = 7\nStep 2: 7 * 3 = 21\nAnswer: 21\n\nProblem: Start with 10, subtract 4, then subtract 1.\nStep 1: 10 - 4 = 6\nStep 2: 6 - 1 = 5\nAnswer: 5\n\nProblem: Double 7, then add 8.\nStep 1: 7 * 2 = 14\nStep 2: 14 + 8 = 22\nAnswer: 22\n\nNow that you have solved these problems, please provide me with a new problem to solve. I will follow the same steps of solving it step by",
+      "generated_continuation": "Step 1: 7 * 2 = 14\nStep 2: 14 + 8 = 22\nAnswer: 22\n\nNow that you have solved these problems, please provide me with a new problem to solve. I will follow the same steps of solving it step by",
+      "answer": "22",
+      "inter": "14",
+      "emitted_answer": "22",
+      "answer_correct": true,
+      "answer_token_index": 155,
+      "inter_token_index": 134,
+      "ans_score_mode": "boundary",
+      "inter_score_mode": "value",
+      "positions": [
+        123,
+        124,
+        125,
+        126,
+        127,
+        128,
+        129,
+        130,
+        131,
+        132,
+        133,
+        134,
+        135,
+        136,
+        137,
+        138,
+        139,
+        140,
+        141,
+        142,
+        143,
+        144,
+        145,
+        146,
+        147,
+        148,
+        149,
+        150,
+        151,
+        152,
+        153,
+        154,
+        155,
+        156,
+        157,
+        158,
+        159,
+        160,
+        161,
+        162,
+        163,
+        164,
+        165,
+        166,
+        167,
+        168,
+        169,
+        170,
+        171,
+        172,
+        173,
+        174,
+        175,
+        176,
+        177,
+        178,
+        179,
+        180,
+        181,
+        182,
+        183,
+        184,
+        185,
+        186
+      ],
+      "ans_hit_layers": [
+        6,
+        7,
+        8,
+        9,
+        12,
+        13,
+        14,
+        15,
+        16,
+        17,
+        22,
+        23,
+        24,
+        25,
+        26
+      ],
+      "inter_hit_layers": [
+        3
+      ],
+      "ans_strong_layers": [
+        9,
+        12,
+        13,
+        17,
+        23,
+        24,
+        25,
+        26
+      ],
+      "inter_strong_layers": [],
+      "ans_digit_ranks": {
+        "0": [
+          1,
+          59
+        ],
+        "1": [
+          1,
+          29
+        ],
+        "2": [
+          1,
+          150
+        ],
+        "3": [
+          1,
+          17
+        ],
+        "4": [
+          3,
+          37
+        ],
+        "5": [
+          1,
+          9
+        ],
+        "6": [
+          2,
+          4
+        ],
+        "7": [
+          2,
+          7
+        ],
+        "8": [
+          2,
+          8
+        ],
+        "9": [
+          2,
+          3
+        ],
+        "10": [
+          2,
+          21
+        ],
+        "11": [
+          1,
+          15
+        ],
+        "12": [
+          1,
+          2
+        ],
+        "13": [
+          1,
+          3
+        ],
+        "14": [
+          2,
+          4
+        ],
+        "15": [
+          3,
+          6
+        ],
+        "16": [
+          2,
+          5
+        ],
+        "17": [
+          3,
+          2
+        ],
+        "18": [
+          32,
+          42
+        ],
+        "19": [
+          7,
+          152
+        ],
+        "20": [
+          22,
+          367
+        ],
+        "21": [
+          2,
+          81
+        ],
+        "22": [
+          1,
+          5
+        ],
+        "23": [
+          1,
+          1
+        ],
+        "24": [
+          1,
+          1
+        ],
+        "25": [
+          1,
+          1
+        ],
+        "26": [
+          1,
+          1
+        ]
+      },
+      "inter_digit_ranks": {
+        "0": [
+          1150,
+          3737
+        ],
+        "1": [
+          32,
+          163
+        ],
+        "2": [
+          18,
+          25
+        ],
+        "3": [
+          4,
+          5
+        ],
+        "4": [
+          11,
+          18
+        ],
+        "5": [
+          10,
+          10
+        ],
+        "6": [
+          4,
+          14
+        ],
+        "7": [
+          13,
+          14
+        ],
+        "8": [
+          12,
+          34
+        ],
+        "9": [
+          4,
+          22
+        ],
+        "10": [
+          52,
+          122
+        ],
+        "11": [
+          11,
+          170
+        ],
+        "12": [
+          2,
+          143
+        ],
+        "13": [
+          3,
+          136
+        ],
+        "14": [
+          3,
+          407
+        ],
+        "15": [
+          97,
+          1982
+        ],
+        "16": [
+          255,
+          1524
+        ],
+        "17": [
+          1786,
+          8730
+        ],
+        "18": [
+          21701,
+          105381
+        ],
+        "19": [
+          2841,
+          106564
+        ],
+        "20": [
+          2819,
+          141183
+        ],
+        "21": [
+          1342,
+          60498
+        ],
+        "22": [
+          2718,
+          42251
+        ],
+        "23": [
+          687,
+          13364
+        ],
+        "24": [
+          52,
+          2016
+        ],
+        "25": [
+          15,
+          1031
+        ],
+        "26": [
+          6,
+          705
+        ]
+      },
+      "foil_digit": "3",
+      "foil_ranks": {
+        "0": 6,
+        "1": 7,
+        "2": 6,
+        "3": 6,
+        "4": 8,
+        "5": 10,
+        "6": 6,
+        "7": 12,
+        "8": 7,
+        "9": 6,
+        "10": 13,
+        "11": 11,
+        "12": 4,
+        "13": 4,
+        "14": 5,
+        "15": 8,
+        "16": 10,
+        "17": 13,
+        "18": 144,
+        "19": 79,
+        "20": 95,
+        "21": 50,
+        "22": 173,
+        "23": 24,
+        "24": 21,
+        "25": 4,
+        "26": 3
+      },
+      "ans_d1_mean_rank": 3.7,
+      "foil_mean_rank": 27.2,
+      "answer_digitseq_hit": true,
+      "answer_digitseq_strong_hit": true,
+      "solve_order_score": null,
+      "primary_order_score": null,
+      "intermediate_order_score": null,
+      "answer_min_rank": null,
+      "sanity_top1_agreement": 0.8125,
+      "wall_time_s": 1.817784576996928
+    }
+  ],
+  "gate": {
+    "go": false,
+    "best_protocol": null,
+    "best_mean_order": null,
+    "protocol_gates": {
+      "solve": {
+        "go": false,
+        "mean_intermediate_order_score": null,
+        "n_probes": 6,
+        "n_order_scored": 0,
+        "n_answer_in_topk": 6,
+        "n_answer_weak_topk": 6,
+        "thresholds": {
+          "mean_order_min": 0.6,
+          "answer_hit_fraction_min": 0.5
+        },
+        "decision": "NO-GO \u2014 signal too weak; deprioritize permanent J-Lens panel"
+      }
+    },
+    "decision": "NO-GO across all protocols \u2014 weak pursue signal for permanent panel"
+  },
+  "ts": 1784403892.2733006
+}

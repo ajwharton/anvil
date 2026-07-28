@@ -17,21 +17,23 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 | **Agentic** | Same SSOT via API/MCP; Anvil owns tools/harness/prompts; **user brings the brain** |
 
 **Purpose:** Anvil forges **sovereign domain experts** from base models.  
-**Mechanism:** live sufficiency — instrument **while** data is applied; decide **how much is enough** / **when to shift gears** before the model turns southward. See `docs/product.md`.
+**Mechanism:** live sufficiency — instrument **while** data is applied; decide **how much is enough** / **when to shift gears**. See `docs/product.md`.  
+**Differentiator:** recipes + meta-recipes + **personal recipe book** (`docs/recipes.md`).
 
-**Prioritize:** Expert-v0 → v1 → v2 in `docs/roadmap.md` (historical Phases 0–5 are archive).
+**Prioritize:** Expert-v1 / P.Recipes (Expert-v0 **closed**).
 
-## Where we are (2026-07-26)
+## Where we are (2026-07-28)
 
 | Done | Open (next) |
 |------|-------------|
-| Phases 0–2.5 foundation + Expert-v0 **path** (smoke + probes) | **Expert-v0 lab:** Bridge → 1k on forge |
-| Convert + VLM metrics + held-out SFT/VLM probes | Expert-v1 method ladder |
-| `docs/expert-v0-smoke.md` + `scripts/expert_v0_smoke.py` | Expert-v2 scale ops · Path: robot/edge |
+| **Expert-v0 closed** — path + LeRobot lab + early-stop dogfood + promote | **Expert-v1** method ladder / meta-recipe **executor** |
+| SFT production early-stop (rel+abs eps) | DPO observe + southward detectors |
+| Personal book + suggest prefers book + MCP list/get | Agent prompt pack book/atlas notes |
+| Meta-recipe schema skeleton | Bridge/OXE scale (optional / Expert-v2) |
 
 **Recommended next Outcome:**  
-`Expert-v0 lab — Bridge episode_pack → 1k + expert_v0_smoke on forge`  
-(or: Expert-v1 preference observe)
+`Expert-v1 — meta-recipe executor or DPO observe SSOT`  
+(or: agent-context docs for book vs atlas)
 
 ## Pull-on-miss only
 
@@ -40,27 +42,22 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 | Product / purpose | `docs/product.md` |
 | Recipes / personal book | `docs/recipes.md` · roadmap **P.Recipes** |
 | Expert-v0 checklist | `docs/expert-v0-smoke.md` |
-| Expert-v0/v1/v2 + P.Recipes + archive | `docs/roadmap.md` |
+| Expert ladder + archive | `docs/roadmap.md` |
 | Primary workflow | `docs/design.md` §1.0 |
 | Agent operator brief | `docs/agent-context.md` |
-| Vision slices | `docs/phase3-vision.md` |
-| Robotics corpora | `docs/datasets-robotics.md` |
-| Lab smokes / cron | `docs/lab-smokes.md`, `scripts/run_lab_smokes.sh` |
-| Agent control ownership | `docs/agentic-control.md`, `anvil/agent/` |
-| Design | `docs/design.md` |
 | PR process | `docs/development-process.md` |
 
 ## Lab facts (no secrets in commits)
 
 - Weights/data: forge `/mnt/data/models`, `/mnt/data/anvil-observe`, `/mnt/data/anvil-runs`  
-- Default VLM: `Qwen2.5-VL-3B-Instruct`; text GRPO: `qwen2.5-1.5b-instruct`  
+- Recipe book lab: `/mnt/data/anvil-recipes` (`ANVIL_RECIPE_BOOK`)  
+- Default VLM: `Qwen2.5-VL-3B-Instruct`  
 - Never commit weights, datasets, or private host dumps  
 
 ## Git / PR (Mia-aligned)
 
 - Never push to `main`. Branch → `gh pr create` → **Andrew merges**.  
-- Small PRs. Design/product thesis via `docs/` first when large.
 
 ## Done looks like
 
-PR opened against an **Expert-v0/v1/v2** (or Path) checkbox, tests green, ready for human merge — or a clear blocked note.
+PR against **Expert-v1 / P.Recipes** checkbox, tests green, ready for human merge.

@@ -79,12 +79,40 @@ class AnvilControlClient:
     def list_recipes(self, group: str | None = None) -> list[dict[str, Any]]:
         return self._request("GET", "/api/recipes", query={"group": group})
 
-    def suggest(self, base_model: str, *, fetch_remote: bool = False) -> dict[str, Any]:
+    def suggest(
+        self,
+        base_model: str,
+        *,
+        fetch_remote: bool = False,
+        include_personal_book: bool = True,
+    ) -> dict[str, Any]:
         return self._request(
             "GET",
             "/api/suggest",
-            query={"base_model": base_model, "fetch_remote": str(fetch_remote).lower()},
+            query={
+                "base_model": base_model,
+                "fetch_remote": str(fetch_remote).lower(),
+                "include_personal_book": str(include_personal_book).lower(),
+            },
         )
+
+    def list_recipe_book(
+        self, *, family: str | None = None, pattern: str | None = None
+    ) -> dict[str, Any]:
+        return self._request(
+            "GET",
+            "/api/recipe-book",
+            query={"family": family, "pattern": pattern},
+        )
+
+    def get_recipe_book(self, recipe_id: str) -> dict[str, Any]:
+        return self._request("GET", f"/api/recipe-book/{recipe_id}")
+
+    def list_meta_recipes(self) -> dict[str, Any]:
+        return self._request("GET", "/api/meta-recipes")
+
+    def get_meta_recipe(self, meta_id: str) -> dict[str, Any]:
+        return self._request("GET", f"/api/meta-recipes/{meta_id}")
 
     def gate(
         self,

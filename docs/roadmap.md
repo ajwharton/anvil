@@ -64,19 +64,18 @@ Not every method; **one** end-to-end expert smoke a human or agent can repeat.
 - [x] Vision core — media CAS, VLM renderer, freeze defaults, forge VLM smoke  
 - [x] Agent control v0 — MCP/HTTP + [`agent-context.md`](agent-context.md) + prompt pack  
 
-### Open / partial gaps
+### Status: **closed** (path + real-domain lab)
 
 | Gap | Status | Notes |
 |-----|--------|--------|
-| Train under **observe** + export PEFT (repeatable path) | **done** | `scripts/expert_v0_smoke.py` + `run_vlm_sft(run_dir=, export_dir=, probes=)` |
-| Held-out **probes** during SFT / VLM | **done** | `probes=` → `probes.jsonl` (greedy sample + match score) |
+| Train under **observe** + export PEFT (repeatable path) | **done** | `scripts/expert_v0_smoke.py` |
+| Held-out **probes** during SFT / VLM | **done** | `probes=` → `probes.jsonl` |
 | **Expert smoke checklist** | **done** | [`docs/expert-v0-smoke.md`](expert-v0-smoke.md) |
-| Agent watch via MCP (no HTML scrape) | **done** (doc + tools) | Checklist §MCP; `anvil_observe_*` |
-| Lab domain slice on NVMe (Bridge → 1k rows) | **open** | Operator extract; converter + smoke accept real pack |
+| Agent watch via MCP (no HTML scrape) | **done** | `anvil_observe_*` |
+| Lab real-domain frames on forge | **done** | LeRobot `pusht` → CAS/JSONL → VLM SFT + production early-stop + promote (2026-07-27/28) |
+| Bridge / large OXE 1k+ pack | **optional stretch** | Scale / Expert-v2; not blocking Expert-v0 bar |
 
-**Recommended next Outcome:**  
-`Expert-v0 lab — Bridge episode_pack → 1k rows → expert_v0_smoke on forge`  
-(or: Expert-v1 preference observe / method ladder)
+**Recommended next Outcome:** Expert-v1 / P.Recipes (meta-recipes, book in suggest) — see below.
 
 ---
 
@@ -135,13 +134,11 @@ book + promote-from-run + rich meta-recipes are the product bet.
 - [x] **Promote-from-run** — knobs, stop policy, observe summary (`promote_from_run`, smoke `--promote-recipe`)  
 - [x] **Family-scoped binding** field on book recipes (prefer filter)  
 - [x] **Experience records** — observe summary + early_stop in notes/stop_policy  
-- [ ] **Meta-recipe schema** — cliff→next, ladders, domain packs; MCP list/get/switch  
-- [ ] **Suggest prefers personal book** when family+pattern match, else shipped atlas  
+- [x] **Meta-recipe schema** (skeleton) — stages/edges + `next_stage`; save under book `meta/`  
+- [x] **Suggest prefers personal book** when family matches (`suggest_for_model`)  
+- [x] **HTTP/MCP** list/get personal book + meta-recipes  
 - [ ] Agent prompts document book vs atlas (`agent-context` + prompt pack)  
-
-**Recommended sequencing:** Expert-v0 lab real data can proceed in parallel;
-**P.Recipes** unblocks durable dogfood of patience and ladders after v1 stop
-signals exist.
+- [ ] Meta-recipe **executor** (agent/queue drives stages automatically)
 
 ---
 
@@ -461,3 +458,5 @@ For a spin-off agent session:
 | 2026-07-26 | **Roadmap re-slice:** Expert-v0 / v1 / v2 + Paths prioritize over historical Phases 0–5 (archive retained); map P.Sufficiency/Ops/Decide and Phase 3–4 open items into Expert ladder |
 | 2026-07-26 | **Expert-v0 path:** `run_sft`/`run_vlm_sft` held-out `probes=` → `probes.jsonl`; `scripts/expert_v0_smoke.py` place→train→observe→export; `docs/expert-v0-smoke.md`. Lab Bridge 1k still operator |
 | 2026-07-27 | **P.Recipes differentiator:** `docs/recipes.md` — recipes/meta-recipes/personal book first-class; roadmap §P.Recipes; product + design + README facing |
+| 2026-07-28 | **Expert-v0 closed** on path + LeRobot lab dogfood; SFT early-stop abs eps; book promote |
+| 2026-07-28 | **P.Recipes wire-up:** suggest prefers personal book; HTTP/MCP book+meta; meta-recipe schema skeleton |

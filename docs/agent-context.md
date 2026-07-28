@@ -16,8 +16,11 @@ You do **not** invent a second train stack or scrape the HTML UI.
 2. Load policy: human red lines + [`prompts/agent/safety_policy.md`](../prompts/agent/safety_policy.md).  
 3. Load habit: [`prompts/agent/watch_loop.md`](../prompts/agent/watch_loop.md) + this file’s metric tables.  
 4. State one **Outcome** (what success looks like for *this* run or session).  
-5. Prefer **recipes + gates** over inventing knobs.  
-6. Act only via **MCP / HTTP / audited tools**. Never invent metrics you did not read.
+5. Prefer **recipes + gates** over inventing knobs. Call `anvil_suggest` — if
+   `personal_book` is non-empty, prefer those learnings for this forge/family.  
+6. Act only via **MCP / HTTP / audited tools**. Never invent metrics you did not read.  
+7. Meta-recipes (`anvil_list_meta_recipes`) are stage graphs; execution may still
+   be operator-driven until a full executor lands.
 
 If a tool is missing, say so and fall back to documented human paths (`anvil-web`, CLI scripts). Do not scrape `/observe` HTML.
 
@@ -50,8 +53,8 @@ Require control plane up: `anvil mcp --url http://127.0.0.1:7600` (or harness).
 
 | Family | Tools | Use for |
 |--------|-------|---------|
-| Discover | `anvil_health`, `anvil_overview`, `anvil_list_recipes`, `anvil_suggest` | Orientation |
-| Plan | `anvil_plan` | RecipePlan + gates (`force` only under policy) |
+| Discover | `anvil_health`, `anvil_overview`, `anvil_list_recipes`, `anvil_list_recipe_book`, `anvil_list_meta_recipes`, `anvil_suggest` | Orientation; **personal book first** in suggest when family matches |
+| Plan | `anvil_plan`, `anvil_get_recipe_book`, `anvil_get_meta_recipe` | RecipePlan + gates; local book/meta detail |
 | Control runs | `anvil_list_runs`, `anvil_get_run`, `anvil_create_run`, `anvil_train`, `anvil_pause`, `anvil_resume`, `anvil_patch_knobs`, `anvil_export`, `anvil_sample` | Lifecycle |
 | Observe | `anvil_observe_list`, `anvil_observe_metrics`, `anvil_observe_probes` | Live sufficiency loop |
 | Audit | `anvil_audit` | Gate overrides / decisions |
