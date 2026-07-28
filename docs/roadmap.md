@@ -141,7 +141,8 @@ book + promote-from-run + rich meta-recipes are the product bet.
 - [x] **HTTP/MCP** list/get personal book + meta-recipes  
 - [x] Agent prompts document book vs atlas (`system_operator` + agent-context + watch_loop)  
 - [x] Meta-recipe **executor** (`run_meta_recipe` + stage_start/end events)  
-- [ ] Wire executor to live SFT/GRPO runners in smoke/CLI by default
+- [x] Wire executor to live SFT/GRPO runners in smoke/CLI by default  
+      (`meta_runners.run_meta_with_defaults`, `anvil meta-run`, lab smoke)
 
 ---
 
@@ -467,3 +468,4 @@ For a spin-off agent session:
 | 2026-07-28 | **Southward detectors** + lab_smokes quick expanded (DPO/meta/southward/expert_v0); expert_v0_smoke scans + `--run-meta` |
 | 2026-07-28 | **Southward auto-stop** mid-train (SFT/VLM/DPO/GRPO); **DPO held-out probes** |
 | 2026-07-28 | **P1–P4:** LocalBackend DPO; book/meta HTTP+MCP tests; J-lens optional (`-m jlens`); `run_vlm_queue` |
+| 2026-07-28 | **Meta-exec default runners:** `meta_runners` + `anvil meta-run` + lab `fake_meta_live_runners` |

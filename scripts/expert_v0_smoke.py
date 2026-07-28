@@ -320,34 +320,31 @@ def main(argv: list[str] | None = None) -> int:
 
     if args.run_meta:
         from anvil.recipes.meta import example_vlm_ladder
-        from anvil.recipes.meta_exec import StageRunResult, run_meta_recipe
+        from anvil.recipes.meta_runners import DefaultRunnerConfig, run_meta_with_defaults
 
-        def _runner(stage, *, step_index: int) -> StageRunResult:
-            # Dogfood executor wiring: signal from the train we already ran.
-            if stage.id == "sft":
-                sig = (
-                    f"early_stop:{sft.early_stop_reason}"
-                    if sft.early_stop_reason
-                    else "sft_complete"
-                )
-                return StageRunResult(
-                    signal=sig,
-                    metrics={"steps_run": sft.steps_run, "adapter": sft.adapter_id},
-                )
-            return StageRunResult(
-                signal="export_done",
-                metrics={"export": sft.export_path},
-            )
-
+        # Default live runners (not injectable stubs). Short budgets for smoke.
         meta_dir = run_dir / "meta_exec"
-        meta_res = run_meta_recipe(
-            example_vlm_ladder(family=args.recipe_family or "Qwen2.5-VL"),
-            _runner,
+        cfg = DefaultRunnerConfig(
+            endpoint=args.endpoint,
+            base_model=args.model,
             run_dir=meta_dir,
+            sft_steps=min(30, max(sft.steps_run, 8)),
+            vlm_steps=min(30, max(sft.steps_run, 8)),
+            early_stop_patience=12,
+            stop_on_southward=False,
+            export_root=meta_dir / "export",
+            fetch_remote=False,
+        )
+        # Prefer the same base the expert smoke already used
+        base = getattr(sft.plan, "base_model", None) or cfg.base_model
+        cfg.base_model = base
+        meta_res = run_meta_with_defaults(
+            example_vlm_ladder(family=args.recipe_family or "Qwen2.5-VL"),
+            config=cfg,
         )
         print(
             f"meta_exec: stages={meta_res.stages_run} stop={meta_res.stopped_reason} "
-            f"dir={meta_dir}"
+            f"dir={meta_dir} (default live runners)"
         )
 
     if not sft.export_path:

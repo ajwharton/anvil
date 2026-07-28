@@ -22,6 +22,11 @@ from anvil.client.training import TrainingClient
 from anvil.observe.metrics import RunMetricsWriter
 from anvil.protocol.messages import Example, Message, TextPart
 from anvil.protocol.types import AdamParams, Datum, LoraTargets, ModelInput, SamplingParams
+from anvil.recipes.checkpoint import (
+    apply_resume_to_client,
+    load_resume_state,
+    save_train_checkpoint,
+)
 from anvil.recipes.profiles import JobPattern, RecipePlan, plan_recipe
 from anvil.render.text import ToyTextRenderer
 
@@ -50,6 +55,8 @@ class SFTResult:
     run_dir: str | None = None
     n_probe_records: int = 0
     early_stop_reason: str | None = None
+    resumed_from_step: int = 0
+    checkpoint_path: str | None = None
 
 
 def sft_loss_improved(
@@ -196,6 +203,8 @@ def run_sft(
     service_client: ServiceClient | None = None,
     training_client: TrainingClient | None = None,
     close_clients: bool = True,
+    checkpoint_every: int | None = None,
+    resume: bool = False,
 ) -> SFTResult:
     """Minimal SFT: create LoRA client → CE steps → optional export.
 
@@ -215,9 +224,21 @@ def run_sft(
 
     Client reuse (VLM/SFT stage queue): pass ``service_client`` +
     ``training_client`` to continue the same LoRA; set ``close_clients=False``.
+
+    Checkpoint / resume (Expert-v2): pass ``run_dir`` + ``checkpoint_every=N`` to
+    ``save_state`` adapter weights and write ``run_dir/resume.json`` every N
+    completed steps (and at end / early-stop). Pass ``resume=True`` on a later
+    call with the same ``run_dir`` (and same ``steps`` total budget) to load the
+    adapter and continue from ``steps_completed`` without replaying prior steps.
     """
     if probe_every < 1:
         raise ValueError(f"probe_every must be >= 1, got {probe_every}")
+    if checkpoint_every is not None and checkpoint_every < 1:
+        raise ValueError(f"checkpoint_every must be >= 1, got {checkpoint_every}")
+    if checkpoint_every is not None and not run_dir:
+        raise ValueError("checkpoint_every requires run_dir")
+    if resume and not run_dir:
+        raise ValueError("resume=True requires run_dir (for resume.json)")
     mode = str(early_stop_mode or "production").lower().strip()
     if mode not in {"production", "calibration"}:
         raise ValueError(
@@ -263,18 +284,88 @@ def run_sft(
     writer = RunMetricsWriter(run_dir) if run_dir else None
     probe_list = list(probes) if probes else []
     n = steps if steps is not None else min(5, plan.max_steps)
-    losses: list[float] = []
+    prior_losses: list[float] = []
+    losses: list[float] = []  # this invocation only
     n_probe_records = 0
     max_tok = int(getattr(plan, "max_tokens", None) or 32)
     stopped_reason: str | None = None
     steps_run = 0
+    start_step = 0
+    last_ckpt_path: str | None = None
 
-    for step_ix in range(n):
+    if resume and run_dir:
+        state = load_resume_state(run_dir)
+        if state is not None:
+            apply_resume_to_client(tc, state)
+            start_step = int(state.steps_completed)
+            prior_losses = list(state.losses)
+            if writer is not None:
+                writer.log_event(
+                    step=start_step,
+                    event="resume",
+                    reason="loaded_resume_json",
+                    job=job,
+                    steps_completed=start_step,
+                    checkpoint_path=state.checkpoint_path,
+                )
+            if start_step >= n:
+                # Already at/past total budget — nothing left to train.
+                if close_clients and owns_svc:
+                    svc.close()
+                return SFTResult(
+                    plan=plan,
+                    steps_run=0,
+                    losses=[],
+                    adapter_id=str(tc.adapter_id),
+                    export_path=None,
+                    run_dir=run_dir,
+                    n_probe_records=0,
+                    early_stop_reason=None,
+                    resumed_from_step=start_step,
+                    checkpoint_path=state.checkpoint_path,
+                )
+
+    def _all_losses() -> list[float]:
+        return prior_losses + losses
+
+    def _maybe_checkpoint(step_completed: int, *, force: bool = False) -> None:
+        nonlocal last_ckpt_path
+        if run_dir is None:
+            return
+        if not force and checkpoint_every is None:
+            return
+        if (
+            not force
+            and checkpoint_every is not None
+            and step_completed % checkpoint_every != 0
+        ):
+            return
+        ref = save_train_checkpoint(
+            tc,
+            run_dir=run_dir,
+            job=job,
+            steps_completed=step_completed,
+            base_model=plan.base_model,
+            losses=_all_losses(),
+        )
+        last_ckpt_path = ref.path
+        if writer is not None:
+            writer.log_event(
+                step=step_completed - 1 if step_completed > 0 else 0,
+                event="checkpoint",
+                reason="periodic" if not force else "final",
+                job=job,
+                steps_completed=step_completed,
+                checkpoint_path=ref.path,
+                checkpoint_name=ref.name,
+            )
+
+    for step_ix in range(start_step, n):
         t0 = time.monotonic()
         fb = tc.forward_backward(data, loss_fn=plan.loss_fn).result()
         tc.optim_step(AdamParams(learning_rate=plan.learning_rate)).result()
         losses.append(fb.loss)
-        steps_run = step_ix + 1
+        steps_run = step_ix + 1 - start_step
         if writer is not None:
             fb_metrics = {str(k_): float(v) for k_, v in dict(fb.metrics or {}).items()
                           if isinstance(v, (int, float))}
@@ -312,9 +403,12 @@ def run_sft(
                     )
                     n_probe_records += 1
 
+        completed = step_ix + 1
+        _maybe_checkpoint(completed)
+
         if early_stop:
             reason = sft_early_stop_reason(
-                losses,
+                _all_losses(),
                 patience=early_stop_patience,
                 rel_eps=early_stop_rel_eps,
                 abs_eps=early_stop_abs_eps,
@@ -356,6 +450,13 @@ def run_sft(
                     )
                 break
 
+    # Final resume snapshot when periodic checkpoints are enabled (covers early-stop
+    # mid-interval and end-of-budget if last step was not a periodic boundary).
+    if checkpoint_every is not None and run_dir and steps_run > 0:
+        completed_total = start_step + steps_run
+        if last_ckpt_path is None or completed_total % checkpoint_every != 0:
+            _maybe_checkpoint(completed_total, force=True)
+
     export_path = None
     if export_dir:
         export_path = tc.export_adapter(
@@ -373,6 +474,8 @@ def run_sft(
         run_dir=run_dir,
         n_probe_records=n_probe_records,
         early_stop_reason=stopped_reason,
+        resumed_from_step=start_step,
+        checkpoint_path=last_ckpt_path,
     )
 
 

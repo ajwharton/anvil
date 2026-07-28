@@ -67,6 +67,7 @@ def test_lab_smokes_quick_profile(tmp_path):
         "fake_sft_early_stop",
         "fake_dpo_observe",
         "fake_meta_exec",
+        "fake_meta_live_runners",
         "fake_southward",
         "fake_rl_queue",
         "fake_expert_v0",

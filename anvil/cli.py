@@ -89,6 +89,38 @@ def main(argv: list[str] | None = None) -> None:
     )
     agent_p.add_argument("--max-rounds", type=int, default=8)
 
+    meta_p = sub.add_parser(
+        "meta-run",
+        help="execute a meta-recipe with default live SFT/GRPO/DPO/export runners",
+    )
+    meta_p.add_argument(
+        "--meta-id",
+        default=None,
+        help="load meta-recipe id from personal book (ANVIL_RECIPE_BOOK)",
+    )
+    meta_p.add_argument(
+        "--example",
+        choices=("vlm-ladder", "sft-grpo"),
+        default=None,
+        help="built-in example meta-recipe (if --meta-id not set)",
+    )
+    meta_p.add_argument(
+        "--endpoint",
+        default=os.environ.get("ANVIL_ENDPOINT", "fake://"),
+        help="train endpoint (default fake:// or $ANVIL_ENDPOINT)",
+    )
+    meta_p.add_argument("--base-model", default="Qwen/Qwen2.5-1.5B-Instruct")
+    meta_p.add_argument("--run-dir", default=None, help="observe root for stage metrics")
+    meta_p.add_argument("--sft-steps", type=int, default=40)
+    meta_p.add_argument("--grpo-steps", type=int, default=20)
+    meta_p.add_argument("--dpo-steps", type=int, default=20)
+    meta_p.add_argument("--patience", type=int, default=15)
+    meta_p.add_argument(
+        "--stop-on-southward",
+        action="store_true",
+        help="enable mid-train southward auto-stop on stages with run_dir",
+    )
+
     args = parser.parse_args(argv)
 
     if args.cmd == "serve":
@@ -123,6 +155,63 @@ def main(argv: list[str] | None = None) -> None:
             args.message, control_url=args.url, max_rounds=args.max_rounds
         )
         sys.stdout.write((text or "") + "\n")
+        return
+
+    if args.cmd == "meta-run":
+        from anvil.recipes.meta import (
+            MetaEdge,
+            MetaRecipe,
+            MetaStage,
+            example_vlm_ladder,
+            get_meta_recipe,
+        )
+        from anvil.recipes.meta_runners import DefaultRunnerConfig, run_meta_with_defaults
+
+        if args.meta_id:
+            meta = get_meta_recipe(args.meta_id)
+            if meta is None:
+                raise SystemExit(f"no meta-recipe {args.meta_id!r} in personal book")
+        elif args.example == "vlm-ladder":
+            meta = example_vlm_ladder()
+        elif args.example == "sft-grpo" or args.example is None:
+            meta = MetaRecipe(
+                id="cli-sft-grpo",
+                title="SFT then GRPO",
+                stages=[
+                    MetaStage(id="sft", recipe_id="sft_chat", pattern="sft_chat"),
+                    MetaStage(id="grpo", recipe_id="rl", pattern="rl_verifiable"),
+                ],
+                edges=[MetaEdge(on="early_stop:*", from_stage="sft", to_stage="grpo")],
+            )
+        else:
+            raise SystemExit("pass --meta-id or --example")
+
+        run_dir = args.run_dir or os.path.join(
+            os.environ.get("ANVIL_OBSERVE_ROOT", os.path.expanduser("~/.anvil/observe")),
+            f"meta-{meta.id}",
+        )
+        cfg = DefaultRunnerConfig(
+            endpoint=args.endpoint,
+            base_model=args.base_model,
+            run_dir=run_dir,
+            sft_steps=args.sft_steps,
+            vlm_steps=args.sft_steps,
+            grpo_steps=args.grpo_steps,
+            dpo_steps=args.dpo_steps,
+            early_stop_patience=args.patience,
+            grpo_patience=max(3, args.patience // 2),
+            stop_on_southward=bool(args.stop_on_southward),
+        )
+        res = run_meta_with_defaults(meta, config=cfg)
+        print(
+            f"meta_id={meta.id} stages={res.stages_run} stop={res.stopped_reason} "
+            f"run_dir={run_dir}"
+        )
+        for o in res.outcomes:
+            print(
+                f"  stage={o.stage.id} signal={o.result.signal} "
+                f"advanced={o.advanced} metrics={o.result.metrics}"
+            )
         return
 
 
