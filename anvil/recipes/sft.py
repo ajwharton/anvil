@@ -34,6 +34,8 @@ class _SFTRenderer(Protocol):
 # Type-scoped; VLM/SFT share this prior until the personal recipe book learns better.
 DEFAULT_SFT_EARLY_STOP_PATIENCE = 40
 DEFAULT_SFT_EARLY_STOP_REL_EPS = 0.01  # relative loss drop required to count as improve
+# Absolute floor: once loss is tiny, relative-only checks never plateau (float noise).
+DEFAULT_SFT_EARLY_STOP_ABS_EPS = 1e-4
 # Calibration mode: effectively no early-stop (still capped by ``steps``).
 CALIBRATION_SFT_EARLY_STOP_PATIENCE = 10**9
 
@@ -55,14 +57,22 @@ def sft_loss_improved(
     cur: float,
     *,
     rel_eps: float = DEFAULT_SFT_EARLY_STOP_REL_EPS,
+    abs_eps: float = DEFAULT_SFT_EARLY_STOP_ABS_EPS,
 ) -> bool:
-    """True if ``cur`` is meaningfully lower than ``prev`` (relative drop)."""
+    """True if ``cur`` is meaningfully lower than ``prev``.
+
+    Requires a drop of at least ``max(rel_eps * |prev|, abs_eps)`` so that
+    near-zero losses do not "improve" forever on float noise (forge dogfood).
+    """
     p = float(prev)
     c = float(cur)
     if not (p == p and c == c):  # NaN guard
         return False
-    scale = max(abs(p), 1e-12)
-    return (p - c) / scale >= float(rel_eps)
+    drop = p - c
+    if drop <= 0:
+        return False
+    need = max(float(rel_eps) * max(abs(p), 1e-12), float(abs_eps))
+    return drop >= need
 
 
 def sft_early_stop_reason(
@@ -70,6 +80,7 @@ def sft_early_stop_reason(
     *,
     patience: int = DEFAULT_SFT_EARLY_STOP_PATIENCE,
     rel_eps: float = DEFAULT_SFT_EARLY_STOP_REL_EPS,
+    abs_eps: float = DEFAULT_SFT_EARLY_STOP_ABS_EPS,
 ) -> str | None:
     """If the last ``patience`` steps each failed to improve vs the prior step, stop.
 
@@ -80,7 +91,9 @@ def sft_early_stop_reason(
         return None
     window = list(losses[-(patience + 1) :])
     for i in range(1, len(window)):
-        if sft_loss_improved(window[i - 1], window[i], rel_eps=rel_eps):
+        if sft_loss_improved(
+            window[i - 1], window[i], rel_eps=rel_eps, abs_eps=abs_eps
+        ):
             return None
     return f"loss_plateau_patience_{patience}"
 
@@ -177,6 +190,7 @@ def run_sft(
     early_stop_mode: str = "production",
     early_stop_patience: int | None = None,
     early_stop_rel_eps: float = DEFAULT_SFT_EARLY_STOP_REL_EPS,
+    early_stop_abs_eps: float = DEFAULT_SFT_EARLY_STOP_ABS_EPS,
 ) -> SFTResult:
     """Minimal SFT: create LoRA client → CE steps → optional export.
 
@@ -285,6 +299,7 @@ def run_sft(
                 losses,
                 patience=early_stop_patience,
                 rel_eps=early_stop_rel_eps,
+                abs_eps=early_stop_abs_eps,
             )
             if reason is not None:
                 stopped_reason = reason
@@ -296,6 +311,7 @@ def run_sft(
                         mode=mode,
                         patience=early_stop_patience,
                         rel_eps=early_stop_rel_eps,
+                        abs_eps=early_stop_abs_eps,
                         job=job,
                     )
                 break

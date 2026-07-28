@@ -13,8 +13,14 @@ from anvil.recipes.sft import (
 
 
 def test_sft_loss_improved_relative():
-    assert sft_loss_improved(1.0, 0.98, rel_eps=0.01)  # 2% drop
-    assert not sft_loss_improved(1.0, 0.995, rel_eps=0.01)  # 0.5% drop
+    assert sft_loss_improved(1.0, 0.98, rel_eps=0.01, abs_eps=1e-4)  # 2% drop
+    assert not sft_loss_improved(1.0, 0.995, rel_eps=0.01, abs_eps=1e-4)  # 0.5%
+
+
+def test_sft_loss_improved_abs_floor_near_zero():
+    # Relative 1% of 1e-5 is tiny; abs_eps=1e-4 requires a real drop.
+    assert not sft_loss_improved(1e-5, 5e-6, rel_eps=0.01, abs_eps=1e-4)
+    assert sft_loss_improved(1e-3, 5e-4, rel_eps=0.01, abs_eps=1e-4)
 
 
 def test_sft_early_stop_reason_patience():
