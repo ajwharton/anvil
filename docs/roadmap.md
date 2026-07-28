@@ -91,7 +91,7 @@ machine-readable tripwires and audited switches.
 - [ ] Southward-turn detectors (probe↓ while reward↑, homogenization, …) as flags  
 - [ ] **Meta-recipes:** method-switch / stage graph (“if cliff X → try Y”) with **audit**  
 - [ ] SFT curricula / data-stage advance (same pattern as RL recipe queue)  
-- [ ] SFT/VLM early-stop with **type-scoped patience** (production mode; calibration mode separate)  
+- [x] SFT/VLM early-stop with **type-scoped patience** (production mode; calibration mode separate)
 - [ ] Early-stop / stage advance for vision SFT stages  
 - [ ] Agent/MCP watch → decide → act loop on a multi-stage **meta-recipe**  
 
@@ -131,10 +131,10 @@ book + promote-from-run + rich meta-recipes are the product bet.
 
 ### Open (product differentiator)
 
-- [ ] **Personal recipe book** store (local/org path; sovereign; versioned)  
-- [ ] **Promote-from-run** — save knobs, stop policy, stage graph, notes from a finished run  
-- [ ] **Family-scoped binding** — recipes ride model families, not only one snapshot  
-- [ ] **Experience records** — link observe summary / calibration vs production tags into recipe versions  
+- [x] **Personal recipe book** store (local/org path; sovereign; versioned) — `anvil.recipes.book`  
+- [x] **Promote-from-run** — knobs, stop policy, observe summary (`promote_from_run`, smoke `--promote-recipe`)  
+- [x] **Family-scoped binding** field on book recipes (prefer filter)  
+- [x] **Experience records** — observe summary + early_stop in notes/stop_policy  
 - [ ] **Meta-recipe schema** — cliff→next, ladders, domain packs; MCP list/get/switch  
 - [ ] **Suggest prefers personal book** when family+pattern match, else shipped atlas  
 - [ ] Agent prompts document book vs atlas (`agent-context` + prompt pack)  
