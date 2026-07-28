@@ -112,9 +112,17 @@ Records are JSON lines in `metrics.jsonl` (`type: "step"` or `"event"`). GRPO an
 
 **Default acts:** stop or lower LR on probe garbage; check renderer train/sample consistency; freeze policy (vision encoder usually frozen); data labels / CAS refs.
 
-### Preference (DPO-like) — when observe lands
+### Preference (DPO)
 
-Same watch habit; expect family-specific cliffs (proxy up, probes worse). Until DPO observe is first-class, treat missing metrics as **Broken/incomplete instrumentation**, not “healthy.”
+| Field | Meaning | Worry when |
+|-------|---------|------------|
+| `loss` | DPO / preference loss | Non-finite; stuck with rising length_bias |
+| `n_pairs` | Pair count in batch | 0 |
+| `length_bias` | preferred_tokens − rejected_tokens (mean) | Large positive (classic length hack) |
+| `margin` | Proxy gap signal | Collapsed / meaningless |
+| `job` | `dpo` | — |
+
+Use production early-stop on loss plateau (same family as SFT) unless calibration mode.
 
 ---
 

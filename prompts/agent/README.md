@@ -10,13 +10,14 @@ HTTP/MCP with these prompts. The **brain** is always yours.
 | Doc | Role |
 |-----|------|
 | **[`docs/agent-context.md`](../../docs/agent-context.md)** | **Session brief:** surfaces, MCP tools, metrics by job type, classify→act, hard rules |
+| **[`docs/recipes.md`](../../docs/recipes.md)** | Atlas vs personal book vs meta-recipes (product differentiator) |
 
 Then these prompts (system + habits):
 
 | File | Role |
 |------|------|
-| [`system_operator.md`](system_operator.md) | System role + hard rules |
-| [`watch_loop.md`](watch_loop.md) | How to monitor a live run |
+| [`system_operator.md`](system_operator.md) | System role + hard rules + **atlas vs book** |
+| [`watch_loop.md`](watch_loop.md) | How to monitor a live run (GRPO / SFT / DPO) |
 | [`method_switch.md`](method_switch.md) | Conservative cliff → next-step suggestions |
 | [`safety_policy.md`](safety_policy.md) | Force, spend, secrets, stop |
 
