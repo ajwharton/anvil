@@ -45,9 +45,12 @@ from anvil.protocol.types import (
     TrainConfig,
 )
 
-_SUPPORTED_LOSSES = {LossFn.CROSS_ENTROPY.value}
+_SUPPORTED_LOSSES = {LossFn.CROSS_ENTROPY.value, LossFn.DPO.value}
 _RL_LOSSES = {LossFn.IMPORTANCE_SAMPLING.value, LossFn.PPO.value}
 _PPO_EPS = 0.2  # named losses + tensors only (design §4.2); no client clip config
+# Reference-free Bradley-Terry preference (implicit-ref DPO form used when no
+# separate π_ref session is available). Classic DPO uses β·(Δlogπ − Δlogπ_ref).
+_DPO_BETA = 0.1
 
 # Opinionated capacity gates (learned the hard way): a LoRA adapter can only
 # steer a model through its hidden width. sshleifer/tiny-gpt2 (hidden_size=2,
@@ -346,10 +349,12 @@ class LocalBackend:
         name = _normalize_loss(loss_fn)
         if name in _RL_LOSSES:
             return self._forward_backward_rl(sess, data, name)
+        if name == LossFn.DPO.value:
+            return self._forward_backward_dpo(sess, data)
         if name not in _SUPPORTED_LOSSES:
             raise NotImplementedError(
-                f"loss {name!r} not supported by LocalBackend — cross_entropy and "
-                f"the IS/PPO family are implemented; CISPO/DRO/DPO still pending"
+                f"loss {name!r} not supported by LocalBackend — cross_entropy, "
+                f"dpo, and the IS/PPO family are implemented; CISPO/DRO still pending"
             )
         if not data:
             raise ValueError("forward_backward requires non-empty data")
@@ -500,6 +505,143 @@ class LocalBackend:
                 "n_examples": float(n_examples),
                 "n_image_refs": float(n_image_refs),
                 "n_with_pixels": float(n_with_pixels),
+            },
+        )
+
+    def _weighted_mean_logp(
+        self,
+        sess: _LocalSession,
+        datum: Datum,
+    ) -> Any:
+        """Mean token log-prob of supervised (weighted) positions for one Datum.
+
+        Renderer convention: ``model_input`` predicts ``target_tokens`` position-wise
+        (no extra causal shift). Returns a 0-d tensor on ``self.device``.
+        """
+        torch, _, _ = _deps()
+        ids = datum.model_input.token_ids()
+        targets = [int(t) for t in datum.loss_fn_inputs.get("target_tokens", [])]
+        weights = [float(w) for w in datum.loss_fn_inputs.get("weights", [])]
+        if not ids or not targets:
+            raise ValueError("DPO datum requires non-empty model_input and target_tokens")
+        if not (len(ids) == len(targets) == len(weights)):
+            raise ValueError(
+                f"input/target/weights length mismatch: "
+                f"{len(ids)}/{len(targets)}/{len(weights)} — build preference data "
+                f"via a renderer (run_dpo / render_example_for_sft)"
+            )
+        input_ids = torch.tensor([ids], dtype=torch.long, device=self.device)
+        attn = torch.ones_like(input_ids)
+        labels = torch.tensor([targets], dtype=torch.long, device=self.device)
+        w = torch.tensor([weights], dtype=torch.float32, device=self.device)
+        logits = sess.model(input_ids=input_ids, attention_mask=attn).logits
+        logp = torch.log_softmax(logits.float(), dim=-1)
+        tok_lp = logp.gather(-1, labels.unsqueeze(-1)).squeeze(-1)
+        supervised = labels != -100
+        mask = w * supervised.float()
+        denom = mask.sum().clamp_min(1e-8)
+        return (tok_lp * mask).sum() / denom
+
+    @staticmethod
+    def _preference_pairs(data: Sequence[Datum]) -> list[tuple[Datum, Datum]]:
+        """Pair preferred/rejected datums for DPO.
+
+        Accepts either explicit ``preference`` tags (from ``run_dpo``) or a flat
+        alternating [preferred, rejected, …] batch of even length.
+        """
+        prefs: list[Datum] = []
+        rejs: list[Datum] = []
+        untagged: list[Datum] = []
+        for d in data:
+            tag = d.loss_fn_inputs.get("preference")
+            if tag == "preferred":
+                prefs.append(d)
+            elif tag == "rejected":
+                rejs.append(d)
+            else:
+                untagged.append(d)
+        if prefs or rejs:
+            if untagged:
+                raise ValueError(
+                    "mixed tagged/untagged preference datums — tag all with "
+                    "preference=preferred|rejected or leave all untagged"
+                )
+            if len(prefs) != len(rejs):
+                raise ValueError(
+                    f"preferred/rejected count mismatch: {len(prefs)}/{len(rejs)}"
+                )
+            if not prefs:
+                raise ValueError("DPO requires at least one preferred/rejected pair")
+            return list(zip(prefs, rejs, strict=True))
+        if len(untagged) < 2 or len(untagged) % 2 != 0:
+            raise ValueError(
+                "untagged DPO batch must be even length [preferred, rejected, …]; "
+                f"got {len(untagged)} rows"
+            )
+        return list(zip(untagged[0::2], untagged[1::2], strict=True))
+
+    def _forward_backward_dpo(
+        self,
+        sess: _LocalSession,
+        data: Sequence[Datum],
+        *,
+        beta: float = _DPO_BETA,
+    ) -> ForwardBackwardOutput:
+        """Preference DPO (reference-free Bradley-Terry form).
+
+        For each (preferred, rejected) pair, with mean supervised log-probs
+        under the live LoRA policy:
+
+        ``L = -log σ(β · (log π_θ(y_w|x) − log π_θ(y_l|x)))``
+
+        When a datum carries ``ref_logprob`` (scalar, mean logp under π_ref),
+        classic DPO is used:
+
+        ``L = -log σ(β · ((lp_w − ref_w) − (lp_l − ref_l)))``
+
+        Pair convention matches ``anvil.recipes.dpo``: ``preference`` tags or
+        alternating preferred/rejected rows in the batch.
+        """
+        torch, _, _ = _deps()
+        if not data:
+            raise ValueError("forward_backward requires non-empty data")
+        pairs = self._preference_pairs(data)
+        beta_t = float(beta)
+        if beta_t <= 0:
+            raise ValueError(f"DPO beta must be > 0, got {beta_t}")
+
+        total: Any = None
+        margins: list[float] = []
+        n_tok = 0.0
+        for pref, rej in pairs:
+            lp_w = self._weighted_mean_logp(sess, pref)
+            lp_l = self._weighted_mean_logp(sess, rej)
+            ref_w = pref.loss_fn_inputs.get("ref_logprob")
+            ref_l = rej.loss_fn_inputs.get("ref_logprob")
+            if ref_w is not None and ref_l is not None:
+                delta = (lp_w - float(ref_w)) - (lp_l - float(ref_l))
+            else:
+                delta = lp_w - lp_l
+            loss_i = -torch.nn.functional.logsigmoid(beta_t * delta)
+            total = loss_i if total is None else total + loss_i
+            margins.append(float(delta.detach().cpu()))
+            for d in (pref, rej):
+                w = d.loss_fn_inputs.get("weights") or []
+                n_tok += float(sum(float(x) for x in w if float(x) > 0))
+
+        assert total is not None
+        loss = total / len(pairs)
+        loss.backward()
+        sess.pending_grad = True
+        mean_margin = sum(margins) / max(len(margins), 1)
+        return ForwardBackwardOutput(
+            loss=float(loss.detach().cpu()),
+            metrics={
+                "n_pairs": float(len(pairs)),
+                "n_examples": float(len(data)),
+                "n_tokens": n_tok,
+                "beta": beta_t,
+                "mean_margin": mean_margin,
             },
         )
 

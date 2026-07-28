@@ -90,10 +90,11 @@ machine-readable tripwires and audited switches.
 - [x] Southward-turn detectors (`anvil.observe.southward` + smoke wiring)
 - [x] Mid-train auto-stop on southward cliffs (`stop_on_southward` / SFT·VLM·DPO·GRPO)
 - [x] **Meta-recipe executor** — `run_meta_recipe` + stage events on metrics.jsonl  
-- [ ] SFT curricula / data-stage advance (same pattern as RL recipe queue)  
+- [x] SFT curricula / data-stage advance — `run_vlm_queue` (shared LoRA + plateau advance; text `job=sft` stages too)  
 - [x] SFT/VLM early-stop with **type-scoped patience** (production mode; calibration mode separate)
-- [ ] Early-stop / stage advance for vision SFT stages  
+- [x] Early-stop / stage advance for vision SFT stages (`run_vlm_queue` + `vlm_stage_*` events)  
 - [x] Agent surfaces for book + meta; executor callable (full autonomous multi-stage loop still open)
+- [x] LocalBackend **real DPO** (reference-free Bradley-Terry; optional `ref_logprob`)
 
 Historical homes: P.Sufficiency open items, P.Decide open items, 3.C remainder.
 
@@ -358,7 +359,7 @@ path. Re-open only against the high bar in the spike writeup.
 - [x] `run_vlm_sft` → `metrics.jsonl` (loss, step, wall, n_image_refs) via `run_dir`  
 - [x] Live `/observe` for vision SFT runs (loss chart + index signal column)  
 - [x] Held-out frame probes during VLM train (`run_vlm_sft` probes= → `probes.jsonl`)  
-- [ ] Early-stop / recipe advance hooks for vision stages (share GRPO queue patterns)  
+- [x] Early-stop / recipe advance hooks for vision stages (`run_vlm_queue`, same adapter)  
 
 ### 3.D Multi-hour VLM jobs *(open — required; implements P.Ops for vision)*
 
@@ -465,3 +466,4 @@ For a spin-off agent session:
 | 2026-07-28 | **Expert-v1 slice:** `run_meta_recipe` executor; `run_dpo` + `log_dpo_step`; agent prompts atlas vs book |
 | 2026-07-28 | **Southward detectors** + lab_smokes quick expanded (DPO/meta/southward/expert_v0); expert_v0_smoke scans + `--run-meta` |
 | 2026-07-28 | **Southward auto-stop** mid-train (SFT/VLM/DPO/GRPO); **DPO held-out probes** |
+| 2026-07-28 | **P1–P4:** LocalBackend DPO; book/meta HTTP+MCP tests; J-lens optional (`-m jlens`); `run_vlm_queue` |

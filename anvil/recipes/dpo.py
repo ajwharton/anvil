@@ -1,8 +1,12 @@
 """Preference DPO recipe — paired data + observe SSOT (Expert-v1).
 
-Uses named loss ``dpo`` on the four-verb path. Real LocalBackend DPO math is
-still research-grade; FakeBackend provides a deterministic stub so metrics,
-early-stop, and probes can ship on the same observe surface as SFT/GRPO.
+Uses named loss ``dpo`` on the four-verb path:
+
+- **LocalBackend** — reference-free Bradley-Terry DPO
+  (``-log σ(β · (log π_θ(y_w) − log π_θ(y_l)))``); optional ``ref_logprob``
+  on datums enables classic DPO with an external π_ref.
+- **FakeBackend** — deterministic stub so CI can exercise metrics, early-stop,
+  probes, and southward without torch.
 """
 
 from __future__ import annotations

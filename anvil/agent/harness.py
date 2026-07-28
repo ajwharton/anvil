@@ -106,6 +106,52 @@ def tool_specs() -> list[dict[str, Any]]:
         {
             "type": "function",
             "function": {
+                "name": "anvil_list_recipe_book",
+                "description": "List personal recipe book entries",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "family": {"type": "string"},
+                        "pattern": {"type": "string"},
+                    },
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "anvil_get_recipe_book",
+                "description": "Get one personal book recipe by id",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"recipe_id": {"type": "string"}},
+                    "required": ["recipe_id"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "anvil_list_meta_recipes",
+                "description": "List meta-recipes (stage graphs) in the personal book",
+                "parameters": {"type": "object", "properties": {}},
+            },
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "anvil_get_meta_recipe",
+                "description": "Get one meta-recipe by id",
+                "parameters": {
+                    "type": "object",
+                    "properties": {"meta_id": {"type": "string"}},
+                    "required": ["meta_id"],
+                },
+            },
+        },
+        {
+            "type": "function",
+            "function": {
                 "name": "anvil_train",
                 "description": "Train a run for N steps",
                 "parameters": {
@@ -189,6 +235,12 @@ def dispatch_tool(client: AnvilControlClient, name: str, args: dict[str, Any]) -
         "anvil_list_runs": lambda: client.list_runs(),
         "anvil_get_run": lambda: client.get_run(args["run_id"]),
         "anvil_suggest": lambda: client.suggest(args["base_model"]),
+        "anvil_list_recipe_book": lambda: client.list_recipe_book(
+            family=args.get("family"), pattern=args.get("pattern")
+        ),
+        "anvil_get_recipe_book": lambda: client.get_recipe_book(args["recipe_id"]),
+        "anvil_list_meta_recipes": lambda: client.list_meta_recipes(),
+        "anvil_get_meta_recipe": lambda: client.get_meta_recipe(args["meta_id"]),
         "anvil_train": lambda: client.train(args["run_id"], int(args.get("steps", 1))),
         "anvil_pause": lambda: client.pause(args["run_id"]),
         "anvil_resume": lambda: client.resume(args["run_id"]),
