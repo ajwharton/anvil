@@ -193,6 +193,9 @@ def run_sft(
     early_stop_abs_eps: float = DEFAULT_SFT_EARLY_STOP_ABS_EPS,
     stop_on_southward: bool | None = None,
     southward_min_steps: int = 8,
+    service_client: ServiceClient | None = None,
+    training_client: TrainingClient | None = None,
+    close_clients: bool = True,
 ) -> SFTResult:
     """Minimal SFT: create LoRA client → CE steps → optional export.
 
@@ -209,6 +212,9 @@ def run_sft(
     Southward auto-stop (production default when ``run_dir`` is set): mid-train
     scan of metrics/probes; cliff flags → ``early_stop`` with reason
     ``southward:<flag>``.
+
+    Client reuse (VLM/SFT stage queue): pass ``service_client`` +
+    ``training_client`` to continue the same LoRA; set ``close_clients=False``.
     """
     if probe_every < 1:
         raise ValueError(f"probe_every must be >= 1, got {probe_every}")
@@ -233,18 +239,22 @@ def run_sft(
     plan = plan or build_plan(base_model, **(overrides or {}))
     k = plan.as_knobs()
     r: _SFTRenderer = renderer if renderer is not None else ToyTextRenderer()
-    svc = ServiceClient(endpoint=endpoint)
-    tc: TrainingClient = svc.create_lora_training_client(
-        base_model=plan.base_model,
-        rank=k["rank"],
-        alpha=k.get("alpha"),
-        modalities=k["modalities"],
-        lora_targets=LoraTargets(
-            language=k["language_lora"],
-            vision_encoder=k["vision_encoder_lora"],
-            mm_projector=k["mm_projector_lora"],
-        ),
-    )
+    owns_svc = service_client is None
+    svc = service_client if service_client is not None else ServiceClient(endpoint=endpoint)
+    if training_client is not None:
+        tc = training_client
+    else:
+        tc = svc.create_lora_training_client(
+            base_model=plan.base_model,
+            rank=k["rank"],
+            alpha=k.get("alpha"),
+            modalities=k["modalities"],
+            lora_targets=LoraTargets(
+                language=k["language_lora"],
+                vision_encoder=k["vision_encoder_lora"],
+                mm_projector=k["mm_projector_lora"],
+            ),
+        )
 
     data = examples_to_data(examples, renderer=r) if examples else _toy_batch()
     n_image_refs = count_image_refs(data)
@@ -352,7 +362,8 @@ def run_sft(
             export_dir, format=plan.export_hint if plan.export_hint == "peft" else "peft"
         ).path
 
-    svc.close()
+    if close_clients and owns_svc:
+        svc.close()
     return SFTResult(
         plan=plan,
         steps_run=steps_run,

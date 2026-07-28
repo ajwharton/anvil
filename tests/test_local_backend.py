@@ -183,9 +183,67 @@ def test_export_peft_real_dir(backend: LocalBackend, adapter_id, tmp_path) -> No
 
 
 def test_unsupported_rl_losses_raise(backend: LocalBackend, adapter_id) -> None:
-    for loss in (LossFn.CISPO, LossFn.DRO, LossFn.DPO):
+    for loss in (LossFn.CISPO, LossFn.DRO):
         with pytest.raises(NotImplementedError, match="not supported"):
             backend.forward_backward(adapter_id, _sft_data(), loss)
+
+
+def _preference_pair_data() -> list[Datum]:
+    """One preferred/rejected pair tagged for LocalBackend DPO."""
+    from anvil.recipes.dpo import PreferencePair, _pair_to_datums
+
+    pref_d, rej_d, _, _ = _pair_to_datums(
+        PreferencePair(
+            prompt="2+2?",
+            preferred="4",
+            rejected="definitely not four but five or six maybe",
+        ),
+        renderer=ToyTextRenderer(),
+    )
+    return [pref_d, rej_d]
+
+
+def test_dpo_runs_and_reports_margin(backend: LocalBackend, adapter_id) -> None:
+    """LocalBackend DPO: finite loss + n_pairs/mean_margin metrics."""
+    data = _preference_pair_data()
+    fb = backend.forward_backward(adapter_id, data, LossFn.DPO)
+    assert fb.loss == fb.loss  # finite
+    assert fb.metrics["n_pairs"] == 1.0
+    assert "mean_margin" in fb.metrics
+    assert fb.metrics["beta"] == pytest.approx(0.1)
+    backend.optim_step(adapter_id, AdamParams(learning_rate=1e-3))
+
+
+def test_dpo_margin_improves_with_steps(backend: LocalBackend, adapter_id) -> None:
+    """Training on a clear pair should raise preferred−rejected logp margin."""
+    data = _preference_pair_data()
+    before = backend.forward_backward(adapter_id, data, LossFn.DPO).metrics["mean_margin"]
+    for _ in range(12):
+        backend.forward_backward(adapter_id, data, LossFn.DPO)
+        backend.optim_step(adapter_id, AdamParams(learning_rate=5e-3))
+    after = backend.forward_backward(adapter_id, data, LossFn.DPO).metrics["mean_margin"]
+    assert after > before, f"DPO margin did not improve: {before} -> {after}"
+
+
+def test_run_dpo_local_endpoint(tmp_path) -> None:
+    """End-to-end run_dpo against local:// tiny model (non-fake path)."""
+    from anvil.recipes.dpo import PreferencePair, run_dpo
+
+    res = run_dpo(
+        base_model=TINY,
+        endpoint="local://",
+        pairs=[
+            PreferencePair(prompt="hi", preferred="ok", rejected="a much longer bad reply xx"),
+        ],
+        steps=3,
+        run_dir=str(tmp_path / "dpo-local"),
+        early_stop=False,
+        stop_on_southward=False,
+        overrides={"rank": 8, "language_lora": True},
+    )
+    assert res.steps_run == 3
+    assert len(res.losses) == 3
+    assert all(x == x for x in res.losses)  # finite
 
 
 # --- Phase 2: IS/PPO loss family over GRPO-shaped datums ----------------------

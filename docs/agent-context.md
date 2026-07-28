@@ -82,6 +82,16 @@ Detectors: `advantage_collapse`, `reward_up_probes_down`, `probe_regression`,
 `maybe_stop_on_southward` mid-train; cliff → `early_stop` reason
 `southward:<flag>`. Disable with `stop_on_southward=False` (calibration).
 
+**DPO math:** `LocalBackend` implements reference-free Bradley-Terry DPO
+(`loss_fn=dpo`); optional per-datum `ref_logprob` for classic π_ref form.
+FakeBackend keeps a CI stub.
+
+**Vision stages:** `anvil.recipes.vlm_queue.run_vlm_queue` advances on
+loss plateau (shared LoRA), same idea as GRPO recipe queue.
+
+**J-lens:** shelved measurement kit only (`docs/spikes/jlens-math.md`).
+Schema/CLI remain; default tests skip (`pytest -m jlens` to run).
+
 ---
 
 ## What to watch by job type

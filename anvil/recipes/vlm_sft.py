@@ -78,6 +78,9 @@ def run_vlm_sft(
     early_stop_rel_eps: float | None = None,
     stop_on_southward: bool | None = None,
     southward_min_steps: int = 8,
+    service_client: Any | None = None,
+    training_client: Any | None = None,
+    close_clients: bool = True,
 ) -> SFTResult:
     """VLM SFT loop.
 
@@ -87,6 +90,8 @@ def run_vlm_sft(
     - ``run_dir``: append loss / wall / n_image_refs to ``metrics.jsonl`` for
       live ``/observe`` (P3.6 / roadmap 3.C).
     - ``probes``: held-out Examples sampled every ``probe_every`` steps → ``probes.jsonl``.
+    - Client reuse for multi-stage queues: ``service_client`` / ``training_client`` /
+      ``close_clients`` (same contract as GRPO / ``run_vlm_queue``).
     """
     card = inspect_base_model(base_model, fetch_remote=fetch_remote)
     plan = build_plan(base_model, card=card, fetch_remote=False, **(overrides or {}))
@@ -122,6 +127,9 @@ def run_vlm_sft(
         early_stop_patience=early_stop_patience,
         stop_on_southward=stop_on_southward,
         southward_min_steps=southward_min_steps,
+        service_client=service_client,
+        training_client=training_client,
+        close_clients=close_clients,
     )
     if early_stop_rel_eps is not None:
         kwargs["early_stop_rel_eps"] = early_stop_rel_eps

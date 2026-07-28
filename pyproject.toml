@@ -62,6 +62,12 @@ anvil = ["web/static/**/*"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+# Default CI / local suite excludes shelved J-lens measurement kit.
+# Run with: pytest -m jlens   or   pytest tests/jlens/
+addopts = ["-m", "not jlens"]
+markers = [
+  "jlens: shelved J-lens measurement kit (optional; not product path)",
+]
 
 [tool.ruff]
 line-length = 100
