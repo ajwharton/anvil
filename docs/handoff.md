@@ -26,13 +26,15 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 
 | Done | Open (next) |
 |------|-------------|
-| **Expert-v0 closed** + LeRobot lab dogfood | Southward-turn detectors |
-| SFT/DPO early-stop + observe SSOT | DPO held-out probes; LocalBackend real DPO math |
-| Personal book + suggest + MCP | Wire meta-executor to smoke CLI by default |
-| Meta-recipe **executor** + agent atlas/book prompts | Bridge/OXE scale (Expert-v2) |
+| Expert-v0 + LeRobot + early-stop dogfood | DPO held-out probes; real LocalBackend DPO |
+| Southward detectors + lab **quick** smokes expanded | Autonomous multi-stage agent loop |
+| Meta-exec + expert_v0_smoke `--run-meta` / southward scan | Bridge/OXE scale (Expert-v2) |
+| Personal book + suggest + MCP | |
+
+**Habit:** `python scripts/lab_smokes.py --profile quick` often.
 
 **Recommended next Outcome:**  
-`Wire meta-executor to SFT/GRPO runners in CLI` or `DPO probes + real LocalBackend DPO`
+`DPO probes + LocalBackend DPO` or `meta-exec default SFT/GRPO runners`
 
 ## Pull-on-miss only
 

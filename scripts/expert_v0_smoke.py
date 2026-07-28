@@ -127,6 +127,27 @@ def main(argv: list[str] | None = None) -> int:
         default=None,
         help="family tag for promoted recipe (e.g. Qwen2.5-VL)",
     )
+    p.add_argument(
+        "--scan-southward",
+        action="store_true",
+        default=True,
+        help="scan metrics/probes for southward flags after train (default on)",
+    )
+    p.add_argument(
+        "--no-scan-southward",
+        action="store_true",
+        help="disable southward scan",
+    )
+    p.add_argument(
+        "--fail-on-southward",
+        action="store_true",
+        help="exit non-zero if any cliff-severity southward flag fires",
+    )
+    p.add_argument(
+        "--run-meta",
+        action="store_true",
+        help="after train, run a tiny meta-recipe (sft→export) executor for dogfood",
+    )
     args = p.parse_args(argv)
 
     from anvil.data.convert import ConvertConfig, convert_corpus, write_demo_episode_pack
@@ -284,12 +305,60 @@ def main(argv: list[str] | None = None) -> int:
         )
         print(f"recipe_book: saved {rec.id} → {book.root / (rec.id + '.json')}")
 
+    southward_cliff = False
+    if args.scan_southward and not args.no_scan_southward and metrics.is_file():
+        from anvil.observe.southward import scan_and_log
+
+        rep = scan_and_log(run_dir)
+        if rep.flags:
+            print(f"southward: {[f.name for f in rep.flags]} ok={rep.ok}")
+            for f in rep.flags:
+                print(f"  - {f.severity} {f.name}: {f.detail}")
+            southward_cliff = not rep.ok
+        else:
+            print("southward: no flags")
+
+    if args.run_meta:
+        from anvil.recipes.meta import example_vlm_ladder
+        from anvil.recipes.meta_exec import StageRunResult, run_meta_recipe
+
+        def _runner(stage, *, step_index: int) -> StageRunResult:
+            # Dogfood executor wiring: signal from the train we already ran.
+            if stage.id == "sft":
+                sig = (
+                    f"early_stop:{sft.early_stop_reason}"
+                    if sft.early_stop_reason
+                    else "sft_complete"
+                )
+                return StageRunResult(
+                    signal=sig,
+                    metrics={"steps_run": sft.steps_run, "adapter": sft.adapter_id},
+                )
+            return StageRunResult(
+                signal="export_done",
+                metrics={"export": sft.export_path},
+            )
+
+        meta_dir = run_dir / "meta_exec"
+        meta_res = run_meta_recipe(
+            example_vlm_ladder(family=args.recipe_family or "Qwen2.5-VL"),
+            _runner,
+            run_dir=meta_dir,
+        )
+        print(
+            f"meta_exec: stages={meta_res.stages_run} stop={meta_res.stopped_reason} "
+            f"dir={meta_dir}"
+        )
+
     if not sft.export_path:
         print("warn: no export path", file=sys.stderr)
         return 1
     if not metrics.is_file():
         print("warn: metrics.jsonl missing", file=sys.stderr)
         return 1
+    if args.fail_on_southward and southward_cliff:
+        print("fail: southward cliff flags present", file=sys.stderr)
+        return 2
     return 0
 
 
