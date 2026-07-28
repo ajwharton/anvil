@@ -286,13 +286,59 @@ def create_app() -> FastAPI:
         base_model: str,
         fetch_remote: bool = False,
         include_blocked: bool = False,
+        include_personal_book: bool = True,
     ) -> dict[str, Any]:
-        """Shape + gated catalog recipes for a base model."""
+        """Shape + gated catalog + personal book matches for a base model."""
         return suggest_for_model(
             base_model,
             fetch_remote=fetch_remote,
             include_blocked=include_blocked,
+            include_personal_book=include_personal_book,
         )
+
+    @app.get("/api/recipe-book")
+    def recipe_book_list(family: str | None = None, pattern: str | None = None) -> dict[str, Any]:
+        """List personal recipe book entries (sovereign local store)."""
+        from anvil.recipes.book import RecipeBook
+
+        book = RecipeBook()
+        rows = book.prefer(family=family, pattern=pattern)
+        return {
+            "root": str(book.root),
+            "recipes": [r.to_public() for r in rows],
+        }
+
+    @app.get("/api/recipe-book/{recipe_id}")
+    def recipe_book_get(recipe_id: str) -> dict[str, Any]:
+        from anvil.recipes.book import RecipeBook
+
+        rec = RecipeBook().get(recipe_id)
+        if rec is None:
+            raise HTTPException(404, f"no personal recipe {recipe_id!r}")
+        return rec.to_public()
+
+    @app.get("/api/meta-recipes")
+    def meta_recipes_list() -> dict[str, Any]:
+        """List meta-recipes (stage graphs) in the personal book meta/ dir."""
+        from anvil.recipes.meta import list_meta_recipes, meta_book_dir
+
+        rows = list_meta_recipes()
+        return {
+            "root": str(meta_book_dir()),
+            "meta_recipes": [m.to_public() for m in rows],
+        }
+
+    @app.get("/api/meta-recipes/{meta_id}")
+    def meta_recipes_get(meta_id: str) -> dict[str, Any]:
+        from anvil.recipes.meta import get_meta_recipe
+
+        try:
+            m = get_meta_recipe(meta_id)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
+        if m is None:
+            raise HTTPException(404, f"no meta-recipe {meta_id!r}")
+        return m.to_public()
 
     @app.get("/api/model-card")
     def model_card(base_model: str, fetch_remote: bool = True) -> dict[str, Any]:

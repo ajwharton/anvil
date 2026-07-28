@@ -60,8 +60,30 @@ def build_mcp_server(control_url: str | None = None) -> Any:
         return json.dumps(c().list_recipes(group=group))
 
     @mcp.tool()
+    def anvil_list_recipe_book(
+        family: str | None = None, pattern: str | None = None
+    ) -> str:
+        """List personal recipe book entries (local ANVIL_RECIPE_BOOK store)."""
+        return json.dumps(c().list_recipe_book(family=family, pattern=pattern))
+
+    @mcp.tool()
+    def anvil_get_recipe_book(recipe_id: str) -> str:
+        """Get one personal book recipe by id."""
+        return json.dumps(c().get_recipe_book(recipe_id))
+
+    @mcp.tool()
+    def anvil_list_meta_recipes() -> str:
+        """List meta-recipes (stage graphs) in the personal book."""
+        return json.dumps(c().list_meta_recipes())
+
+    @mcp.tool()
+    def anvil_get_meta_recipe(meta_id: str) -> str:
+        """Get one meta-recipe by id."""
+        return json.dumps(c().get_meta_recipe(meta_id))
+
+    @mcp.tool()
     def anvil_suggest(base_model: str, fetch_remote: bool = False) -> str:
-        """Suggest gated recipes for a base model id."""
+        """Suggest catalog + personal book recipes for a base model id."""
         return json.dumps(c().suggest(base_model, fetch_remote=fetch_remote))
 
     @mcp.tool()
