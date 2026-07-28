@@ -76,6 +76,8 @@ def run_vlm_sft(
     early_stop_mode: str = "production",
     early_stop_patience: int | None = None,
     early_stop_rel_eps: float | None = None,
+    stop_on_southward: bool | None = None,
+    southward_min_steps: int = 8,
 ) -> SFTResult:
     """VLM SFT loop.
 
@@ -118,6 +120,8 @@ def run_vlm_sft(
         early_stop=early_stop,
         early_stop_mode=early_stop_mode,
         early_stop_patience=early_stop_patience,
+        stop_on_southward=stop_on_southward,
+        southward_min_steps=southward_min_steps,
     )
     if early_stop_rel_eps is not None:
         kwargs["early_stop_rel_eps"] = early_stop_rel_eps

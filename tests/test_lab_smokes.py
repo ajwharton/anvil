@@ -61,5 +61,14 @@ def test_lab_smokes_quick_profile(tmp_path):
     assert report["ok"] is True
     assert report["failed"] == 0
     names = {r["name"] for r in report["results"]}
-    assert "fake_early_stop" in names
-    assert "fake_rl_queue" in names
+    # Expert-v1 quick profile: early-stop + DPO observe/probes + meta + southward + queue + expert path
+    for required in (
+        "fake_early_stop",
+        "fake_sft_early_stop",
+        "fake_dpo_observe",
+        "fake_meta_exec",
+        "fake_southward",
+        "fake_rl_queue",
+        "fake_expert_v0",
+    ):
+        assert required in names, f"missing smoke {required} in {sorted(names)}"

@@ -15,12 +15,14 @@ from anvil.client.service import ServiceClient
 from anvil.client.training import TrainingClient
 from anvil.observe.metrics import RunMetricsWriter
 from anvil.protocol.messages import Example, Message, TextPart
-from anvil.protocol.types import AdamParams, Datum, LoraTargets
+from anvil.protocol.types import AdamParams, Datum, LoraTargets, SamplingParams
 from anvil.recipes.profiles import JobPattern, RecipePlan, plan_recipe
 from anvil.recipes.sft import (
     DEFAULT_SFT_EARLY_STOP_ABS_EPS,
     DEFAULT_SFT_EARLY_STOP_PATIENCE,
     DEFAULT_SFT_EARLY_STOP_REL_EPS,
+    _decode_tokens,
+    _match_score,
     sft_early_stop_reason,
 )
 from anvil.render.text import ToyTextRenderer
@@ -46,6 +48,7 @@ class DPOResult:
     run_dir: str | None = None
     early_stop_reason: str | None = None
     mean_length_bias: float | None = None
+    n_probe_records: int = 0
 
 
 def build_plan(base_model: str, **overrides: Any) -> RecipePlan:
@@ -110,12 +113,22 @@ def run_dpo(
     early_stop_patience: int | None = None,
     early_stop_rel_eps: float = DEFAULT_SFT_EARLY_STOP_REL_EPS,
     early_stop_abs_eps: float = DEFAULT_SFT_EARLY_STOP_ABS_EPS,
+    probes: Sequence[PreferencePair] | None = None,
+    probe_every: int = 1,
+    stop_on_southward: bool | None = None,
+    southward_min_steps: int = 8,
 ) -> DPOResult:
     """DPO-style loop: preferred+rejected batch → named ``dpo`` loss → observe.
 
     Logs ``job=dpo`` steps (loss, n_pairs, length_bias, margin proxy). Early-stop
-    reuses SFT plateau logic on the loss curve.
+    reuses SFT plateau logic on the loss curve. Held-out ``probes`` (pairs) sample
+    the live adapter on the prompt and score match to ``preferred``.
+
+    ``stop_on_southward`` (production default with ``run_dir``) aborts on cliff
+    flags such as ``length_bias_spike`` or probe regression.
     """
+    if probe_every < 1:
+        raise ValueError(f"probe_every must be >= 1, got {probe_every}")
     mode = str(early_stop_mode or "production").lower().strip()
     if mode not in {"production", "calibration"}:
         raise ValueError(f"early_stop_mode must be production|calibration, got {early_stop_mode!r}")
@@ -125,6 +138,8 @@ def run_dpo(
         early_stop_patience = (
             DEFAULT_SFT_EARLY_STOP_PATIENCE if mode == "production" else 10**9
         )
+    if stop_on_southward is None:
+        stop_on_southward = bool(early_stop and mode == "production" and run_dir)
 
     plan = plan or build_plan(base_model, **(overrides or {}))
     k = plan.as_knobs()
@@ -132,6 +147,7 @@ def run_dpo(
     pair_list = list(pairs) if pairs is not None else _toy_pairs()
     if not pair_list:
         raise ValueError("run_dpo requires at least one PreferencePair")
+    probe_list = list(probes) if probes is not None else []
 
     batch: list[Datum] = []
     pref_tok = 0
@@ -163,6 +179,8 @@ def run_dpo(
     losses: list[float] = []
     stopped: str | None = None
     steps_run = 0
+    n_probe_records = 0
+    max_tok = int(getattr(plan, "max_tokens", None) or 32)
 
     for step_ix in range(n):
         t0 = time.monotonic()
@@ -188,6 +206,30 @@ def run_dpo(
                 wall_time_s=time.monotonic() - t0,
                 job="dpo",
             )
+            if probe_list and step_ix % probe_every == 0:
+                sc = tc.save_weights_and_get_sampling_client(name=f"dpo-probe-{step_ix}")
+                for probe_ix, pp in enumerate(probe_list):
+                    prompt = renderer.render_prompt(
+                        (Message(role="user", content=(TextPart(text=pp.prompt),)),)
+                    )
+                    out = sc.sample(
+                        prompt,
+                        SamplingParams(max_tokens=max_tok, temperature=0.0, seed=0),
+                        num_samples=1,
+                    ).result()
+                    seq = out.sequences[0] if out.sequences else None
+                    toks = tuple(seq.tokens) if seq is not None else ()
+                    text = _decode_tokens(renderer, toks)
+                    writer.log_probe(
+                        step=step_ix,
+                        probe_idx=probe_ix,
+                        tokens=toks,
+                        text=text,
+                        reward=_match_score(text, pp.preferred),
+                        target=pp.preferred,
+                        job="dpo",
+                    )
+                    n_probe_records += 1
         if early_stop:
             reason = sft_early_stop_reason(
                 losses,
@@ -209,6 +251,29 @@ def run_dpo(
                     )
                 break
 
+        if stop_on_southward and run_dir:
+            from anvil.observe.southward import maybe_stop_on_southward
+
+            sw = maybe_stop_on_southward(
+                run_dir,
+                step=step_ix,
+                enabled=True,
+                min_steps=southward_min_steps,
+            )
+            if sw is not None:
+                stopped = sw
+                if writer is not None:
+                    writer.log_event(
+                        step=step_ix,
+                        event="early_stop",
+                        reason=sw,
+                        mode=mode,
+                        job="dpo",
+                        trigger="southward",
+                        length_bias=length_bias,
+                    )
+                break
+
     export_path = None
     if export_dir:
         export_path = tc.export_adapter(
@@ -224,6 +289,7 @@ def run_dpo(
         run_dir=run_dir,
         early_stop_reason=stopped,
         mean_length_bias=length_bias,
+        n_probe_records=n_probe_records,
     )
 
 

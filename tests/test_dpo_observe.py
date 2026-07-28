@@ -38,6 +38,7 @@ def test_run_dpo_production_early_stop(tmp_path):
         run_dir=str(tmp_path / "dpo-es"),
         early_stop_mode="production",
         early_stop_patience=15,
+        stop_on_southward=False,  # isolate plateau stop
     )
     assert res.steps_run < 200
     assert res.early_stop_reason is not None
@@ -49,3 +50,29 @@ def test_run_dpo_production_early_stop(tmp_path):
     ]
     assert events
     assert events[0].get("job") == "dpo"
+
+
+def test_run_dpo_held_out_probes(tmp_path):
+    from anvil.observe.metrics import PROBES_FILENAME
+
+    train = [
+        PreferencePair(prompt="hi", preferred="ok", rejected="long bad answer text"),
+    ]
+    hold = [
+        PreferencePair(prompt="2+2?", preferred="4", rejected="five is bigger"),
+    ]
+    res = run_dpo(
+        endpoint="fake://",
+        pairs=train,
+        probes=hold,
+        probe_every=1,
+        steps=3,
+        run_dir=str(tmp_path / "dpo-pr"),
+        early_stop=False,
+        stop_on_southward=False,
+    )
+    assert res.n_probe_records == 3
+    probes = read_jsonl(tmp_path / "dpo-pr" / PROBES_FILENAME)
+    assert len(probes) == 3
+    assert probes[0]["job"] == "dpo"
+    assert probes[0]["target"] == "4"

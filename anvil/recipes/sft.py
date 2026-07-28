@@ -191,6 +191,8 @@ def run_sft(
     early_stop_patience: int | None = None,
     early_stop_rel_eps: float = DEFAULT_SFT_EARLY_STOP_REL_EPS,
     early_stop_abs_eps: float = DEFAULT_SFT_EARLY_STOP_ABS_EPS,
+    stop_on_southward: bool | None = None,
+    southward_min_steps: int = 8,
 ) -> SFTResult:
     """Minimal SFT: create LoRA client → CE steps → optional export.
 
@@ -203,6 +205,10 @@ def run_sft(
     ``early_stop_patience`` consecutive non-improving steps. Use
     ``early_stop_mode="calibration"`` (or ``early_stop=False``) to overshoot
     for plateau mapping — still fully instrumented.
+
+    Southward auto-stop (production default when ``run_dir`` is set): mid-train
+    scan of metrics/probes; cliff flags → ``early_stop`` with reason
+    ``southward:<flag>``.
     """
     if probe_every < 1:
         raise ValueError(f"probe_every must be >= 1, got {probe_every}")
@@ -221,6 +227,8 @@ def run_sft(
         )
     if early_stop_patience < 1:
         raise ValueError(f"early_stop_patience must be >= 1, got {early_stop_patience}")
+    if stop_on_southward is None:
+        stop_on_southward = bool(early_stop and mode == "production" and run_dir)
 
     plan = plan or build_plan(base_model, **(overrides or {}))
     k = plan.as_knobs()
@@ -313,6 +321,28 @@ def run_sft(
                         rel_eps=early_stop_rel_eps,
                         abs_eps=early_stop_abs_eps,
                         job=job,
+                    )
+                break
+
+        if stop_on_southward and run_dir:
+            from anvil.observe.southward import maybe_stop_on_southward
+
+            sw = maybe_stop_on_southward(
+                run_dir,
+                step=step_ix,
+                enabled=True,
+                min_steps=southward_min_steps,
+            )
+            if sw is not None:
+                stopped_reason = sw
+                if writer is not None:
+                    writer.log_event(
+                        step=step_ix,
+                        event="early_stop",
+                        reason=sw,
+                        mode=mode,
+                        job=job,
+                        trigger="southward",
                     )
                 break
 

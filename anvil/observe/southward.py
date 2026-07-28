@@ -343,15 +343,52 @@ def scan_and_log(run_dir: str | Path) -> SouthwardReport:
     return rep
 
 
+def cliff_stop_reason(report: SouthwardReport) -> str | None:
+    """If any cliff-severity flag is present, return an early_stop reason string."""
+    cliffs = [f for f in report.flags if f.severity == "cliff"]
+    if not cliffs:
+        return None
+    names = ",".join(sorted({f.name for f in cliffs}))
+    return f"southward:{names}"
+
+
+def maybe_stop_on_southward(
+    run_dir: str | Path | None,
+    *,
+    step: int,
+    enabled: bool = True,
+    min_steps: int = 5,
+) -> str | None:
+    """Mid-train hook: scan disk artifacts; log flags; return stop reason or None.
+
+    Requires ``run_dir`` with enough steps so detectors have signal. No-op when
+    disabled, missing dir, or ``step + 1 < min_steps``.
+    """
+    if not enabled or run_dir is None:
+        return None
+    if step + 1 < min_steps:
+        return None
+    d = Path(run_dir)
+    if not d.is_dir():
+        return None
+    rep = scan_run_dir(d)
+    if not rep.flags:
+        return None
+    log_southward_flags(d, rep, step=step)
+    return cliff_stop_reason(rep)
+
+
 __all__ = [
     "SouthwardFlag",
     "SouthwardReport",
+    "cliff_stop_reason",
     "detect_advantage_collapse",
     "detect_length_bias_spike",
     "detect_loss_flat_probes_down",
     "detect_probe_regression",
     "detect_reward_up_probes_down",
     "log_southward_flags",
+    "maybe_stop_on_southward",
     "scan_and_log",
     "scan_records",
     "scan_run_dir",

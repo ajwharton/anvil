@@ -78,6 +78,10 @@ Cycle (details in [`watch_loop.md`](../prompts/agent/watch_loop.md)):
 Detectors: `advantage_collapse`, `reward_up_probes_down`, `probe_regression`,
 `loss_flat_probes_down`, `length_bias_spike`. Events log as `event=southward`.
 
+**Auto-stop:** SFT / VLM / DPO / GRPO (production + `run_dir`) call
+`maybe_stop_on_southward` mid-train; cliff → `early_stop` reason
+`southward:<flag>`. Disable with `stop_on_southward=False` (calibration).
+
 ---
 
 ## What to watch by job type

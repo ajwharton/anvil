@@ -86,8 +86,9 @@ cliffs and **meta-recipes**, not a fixed pre-run schedule; agents get
 machine-readable tripwires and audited switches.
 
 - [x] Preference (DPO) observe SSOT (`run_dpo` → `job=dpo` metrics; length_bias)  
-- [ ] Probes for **all** methods — SFT/VLM done; DPO probes still open  
+- [x] Probes for **all** methods — SFT/VLM/DPO held-out probes → `probes.jsonl`  
 - [x] Southward-turn detectors (`anvil.observe.southward` + smoke wiring)
+- [x] Mid-train auto-stop on southward cliffs (`stop_on_southward` / SFT·VLM·DPO·GRPO)
 - [x] **Meta-recipe executor** — `run_meta_recipe` + stage events on metrics.jsonl  
 - [ ] SFT curricula / data-stage advance (same pattern as RL recipe queue)  
 - [x] SFT/VLM early-stop with **type-scoped patience** (production mode; calibration mode separate)
@@ -173,10 +174,10 @@ Cross-cutting goals still apply to every job type. They are **re-homed** above:
 - [x] GRPO early-stop on dead signal + recipe queue advance  
 - [x] SFT / VLM SFT observe SSOT (`log_sft_step`)  
 - [x] Live web lists GRPO + SFT/VLM on `/observe`  
-- [ ] Preference (DPO/…) observe SSOT + family-specific cliffs → **v1**  
+- [x] Preference (DPO/…) observe SSOT + family-specific cliffs → **v1** (`log_dpo_step`, length_bias)  
 - [x] Probes for SFT/VLM mid-run → **v0** (`run_sft`/`run_vlm_sft` probes=)  
-- [ ] Probes for preference / remaining methods → **v1**  
-- [ ] Southward-turn detectors → **v1**  
+- [x] Probes for preference / remaining methods → **v1** (`run_dpo` probes=)  
+- [x] Southward-turn detectors + mid-train auto-stop → **v1** (`maybe_stop_on_southward`)  
 
 ### P.Ops — Multi-hour / large-corpus jobs → **v2**
 
@@ -356,7 +357,7 @@ path. Re-open only against the high bar in the spike writeup.
 
 - [x] `run_vlm_sft` → `metrics.jsonl` (loss, step, wall, n_image_refs) via `run_dir`  
 - [x] Live `/observe` for vision SFT runs (loss chart + index signal column)  
-- [ ] Held-out frame probes during VLM train  
+- [x] Held-out frame probes during VLM train (`run_vlm_sft` probes= → `probes.jsonl`)  
 - [ ] Early-stop / recipe advance hooks for vision stages (share GRPO queue patterns)  
 
 ### 3.D Multi-hour VLM jobs *(open — required; implements P.Ops for vision)*
@@ -463,3 +464,4 @@ For a spin-off agent session:
 | 2026-07-28 | **P.Recipes wire-up:** suggest prefers personal book; HTTP/MCP book+meta; meta-recipe schema skeleton |
 | 2026-07-28 | **Expert-v1 slice:** `run_meta_recipe` executor; `run_dpo` + `log_dpo_step`; agent prompts atlas vs book |
 | 2026-07-28 | **Southward detectors** + lab_smokes quick expanded (DPO/meta/southward/expert_v0); expert_v0_smoke scans + `--run-meta` |
+| 2026-07-28 | **Southward auto-stop** mid-train (SFT/VLM/DPO/GRPO); **DPO held-out probes** |
