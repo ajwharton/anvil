@@ -29,7 +29,7 @@ If a tool is missing, say so and fall back to documented human paths (`anvil-web
 |---------|------------|--------|
 | **Control plane** | Runs, knobs, pause/resume/patch, audit | `anvil-web` HTTP · MCP `anvil_*` · `AnvilControlClient` |
 | **Observe plane** | Live train curves + probes | `ANVIL_OBSERVE_ROOT/<run_id>/metrics.jsonl` (+ `probes.jsonl`) · `/api/observe/*` · MCP `anvil_observe_*` |
-| **Recipes / gates** | Architecture-aware plans | `/api/recipes`, `/api/plan` · `anvil_list_recipes` / `anvil_plan` / `anvil_suggest` |
+| **Recipes / gates / book** | Architecture-aware plans; personal book (roadmap) | `/api/recipes`, `/api/plan` · `anvil_list_recipes` / `anvil_plan` / `anvil_suggest` · [`recipes.md`](recipes.md) |
 | **Data** | Examples, trajectories, `cas://` media | `anvil.data.*`, convert CLI, media store — **not** git blobs |
 | **Prompts** | Operator brain text | `prompts/agent/*` |
 

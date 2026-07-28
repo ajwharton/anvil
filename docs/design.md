@@ -47,7 +47,28 @@ or a later algorithm behind the same verbs:
 | Export | PEFT/path adapters | Where the expert runs next |
 
 **Profiles** (same workflow): robotics/edge VLM · org self-host large base · solo lab.  
-**Prioritization:** Expert-v0/v1/v2 in [`roadmap.md`](roadmap.md) — not “fill every kit checkbox.”
+**Prioritization:** Expert-v0/v1/v2 + **P.Recipes** in [`roadmap.md`](roadmap.md) — not “fill every kit checkbox.”
+
+### 1.0b Recipe book (control plane, not docs)
+
+Recipes are **first-class control objects**, not README snippets:
+
+```text
+  shipped atlas  ─┐
+  personal book  ─┼─► plan_recipe / suggest ─► train + observe
+                  │                              │
+                  └◄──── promote-from-run ───────┘
+```
+
+| Object | Role |
+|--------|------|
+| **Recipe** | Pattern + knobs + gates + stop/probe defaults; binds to **family/shape**, optional instance pin |
+| **Meta-recipe** | Graph of recipes + cliff edges + calibration vs production mode |
+| **Personal book** | Operator-local library (sovereign); versioned; org-shareable without Anvil hosting |
+
+Design rules: same SSOT for UI and agents; card/gates still block impossible combos;
+calibration overshoot may update experience only when explicitly promoted.
+Detail: [`recipes.md`](recipes.md).
 
 ### 1.1 Layering
 
@@ -57,7 +78,7 @@ or a later algorithm behind the same verbs:
 | **Control / observe APIs** | HTTP + SSE SSOT for web UI **and** agents (`anvil-web`, `AnvilControlClient`). |
 | **MCP + harness** | Anvil-owned tools and optional loop; **user brings** the agent model (see agentic-control.md). |
 | **Train / sample workers** | Warm bases + LoRA adapters. Scheduling, multi-node, fault tolerance as backends grow. |
-| **Recipes** | SFT, GRPO/PPO-style RL, DPO/RLHF, distillation, tools, multi-agent, VLM classifier, robot offline. |
+| **Recipes / meta-recipes / book** | Shipped atlas + **personal recipe book**; stage graphs and cliff→next policies; family/shape binding (see [`recipes.md`](recipes.md)). |
 | **Renderers** | Chat/tool/reasoning/multimodal rendering so train and sample share one message↔token contract. |
 
 ### 1.2 The primitive surface

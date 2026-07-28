@@ -2,12 +2,12 @@
 
 Status legend: **todo** · **doing** · **done** · **blocked**
 
-**How to use this file:** prioritize **Expert-v0 → v1 → v2** (product bar).  
-Historical **Phases 0–5** below are the build archive (what shipped when). Map
-open work into the Expert ladder first; do not start net-new work only because
-a Phase 3/4 checkbox is open if it does not close an Expert gap.
+**How to use this file:** prioritize **Expert-v0 → v1 → v2** and cross-cutting
+**P.Recipes** (recipe book). Historical **Phases 0–5** are the build archive.
+Map open work into those bars first.
 
-Product thesis: [`product.md`](product.md) · design workflow: [`design.md`](design.md) §1.0 · agent brief: [`agent-context.md`](agent-context.md)
+Product thesis: [`product.md`](product.md) · recipes: [`recipes.md`](recipes.md) ·
+design: [`design.md`](design.md) §1.0 · agent brief: [`agent-context.md`](agent-context.md)
 
 ---
 
@@ -16,21 +16,27 @@ Product thesis: [`product.md`](product.md) · design workflow: [`design.md`](des
 **Purpose:** Anvil forges **sovereign domain experts** from base models.  
 **Mechanism:** live sufficiency — instrument every post-training job **while**
 data is applied so operators and agents decide **how much is enough** and
-**when to shift gears** before the model turns southward.
+**when to shift gears** before the model turns southward.  
+**Differentiator:** **recipes + meta-recipes + personal recipe book** — shipped
+atlas *and* operator-owned learnings, not a static config file.
 
 **Success:** a researcher, roboticist, org, or **their agent** can take a base
 model + domain data on **owned GPUs**, train under live metrics/probes, stop or
-switch methods with evidence, and **export an adapter they own**.
+switch methods with evidence, **export an adapter they own**, and **promote
+what worked into a recipe** for the next run in that model family.
 
 ```text
   base + domain data (you)
            │
            ▼
-  place → recipe ladder → train under observe → decide enough / switch → export
+  place → recipe / meta-recipe → train under observe → decide enough / switch → export
+           │                              │
+           │                              └── promote → personal recipe book
            │
            ├── Expert-v0   ship one specialist (near-term bar)
-           ├── Expert-v1   method ladder + cliffs for agents
-           └── Expert-v2   scale ops (hours, large corpora, big bases)
+           ├── Expert-v1   method ladder + meta-recipes + cliffs for agents
+           ├── Expert-v2   scale ops + book maturity (org packs, experience→defaults)
+           └── P.Recipes   shipped atlas + personal book (cross-cutting)
                     │
                     ├── Path: robotics / edge
                     ├── Path: org self-host
@@ -77,24 +83,27 @@ Not every method; **one** end-to-end expert smoke a human or agent can repeat.
 ## Expert-v1 — Method ladder under live judgment
 
 **Exit:** operator can sequence methods (SFT ↔ preference ↔ GRPO) using live
-cliffs, not a fixed pre-run schedule; agents get machine-readable tripwires.
+cliffs and **meta-recipes**, not a fixed pre-run schedule; agents get
+machine-readable tripwires and audited switches.
 
 - [ ] Preference (DPO/…) observe SSOT + family-specific cliffs  
 - [ ] Probes for **all** methods (held-out prompts/frames mid-run)  
 - [ ] Southward-turn detectors (probe↓ while reward↑, homogenization, …) as flags  
-- [ ] Method-switch recipes (“if cliff X → try Y”) with **audit** trail  
+- [ ] **Meta-recipes:** method-switch / stage graph (“if cliff X → try Y”) with **audit**  
 - [ ] SFT curricula / data-stage advance (same pattern as RL recipe queue)  
+- [ ] SFT/VLM early-stop with **type-scoped patience** (production mode; calibration mode separate)  
 - [ ] Early-stop / stage advance for vision SFT stages  
-- [ ] Agent/MCP watch → decide → act loop exercised on a multi-stage ladder  
+- [ ] Agent/MCP watch → decide → act loop on a multi-stage **meta-recipe**  
 
 Historical homes: P.Sufficiency open items, P.Decide open items, 3.C remainder.
 
 ---
 
-## Expert-v2 — Scale ops
+## Expert-v2 — Scale ops + book maturity
 
 **Exit:** multi-hour / large-corpus jobs without full replay; documented
-throughput; org-scale bases treated as an **ops profile**, not a separate product.
+throughput; org-scale bases as an **ops profile**; personal/org recipe book
+used as the default plan source for repeat domains.
 
 - [ ] Checkpoint + resume (adapter + step) for long SFT/RL  
 - [ ] Batching / throughput defaults per shape (dense text, VLM, …)  
@@ -102,8 +111,37 @@ throughput; org-scale bases treated as an **ops profile**, not a separate produc
 - [ ] Multi-hour lab smokes (`lab_smokes` + report)  
 - [ ] Optional multi-worker train/sample when single-process is the wall  
 - [ ] Org self-host notes (governance, no secrets, multi-GPU reality)  
+- [ ] Org recipe packs + experience→default patience per family/pattern  
 
 Historical homes: P.Ops, 3.D, part of 3.B scale ladder.
+
+---
+
+## P.Recipes — Recipe book (shipped + personal) *(cross-cutting differentiator)*
+
+**Thesis:** [`docs/recipes.md`](recipes.md). Catalog/gates **v0 exist**; personal
+book + promote-from-run + rich meta-recipes are the product bet.
+
+### Already landed
+
+- [x] Bounded recipe catalog + architecture gates (`anvil/recipes/catalog.py`)  
+- [x] `plan_recipe` / suggest / web + MCP list-plan surface  
+- [x] Pattern-level recipes (SFT, VLM SFT, GRPO, …)  
+- [x] Thin meta-recipe: GRPO **recipe queue** (stage advance on early-stop)  
+
+### Open (product differentiator)
+
+- [ ] **Personal recipe book** store (local/org path; sovereign; versioned)  
+- [ ] **Promote-from-run** — save knobs, stop policy, stage graph, notes from a finished run  
+- [ ] **Family-scoped binding** — recipes ride model families, not only one snapshot  
+- [ ] **Experience records** — link observe summary / calibration vs production tags into recipe versions  
+- [ ] **Meta-recipe schema** — cliff→next, ladders, domain packs; MCP list/get/switch  
+- [ ] **Suggest prefers personal book** when family+pattern match, else shipped atlas  
+- [ ] Agent prompts document book vs atlas (`agent-context` + prompt pack)  
+
+**Recommended sequencing:** Expert-v0 lab real data can proceed in parallel;
+**P.Recipes** unblocks durable dogfood of patience and ladders after v1 stop
+signals exist.
 
 ---
 
@@ -422,3 +460,4 @@ For a spin-off agent session:
 | 2026-07-26 | **Facing:** purpose one-liner — sovereign domain experts from base models (`product.md`, README, start, …) |
 | 2026-07-26 | **Roadmap re-slice:** Expert-v0 / v1 / v2 + Paths prioritize over historical Phases 0–5 (archive retained); map P.Sufficiency/Ops/Decide and Phase 3–4 open items into Expert ladder |
 | 2026-07-26 | **Expert-v0 path:** `run_sft`/`run_vlm_sft` held-out `probes=` → `probes.jsonl`; `scripts/expert_v0_smoke.py` place→train→observe→export; `docs/expert-v0-smoke.md`. Lab Bridge 1k still operator |
+| 2026-07-27 | **P.Recipes differentiator:** `docs/recipes.md` — recipes/meta-recipes/personal book first-class; roadmap §P.Recipes; product + design + README facing |

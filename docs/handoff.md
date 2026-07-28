@@ -38,8 +38,9 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 | Topic | Where |
 |-------|--------|
 | Product / purpose | `docs/product.md` |
+| Recipes / personal book | `docs/recipes.md` · roadmap **P.Recipes** |
 | Expert-v0 checklist | `docs/expert-v0-smoke.md` |
-| Expert-v0/v1/v2 + archive phases | `docs/roadmap.md` |
+| Expert-v0/v1/v2 + P.Recipes + archive | `docs/roadmap.md` |
 | Primary workflow | `docs/design.md` §1.0 |
 | Agent operator brief | `docs/agent-context.md` |
 | Vision slices | `docs/phase3-vision.md` |
