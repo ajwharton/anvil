@@ -175,6 +175,7 @@ def smoke_fake_dpo_observe(ctx: SmokeContext) -> SmokeResult:
 
 
 def smoke_fake_meta_exec(ctx: SmokeContext) -> SmokeResult:
+    """Executor graph plumbing (injectable runner) — kept as a pure unit-ish smoke."""
     t0 = time.monotonic()
     from anvil.recipes.meta import MetaEdge, MetaRecipe, MetaStage
     from anvil.recipes.meta_exec import StageRunResult, run_meta_recipe
@@ -205,6 +206,50 @@ def smoke_fake_meta_exec(ctx: SmokeContext) -> SmokeResult:
         duration_s=time.monotonic() - t0,
         detail=f"stages={res.stages_run} stop={res.stopped_reason}",
         meta={"stages_run": res.stages_run},
+    )
+
+
+def smoke_fake_meta_live_runners(ctx: SmokeContext) -> SmokeResult:
+    """Default live runners: SFT → GRPO on fake:// (Expert-v1 wire-up)."""
+    t0 = time.monotonic()
+    from anvil.recipes.meta import MetaEdge, MetaRecipe, MetaStage
+    from anvil.recipes.meta_runners import DefaultRunnerConfig, run_meta_with_defaults
+
+    meta = MetaRecipe(
+        id="lab-smoke-meta-live",
+        title="live SFT then GRPO",
+        stages=[
+            MetaStage(id="sft", recipe_id="sft_chat", pattern="sft_chat"),
+            MetaStage(id="grpo", recipe_id="rl", pattern="rl_verifiable"),
+        ],
+        edges=[MetaEdge(on="early_stop:*", from_stage="sft", to_stage="grpo")],
+    )
+    run_dir = ctx.report_run / "fake-meta-live"
+    cfg = DefaultRunnerConfig(
+        endpoint=ctx.endpoint if ctx.endpoint.startswith("fake") else "fake://",
+        run_dir=run_dir,
+        sft_steps=40,
+        grpo_steps=20,
+        early_stop_patience=12,
+        grpo_patience=5,
+        stop_on_southward=False,
+    )
+    res = run_meta_with_defaults(meta, config=cfg)
+    ok = (
+        res.stages_run == 2
+        and res.outcomes[0].advanced
+        and (run_dir / "sft" / "metrics.jsonl").is_file()
+        and (run_dir / "grpo" / "metrics.jsonl").is_file()
+    )
+    return SmokeResult(
+        name="fake_meta_live_runners",
+        ok=ok,
+        duration_s=time.monotonic() - t0,
+        detail=(
+            f"stages={res.stages_run} stop={res.stopped_reason} "
+            f"s0={res.outcomes[0].result.signal if res.outcomes else None}"
+        ),
+        meta={"stages_run": res.stages_run, "stopped_reason": res.stopped_reason},
     )
 
 
@@ -662,6 +707,7 @@ SMOKES: dict[str, SmokeFn] = {
     "fake_sft_early_stop": smoke_fake_sft_early_stop,
     "fake_dpo_observe": smoke_fake_dpo_observe,
     "fake_meta_exec": smoke_fake_meta_exec,
+    "fake_meta_live_runners": smoke_fake_meta_live_runners,
     "fake_southward": smoke_fake_southward,
     "fake_rl_queue": smoke_fake_rl_queue,
     "fake_expert_v0": smoke_fake_expert_v0,
@@ -679,6 +725,7 @@ PROFILES: dict[str, tuple[str, ...]] = {
         "fake_sft_early_stop",
         "fake_dpo_observe",
         "fake_meta_exec",
+        "fake_meta_live_runners",
         "fake_southward",
         "fake_rl_queue",
         "fake_expert_v0",
@@ -690,6 +737,7 @@ PROFILES: dict[str, tuple[str, ...]] = {
         "fake_sft_early_stop",
         "fake_dpo_observe",
         "fake_meta_exec",
+        "fake_meta_live_runners",
         "fake_southward",
         "fake_rl_queue",
         "fake_expert_v0",
@@ -703,6 +751,7 @@ PROFILES: dict[str, tuple[str, ...]] = {
         "fake_sft_early_stop",
         "fake_dpo_observe",
         "fake_meta_exec",
+        "fake_meta_live_runners",
         "fake_southward",
         "fake_rl_queue",
         "fake_expert_v0",

@@ -26,17 +26,18 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 
 | Done | Open (next) |
 |------|-------------|
-| Expert-v0/v1 observe + southward auto-stop | meta-exec default live SFT/GRPO runners |
-| LocalBackend real DPO + DPO probes | Bridge/OXE scale (Expert-v2) |
-| Book/meta HTTP+MCP+harness surfaces | Checkpoint/resume multi-hour ops |
+| Expert-v0/v1 observe + southward + DPO | Expert-v2: checkpoint/resume, scale ladder |
+| Meta-exec **default live runners** (`anvil meta-run`) | Bridge/OXE scale |
+| Book/meta HTTP+MCP+harness | Multi-hour lab smokes |
 | `run_vlm_queue` vision stage advance | |
-| J-lens shelved (code kept; tests optional `-m jlens`) | |
+| J-lens shelved (optional `-m jlens`) | |
 
 **Habit:** `python scripts/lab_smokes.py --profile quick` often.  
-**J-lens:** `pytest -m jlens` or `pytest tests/jlens/ -o addopts=` (not default CI).
+**Meta ladder:** `anvil meta-run --example sft-grpo --endpoint fake://`  
+**J-lens:** `pytest -m jlens` (not default CI).
 
 **Recommended next Outcome:**  
-`meta-exec default SFT/GRPO runners` or Expert-v2 scale ladder
+Expert-v2 checkpoint/resume or scale ladder on forge
 
 ## Pull-on-miss only
 
