@@ -13,10 +13,18 @@ For each open training run, cycle:
 
 | Class | Rough meaning |
 |-------|----------------|
-| **Healthy** | Reward/probes improving or stable; no collapse; IS ratio near on-policy if RL |
+| **Healthy** | Reward/probes improving or stable; no collapse; IS ratio near on-policy if RL; SFT/DPO loss still improving past abs/rel eps |
 | **Noisy** | High variance; need more steps or more groups before judging |
-| **Cliff** | Clear stall or regression with a known signature (see method_switch) |
+| **Cliff** | Clear stall or regression with a known signature (see method_switch); DPO length_bias exploding while loss drops |
 | **Broken** | Tool errors, empty batches, sampler out of sync—fix infra first |
+
+### Job field (`metrics.jsonl`)
+
+| `job` | Primary live signals |
+|-------|----------------------|
+| `grpo` | reward_mean, group_reward_std_mean, is_mean_ratio, probes |
+| `sft` / `vlm_sft` | loss, n_image_refs, wall, probes, early_stop |
+| `dpo` | loss, n_pairs, length_bias, margin proxy, early_stop |
 
 ## 3. Act or wait
 

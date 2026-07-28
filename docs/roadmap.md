@@ -85,14 +85,14 @@ Not every method; **one** end-to-end expert smoke a human or agent can repeat.
 cliffs and **meta-recipes**, not a fixed pre-run schedule; agents get
 machine-readable tripwires and audited switches.
 
-- [ ] Preference (DPO/…) observe SSOT + family-specific cliffs  
-- [ ] Probes for **all** methods (held-out prompts/frames mid-run)  
+- [x] Preference (DPO) observe SSOT (`run_dpo` → `job=dpo` metrics; length_bias)  
+- [ ] Probes for **all** methods — SFT/VLM done; DPO probes still open  
 - [ ] Southward-turn detectors (probe↓ while reward↑, homogenization, …) as flags  
-- [ ] **Meta-recipes:** method-switch / stage graph (“if cliff X → try Y”) with **audit**  
+- [x] **Meta-recipe executor** — `run_meta_recipe` + stage events on metrics.jsonl  
 - [ ] SFT curricula / data-stage advance (same pattern as RL recipe queue)  
 - [x] SFT/VLM early-stop with **type-scoped patience** (production mode; calibration mode separate)
 - [ ] Early-stop / stage advance for vision SFT stages  
-- [ ] Agent/MCP watch → decide → act loop on a multi-stage **meta-recipe**  
+- [x] Agent surfaces for book + meta; executor callable (full autonomous multi-stage loop still open)
 
 Historical homes: P.Sufficiency open items, P.Decide open items, 3.C remainder.
 
@@ -134,11 +134,12 @@ book + promote-from-run + rich meta-recipes are the product bet.
 - [x] **Promote-from-run** — knobs, stop policy, observe summary (`promote_from_run`, smoke `--promote-recipe`)  
 - [x] **Family-scoped binding** field on book recipes (prefer filter)  
 - [x] **Experience records** — observe summary + early_stop in notes/stop_policy  
-- [x] **Meta-recipe schema** (skeleton) — stages/edges + `next_stage`; save under book `meta/`  
+- [x] **Meta-recipe schema** — stages/edges + `next_stage`; save under book `meta/`  
 - [x] **Suggest prefers personal book** when family matches (`suggest_for_model`)  
 - [x] **HTTP/MCP** list/get personal book + meta-recipes  
-- [ ] Agent prompts document book vs atlas (`agent-context` + prompt pack)  
-- [ ] Meta-recipe **executor** (agent/queue drives stages automatically)
+- [x] Agent prompts document book vs atlas (`system_operator` + agent-context + watch_loop)  
+- [x] Meta-recipe **executor** (`run_meta_recipe` + stage_start/end events)  
+- [ ] Wire executor to live SFT/GRPO runners in smoke/CLI by default
 
 ---
 
@@ -460,3 +461,4 @@ For a spin-off agent session:
 | 2026-07-27 | **P.Recipes differentiator:** `docs/recipes.md` — recipes/meta-recipes/personal book first-class; roadmap §P.Recipes; product + design + README facing |
 | 2026-07-28 | **Expert-v0 closed** on path + LeRobot lab dogfood; SFT early-stop abs eps; book promote |
 | 2026-07-28 | **P.Recipes wire-up:** suggest prefers personal book; HTTP/MCP book+meta; meta-recipe schema skeleton |
+| 2026-07-28 | **Expert-v1 slice:** `run_meta_recipe` executor; `run_dpo` + `log_dpo_step`; agent prompts atlas vs book |

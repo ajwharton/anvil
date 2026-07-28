@@ -16,6 +16,7 @@ from anvil.recipes.catalog import (
     list_recipes,
     recipes_for_shape,
 )
+from anvil.recipes.dpo import DPOResult, PreferencePair, run_dpo
 from anvil.recipes.meta import (
     MetaEdge,
     MetaRecipe,
@@ -25,6 +26,11 @@ from anvil.recipes.meta import (
     list_meta_recipes,
     next_stage,
     save_meta_recipe,
+)
+from anvil.recipes.meta_exec import (
+    MetaExecResult,
+    StageRunResult,
+    run_meta_recipe,
 )
 from anvil.recipes.model_card import ModelCardFacts, inspect_base_model
 from anvil.recipes.profiles import (
@@ -41,18 +47,22 @@ from anvil.recipes.profiles import (
 
 __all__ = [
     "BookRecipe",
+    "DPOResult",
     "GateLevel",
     "GateResult",
     "JobPattern",
     "MetaEdge",
+    "MetaExecResult",
     "MetaRecipe",
     "MetaStage",
     "ModelCardFacts",
     "ModelShape",
     "PatternSpec",
+    "PreferencePair",
     "RecipeBook",
     "RecipePlan",
     "RecipeSpec",
+    "StageRunResult",
     "default_book_root",
     "default_recipe_id_for_shape",
     "example_vlm_ladder",
@@ -69,6 +79,8 @@ __all__ = [
     "plan_recipe",
     "promote_from_run",
     "recipes_for_shape",
+    "run_dpo",
+    "run_meta_recipe",
     "save_meta_recipe",
     "suggest_for_model",
 ]

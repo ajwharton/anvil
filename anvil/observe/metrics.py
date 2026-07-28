@@ -144,6 +144,46 @@ class RunMetricsWriter:
         _append_jsonl(self.metrics_path, record)
         return record
 
+    def log_dpo_step(
+        self,
+        *,
+        step: int,
+        loss: float,
+        n_pairs: int,
+        preferred_tokens: float | None = None,
+        rejected_tokens: float | None = None,
+        margin: float | None = None,
+        length_bias: float | None = None,
+        fb_metrics: dict[str, float] | None = None,
+        wall_time_s: float | None = None,
+        job: str = "dpo",
+    ) -> dict[str, Any]:
+        """Preference/DPO step on the same metrics.jsonl SSOT.
+
+        Signals: loss, pair count, optional margin proxy (preferred vs rejected
+        length/score), length_bias (preferred_len - rejected_len). Observe UI
+        charts loss when ``job`` is dpo (same path as SFT).
+        """
+        fb = dict(fb_metrics or {})
+        record: dict[str, Any] = {
+            "schema_version": SCHEMA_VERSION,
+            "type": "step",
+            "job": str(job),
+            "ts": time.time(),
+            "step": int(step),
+            "loss": float(loss),
+            "n_datums": int(n_pairs),
+            "n_pairs": int(n_pairs),
+            "preferred_tokens": None if preferred_tokens is None else float(preferred_tokens),
+            "rejected_tokens": None if rejected_tokens is None else float(rejected_tokens),
+            "margin": None if margin is None else float(margin),
+            "length_bias": None if length_bias is None else float(length_bias),
+            "fb": fb,
+            "wall_time_s": wall_time_s,
+        }
+        _append_jsonl(self.metrics_path, record)
+        return record
+
     def log_event(
         self,
         *,

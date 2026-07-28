@@ -26,14 +26,13 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 
 | Done | Open (next) |
 |------|-------------|
-| **Expert-v0 closed** — path + LeRobot lab + early-stop dogfood + promote | **Expert-v1** method ladder / meta-recipe **executor** |
-| SFT production early-stop (rel+abs eps) | DPO observe + southward detectors |
-| Personal book + suggest prefers book + MCP list/get | Agent prompt pack book/atlas notes |
-| Meta-recipe schema skeleton | Bridge/OXE scale (optional / Expert-v2) |
+| **Expert-v0 closed** + LeRobot lab dogfood | Southward-turn detectors |
+| SFT/DPO early-stop + observe SSOT | DPO held-out probes; LocalBackend real DPO math |
+| Personal book + suggest + MCP | Wire meta-executor to smoke CLI by default |
+| Meta-recipe **executor** + agent atlas/book prompts | Bridge/OXE scale (Expert-v2) |
 
 **Recommended next Outcome:**  
-`Expert-v1 — meta-recipe executor or DPO observe SSOT`  
-(or: agent-context docs for book vs atlas)
+`Wire meta-executor to SFT/GRPO runners in CLI` or `DPO probes + real LocalBackend DPO`
 
 ## Pull-on-miss only
 

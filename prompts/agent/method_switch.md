@@ -7,7 +7,7 @@ method thrashing. Make **one** primary change per intervention.
 
 | Signature | Possible next step |
 |-----------|-------------------|
-| Offline preference (DPO-like) reward proxy flat for many steps; probes worse | Try on-policy RL recipe (GRPO/IS) if verifiable reward exists; else more/better preference data or SFT recovery |
+| Offline preference (DPO-like) loss flat / length_bias large; probes worse | Try on-policy RL (GRPO/IS) if verifiable reward exists; else better preference data or SFT recovery; watch `job=dpo` length_bias |
 | On-policy RL: **advantage collapse** (within-group reward std ≈ 0) | Pause RL; diversify prompts/rewards; lower LR; short SFT recovery on clean data |
 | On-policy: **IS mean_ratio** drifts far from 1 | Push/sync adapter to sample worker more often; reduce steps between sync; check logprob alignment |
 | Probe quality down, reward up | Reward hacking—stop optim; redesign reward or add probe gates; do not “train more” |

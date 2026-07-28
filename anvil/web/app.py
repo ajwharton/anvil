@@ -126,11 +126,11 @@ function stepRecs() {{
   return recs.filter(r => r.type === 'step'
     || (r.type !== 'event' && (r.reward_mean != null || r.loss != null)));
 }}
-function isSft(steps) {{
+function isLossJob(steps) {{
   if (!steps.length) return false;
   const j = steps[steps.length - 1].job;
-  if (j === 'sft' || j === 'vlm_sft') return true;
-  // legacy: SFT records have loss but no reward_mean
+  if (j === 'sft' || j === 'vlm_sft' || j === 'dpo') return true;
+  // legacy: loss records without reward_mean
   return steps[steps.length - 1].reward_mean == null
     && steps[steps.length - 1].loss != null;
 }}
@@ -139,9 +139,10 @@ function draw() {{
   ctx.clearRect(0, 0, c.width, c.height);
   const steps = stepRecs();
   if (!steps.length) return;
-  const sft = isSft(steps);
+  const sft = isLossJob(steps);
   document.getElementById('chart-title').textContent = sft
     ? 'loss / step (blue)' + (steps.some(r => r.n_image_refs) ? ' · n_image_refs on last step' : '')
+      + (steps.some(r => r.length_bias != null) ? ' · length_bias on last step' : '')
     : 'reward_mean/step (blue) · group reward std (orange)';
   const pad = 30, W = c.width - 2*pad, H = c.height - 2*pad;
   const series = sft
@@ -179,6 +180,9 @@ function draw() {{
       + ' · group_std ' + (last.group_reward_std_mean == null ? '—' : Number(last.group_reward_std_mean).toFixed(6));
   }} else {{
     if (last.n_image_refs != null) meta += ' · n_image_refs ' + last.n_image_refs;
+    if (last.n_pairs != null) meta += ' · n_pairs ' + last.n_pairs;
+    if (last.length_bias != null) meta += ' · length_bias ' + Number(last.length_bias).toFixed(2);
+    if (last.margin != null) meta += ' · margin ' + Number(last.margin).toFixed(3);
     if (last.n_tokens != null) meta += ' · n_tokens ' + last.n_tokens;
     if (last.wall_time_s != null) meta += ' · wall ' + Number(last.wall_time_s).toFixed(3) + 's';
   }}
