@@ -1,5 +1,11 @@
-"""Architecture-aware recipes — catalog + gates + model cards."""
+"""Architecture-aware recipes — catalog + gates + model cards + personal book."""
 
+from anvil.recipes.book import (
+    BookRecipe,
+    RecipeBook,
+    default_book_root,
+    promote_from_run,
+)
 from anvil.recipes.catalog import (
     GateLevel,
     GateResult,
@@ -23,14 +29,17 @@ from anvil.recipes.profiles import (
 )
 
 __all__ = [
+    "BookRecipe",
     "GateLevel",
     "GateResult",
     "JobPattern",
     "ModelCardFacts",
     "ModelShape",
     "PatternSpec",
+    "RecipeBook",
     "RecipePlan",
     "RecipeSpec",
+    "default_book_root",
     "default_recipe_id_for_shape",
     "gate_recipe",
     "get_recipe",
@@ -39,6 +48,7 @@ __all__ = [
     "list_patterns",
     "list_recipes",
     "plan_recipe",
+    "promote_from_run",
     "recipes_for_shape",
     "suggest_for_model",
 ]

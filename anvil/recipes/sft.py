@@ -30,6 +30,16 @@ class _SFTRenderer(Protocol):
     def render_example_for_sft(self, example: Example) -> Datum: ...
 
 
+# Production default: stop after this many consecutive non-improving steps.
+# Type-scoped; VLM/SFT share this prior until the personal recipe book learns better.
+DEFAULT_SFT_EARLY_STOP_PATIENCE = 40
+DEFAULT_SFT_EARLY_STOP_REL_EPS = 0.01  # relative loss drop required to count as improve
+# Absolute floor: once loss is tiny, relative-only checks never plateau (float noise).
+DEFAULT_SFT_EARLY_STOP_ABS_EPS = 1e-4
+# Calibration mode: effectively no early-stop (still capped by ``steps``).
+CALIBRATION_SFT_EARLY_STOP_PATIENCE = 10**9
+
+
 @dataclass
 class SFTResult:
     plan: RecipePlan
@@ -39,6 +49,53 @@ class SFTResult:
     export_path: str | None = None
     run_dir: str | None = None
     n_probe_records: int = 0
+    early_stop_reason: str | None = None
+
+
+def sft_loss_improved(
+    prev: float,
+    cur: float,
+    *,
+    rel_eps: float = DEFAULT_SFT_EARLY_STOP_REL_EPS,
+    abs_eps: float = DEFAULT_SFT_EARLY_STOP_ABS_EPS,
+) -> bool:
+    """True if ``cur`` is meaningfully lower than ``prev``.
+
+    Requires a drop of at least ``max(rel_eps * |prev|, abs_eps)`` so that
+    near-zero losses do not "improve" forever on float noise (forge dogfood).
+    """
+    p = float(prev)
+    c = float(cur)
+    if not (p == p and c == c):  # NaN guard
+        return False
+    drop = p - c
+    if drop <= 0:
+        return False
+    need = max(float(rel_eps) * max(abs(p), 1e-12), float(abs_eps))
+    return drop >= need
+
+
+def sft_early_stop_reason(
+    losses: Sequence[float],
+    *,
+    patience: int = DEFAULT_SFT_EARLY_STOP_PATIENCE,
+    rel_eps: float = DEFAULT_SFT_EARLY_STOP_REL_EPS,
+    abs_eps: float = DEFAULT_SFT_EARLY_STOP_ABS_EPS,
+) -> str | None:
+    """If the last ``patience`` steps each failed to improve vs the prior step, stop.
+
+    Production dogfood for SFT/VLM. Calibration uses a huge patience (or
+    early_stop=False) so overshoot runs can map false plateaus.
+    """
+    if patience < 1 or len(losses) < patience + 1:
+        return None
+    window = list(losses[-(patience + 1) :])
+    for i in range(1, len(window)):
+        if sft_loss_improved(
+            window[i - 1], window[i], rel_eps=rel_eps, abs_eps=abs_eps
+        ):
+            return None
+    return f"loss_plateau_patience_{patience}"
 
 
 def build_plan(base_model: str, **overrides: Any) -> RecipePlan:
@@ -129,6 +186,11 @@ def run_sft(
     job: str = "sft",
     probes: Sequence[Example] | None = None,
     probe_every: int = 1,
+    early_stop: bool | None = None,
+    early_stop_mode: str = "production",
+    early_stop_patience: int | None = None,
+    early_stop_rel_eps: float = DEFAULT_SFT_EARLY_STOP_REL_EPS,
+    early_stop_abs_eps: float = DEFAULT_SFT_EARLY_STOP_ABS_EPS,
 ) -> SFTResult:
     """Minimal SFT: create LoRA client → CE steps → optional export.
 
@@ -136,9 +198,29 @@ def run_sft(
     ``job`` labels records (``sft`` or ``vlm_sft``) so the UI charts loss.
     Pass held-out ``probes`` to sample the live adapter into ``probes.jsonl``
     every ``probe_every`` steps (Expert-v0 eyes signal).
+
+    Early-stop (dogfood): ``early_stop_mode="production"`` (default) stops after
+    ``early_stop_patience`` consecutive non-improving steps. Use
+    ``early_stop_mode="calibration"`` (or ``early_stop=False``) to overshoot
+    for plateau mapping — still fully instrumented.
     """
     if probe_every < 1:
         raise ValueError(f"probe_every must be >= 1, got {probe_every}")
+    mode = str(early_stop_mode or "production").lower().strip()
+    if mode not in {"production", "calibration"}:
+        raise ValueError(
+            f"early_stop_mode must be production|calibration, got {early_stop_mode!r}"
+        )
+    if early_stop is None:
+        early_stop = mode == "production"
+    if early_stop_patience is None:
+        early_stop_patience = (
+            DEFAULT_SFT_EARLY_STOP_PATIENCE
+            if mode == "production"
+            else CALIBRATION_SFT_EARLY_STOP_PATIENCE
+        )
+    if early_stop_patience < 1:
+        raise ValueError(f"early_stop_patience must be >= 1, got {early_stop_patience}")
 
     plan = plan or build_plan(base_model, **(overrides or {}))
     k = plan.as_knobs()
@@ -166,12 +248,15 @@ def run_sft(
     losses: list[float] = []
     n_probe_records = 0
     max_tok = int(getattr(plan, "max_tokens", None) or 32)
+    stopped_reason: str | None = None
+    steps_run = 0
 
     for step_ix in range(n):
         t0 = time.monotonic()
         fb = tc.forward_backward(data, loss_fn=plan.loss_fn).result()
         tc.optim_step(AdamParams(learning_rate=plan.learning_rate)).result()
         losses.append(fb.loss)
+        steps_run = step_ix + 1
         if writer is not None:
             fb_metrics = {str(k_): float(v) for k_, v in dict(fb.metrics or {}).items()
                           if isinstance(v, (int, float))}
@@ -209,6 +294,28 @@ def run_sft(
                     )
                     n_probe_records += 1
 
+        if early_stop:
+            reason = sft_early_stop_reason(
+                losses,
+                patience=early_stop_patience,
+                rel_eps=early_stop_rel_eps,
+                abs_eps=early_stop_abs_eps,
+            )
+            if reason is not None:
+                stopped_reason = reason
+                if writer is not None:
+                    writer.log_event(
+                        step=step_ix,
+                        event="early_stop",
+                        reason=reason,
+                        mode=mode,
+                        patience=early_stop_patience,
+                        rel_eps=early_stop_rel_eps,
+                        abs_eps=early_stop_abs_eps,
+                        job=job,
+                    )
+                break
+
     export_path = None
     if export_dir:
         export_path = tc.export_adapter(
@@ -218,12 +325,13 @@ def run_sft(
     svc.close()
     return SFTResult(
         plan=plan,
-        steps_run=n,
+        steps_run=steps_run,
         losses=losses,
         adapter_id=str(tc.adapter_id),
         export_path=export_path,
         run_dir=run_dir,
         n_probe_records=n_probe_records,
+        early_stop_reason=stopped_reason,
     )
 
 

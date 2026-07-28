@@ -72,6 +72,10 @@ def run_vlm_sft(
     run_dir: str | None = None,
     probes: Sequence[Example] | None = None,
     probe_every: int = 1,
+    early_stop: bool | None = None,
+    early_stop_mode: str = "production",
+    early_stop_patience: int | None = None,
+    early_stop_rel_eps: float | None = None,
 ) -> SFTResult:
     """VLM SFT loop.
 
@@ -99,7 +103,7 @@ def run_vlm_sft(
     # Validate renderer can build data before opening a train session
     _ = examples_to_data(exs[:1], renderer=renderer)
 
-    return run_sft(
+    kwargs: dict[str, Any] = dict(
         base_model=plan.base_model,
         examples=exs,
         steps=steps,
@@ -111,4 +115,10 @@ def run_vlm_sft(
         job="vlm_sft",
         probes=probes,
         probe_every=probe_every,
+        early_stop=early_stop,
+        early_stop_mode=early_stop_mode,
+        early_stop_patience=early_stop_patience,
     )
+    if early_stop_rel_eps is not None:
+        kwargs["early_stop_rel_eps"] = early_stop_rel_eps
+    return run_sft(**kwargs)

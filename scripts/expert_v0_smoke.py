@@ -94,6 +94,39 @@ def main(argv: list[str] | None = None) -> int:
         action="store_true",
         help="use --output-jsonl as already-converted Anvil JSONL",
     )
+    p.add_argument(
+        "--max-train",
+        type=int,
+        default=None,
+        help="cap train+holdout examples after load (safe full-batch size)",
+    )
+    p.add_argument(
+        "--early-stop-mode",
+        choices=("production", "calibration"),
+        default="production",
+        help="production: plateau early-stop; calibration: overshoot to map plateaus",
+    )
+    p.add_argument(
+        "--early-stop-patience",
+        type=int,
+        default=None,
+        help="override consecutive non-improve steps (default: type prior)",
+    )
+    p.add_argument(
+        "--no-early-stop",
+        action="store_true",
+        help="disable early-stop (same as calibration with full --steps)",
+    )
+    p.add_argument(
+        "--promote-recipe",
+        default=None,
+        help="save personal recipe id into ANVIL_RECIPE_BOOK after run",
+    )
+    p.add_argument(
+        "--recipe-family",
+        default=None,
+        help="family tag for promoted recipe (e.g. Qwen2.5-VL)",
+    )
     args = p.parse_args(argv)
 
     from anvil.data.convert import ConvertConfig, convert_corpus, write_demo_episode_pack
@@ -165,6 +198,8 @@ def main(argv: list[str] | None = None) -> int:
     examples = examples_from_vlm_jsonl(out_jsonl, store)
     if not examples:
         raise SystemExit(f"no examples loaded from {out_jsonl}")
+    if args.max_train is not None and args.max_train > 0:
+        examples = examples[: args.max_train]
 
     holdout_n = max(0, min(args.holdout, len(examples) - 1))
     if holdout_n > 0 and len(examples) > holdout_n:
@@ -176,7 +211,8 @@ def main(argv: list[str] | None = None) -> int:
 
     print(
         f"train_examples={len(train_ex)} probes={len(probe_ex)} "
-        f"steps={args.steps} endpoint={args.endpoint}"
+        f"steps={args.steps} endpoint={args.endpoint} "
+        f"early_stop_mode={args.early_stop_mode}"
     )
     print(f"observe → /observe/{run_id}  root={observe_root}")
     print(f"export → {export_dir}")
@@ -194,6 +230,9 @@ def main(argv: list[str] | None = None) -> int:
         run_dir=str(run_dir),
         probes=probe_ex or None,
         probe_every=args.probe_every,
+        early_stop=False if args.no_early_stop else None,
+        early_stop_mode=args.early_stop_mode,
+        early_stop_patience=args.early_stop_patience,
     )
 
     metrics = run_dir / "metrics.jsonl"
@@ -202,7 +241,14 @@ def main(argv: list[str] | None = None) -> int:
         f"done: steps={sft.steps_run} adapter={sft.adapter_id} "
         f"export={sft.export_path} probe_records={sft.n_probe_records}"
     )
-    print(f"losses: {[round(x, 4) for x in sft.losses]}")
+    if sft.early_stop_reason:
+        print(f"early_stop: {sft.early_stop_reason}")
+    # print compact loss summary (full list is huge on long runs)
+    if sft.losses:
+        print(
+            f"losses: first={sft.losses[0]:.4f} last={sft.losses[-1]:.4f} "
+            f"min={min(sft.losses):.4f} n={len(sft.losses)}"
+        )
     print(f"metrics: {metrics}")
     if probes_path.is_file():
         print(f"probes:  {probes_path}")
@@ -212,6 +258,32 @@ def main(argv: list[str] | None = None) -> int:
         "MCP: anvil_observe_metrics / anvil_observe_probes "
         f'with run_id="{run_id}"'
     )
+
+    if args.promote_recipe:
+        from anvil.recipes.book import RecipeBook, promote_from_run
+
+        book = RecipeBook()
+        rec = promote_from_run(
+            recipe_id=args.promote_recipe,
+            title=args.promote_recipe,
+            run_dir=run_dir,
+            run_id=run_id,
+            pattern="vlm_sft",
+            family=args.recipe_family or "Qwen2.5-VL",
+            job="vlm_sft",
+            knobs={"rank": args.rank, "base_model": args.model, "steps_cap": args.steps},
+            stop_policy={
+                "mode": args.early_stop_mode,
+                "patience": args.early_stop_patience,
+                "early_stop": not args.no_early_stop,
+            },
+            notes=f"promoted from expert_v0_smoke endpoint={args.endpoint}",
+            tags=["expert_v0", "auto_promote"],
+            book=book,
+            early_stop_reason=sft.early_stop_reason,
+        )
+        print(f"recipe_book: saved {rec.id} → {book.root / (rec.id + '.json')}")
+
     if not sft.export_path:
         print("warn: no export path", file=sys.stderr)
         return 1
