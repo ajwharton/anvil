@@ -96,6 +96,11 @@ FakeBackend keeps a CI stub.
 **Vision stages:** `anvil.recipes.vlm_queue.run_vlm_queue` advances on
 loss plateau (shared LoRA), same idea as GRPO recipe queue.
 
+**Meta-recipe live runners:** default SFT / VLM / GRPO / DPO / export via
+`anvil.recipes.meta_runners.run_meta_with_defaults` (CLI `anvil meta-run`).
+Stage metrics land under `<run_dir>/<stage_id>/`; graph events on
+`<run_dir>/metrics.jsonl`.
+
 **J-lens:** shelved measurement kit only (`docs/spikes/jlens-math.md`).
 Schema/CLI remain; default tests skip (`pytest -m jlens` to run).
 

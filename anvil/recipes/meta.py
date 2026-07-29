@@ -184,10 +184,10 @@ def example_vlm_ladder(*, family: str = "Qwen2.5-VL") -> MetaRecipe:
             ),
             MetaStage(
                 id="export",
-                recipe_id="vlm_sft_edge",
+                recipe_id="export",
                 source="catalog",
-                pattern="vlm_sft",
-                notes="Export PEFT after early-stop (operator/agent act)",
+                pattern="export",
+                notes="Export PEFT after early-stop (default meta runner)",
             ),
         ],
         edges=[
@@ -198,7 +198,10 @@ def example_vlm_ladder(*, family: str = "Qwen2.5-VL") -> MetaRecipe:
                 notes="Dogfood: stop training when plateau fires",
             )
         ],
-        notes="Skeleton for agent/MCP; GRPO queue remains the executed multi-stage path today.",
+        notes=(
+            "Default runners: anvil.recipes.meta_runners.run_meta_with_defaults "
+            "(SFT/VLM/GRPO/DPO/export). CLI: anvil meta-run."
+        ),
     )
 
 
