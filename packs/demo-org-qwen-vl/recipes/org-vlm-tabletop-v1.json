@@ -1,0 +1,25 @@
+{
+  "id": "org-vlm-tabletop-v1",
+  "title": "Org tabletop VLM (production)",
+  "pattern": "vlm_sft",
+  "family": "Qwen2.5-VL",
+  "job": "vlm_sft",
+  "knobs": {
+    "rank": 16,
+    "learning_rate": 0.0001
+  },
+  "stop_policy": {
+    "mode": "production",
+    "patience": 35,
+    "last_early_stop_reason": "loss_plateau_patience_35",
+    "experience": {
+      "patience": 35,
+      "n_steps": 69,
+      "loss_first": 0.84,
+      "loss_last": 0.02
+    }
+  },
+  "notes": "Demo org prior: tabletop / expert-v0 style VLM SFT.",
+  "tags": ["org_pack", "demo", "vlm"],
+  "schema_version": 1
+}

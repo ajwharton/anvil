@@ -1,10 +1,14 @@
-"""Personal recipe book — operator-owned learnings (P.Recipes v0).
+"""Personal / org recipe book — operator-owned learnings (P.Recipes).
 
 Shipped atlas lives in ``catalog.py``. This module stores **local** recipes
 under ``ANVIL_RECIPE_BOOK`` (default ``~/.anvil/recipes``): promote a finished
 run's knobs/stop policy into a versioned JSON file the next plan can prefer.
 
-Sovereign: nothing is uploaded; the forge owns its book.
+**Org packs:** set ``ANVIL_ORG_RECIPE_PACK`` (or ``ANVIL_RECIPE_PACK``) to a
+directory of recipe JSON files (optional ``manifest.json``). List/get merge
+personal + org; **writes always go to the personal root**.
+
+Sovereign: nothing is uploaded; the forge / org owns its book.
 """
 
 from __future__ import annotations
@@ -26,6 +30,30 @@ def default_book_root() -> Path:
     if env:
         return Path(env)
     return Path.home() / ".anvil" / "recipes"
+
+
+def org_pack_roots() -> list[Path]:
+    """Extra read-only roots for org recipe packs (env)."""
+    out: list[Path] = []
+    for key in ("ANVIL_ORG_RECIPE_PACK", "ANVIL_RECIPE_PACK"):
+        raw = os.environ.get(key)
+        if not raw:
+            continue
+        p = Path(raw).expanduser()
+        if p.is_dir() and p not in out:
+            out.append(p)
+    return out
+
+
+def book_search_roots(*, personal: Path | None = None) -> list[Path]:
+    """Personal write root first, then org pack roots."""
+    roots: list[Path] = []
+    pr = personal if personal is not None else default_book_root()
+    roots.append(Path(pr))
+    for o in org_pack_roots():
+        if o.resolve() != Path(pr).resolve() and o not in roots:
+            roots.append(o)
+    return roots
 
 
 @dataclass
@@ -69,21 +97,35 @@ class BookRecipe:
 
 
 class RecipeBook:
-    """Filesystem-backed personal recipe library."""
+    """Filesystem-backed personal recipe library (+ optional org pack search)."""
 
-    def __init__(self, root: str | Path | None = None) -> None:
+    def __init__(
+        self,
+        root: str | Path | None = None,
+        *,
+        search_roots: Sequence[str | Path] | None = None,
+    ) -> None:
         self.root = Path(root) if root is not None else default_book_root()
         self.root.mkdir(parents=True, exist_ok=True)
+        if search_roots is not None:
+            self.search_roots = [Path(p) for p in search_roots]
+        else:
+            self.search_roots = book_search_roots(personal=self.root)
 
-    def _path(self, recipe_id: str) -> Path:
+    def _path(self, recipe_id: str, *, root: Path | None = None) -> Path:
         if not _SAFE_ID.fullmatch(recipe_id):
             raise ValueError(f"bad recipe id: {recipe_id!r}")
-        return self.root / f"{recipe_id}.json"
+        base = root if root is not None else self.root
+        # org packs may nest under recipes/
+        nested = base / "recipes" / f"{recipe_id}.json"
+        if nested.is_file():
+            return nested
+        return base / f"{recipe_id}.json"
 
     def save(self, recipe: BookRecipe) -> Path:
         if not _SAFE_ID.fullmatch(recipe.id):
             raise ValueError(f"bad recipe id: {recipe.id!r}")
-        path = self._path(recipe.id)
+        path = self.root / f"{recipe.id}.json"
         path.write_text(
             json.dumps(recipe.to_public(), indent=2, ensure_ascii=False) + "\n",
             encoding="utf-8",
@@ -91,19 +133,36 @@ class RecipeBook:
         return path
 
     def get(self, recipe_id: str) -> BookRecipe | None:
-        path = self._path(recipe_id)
-        if not path.is_file():
-            return None
-        return BookRecipe.from_public(json.loads(path.read_text(encoding="utf-8")))
+        # Prefer personal root first
+        for root in self.search_roots:
+            for candidate in (
+                root / f"{recipe_id}.json",
+                root / "recipes" / f"{recipe_id}.json",
+            ):
+                if candidate.is_file():
+                    try:
+                        return BookRecipe.from_public(
+                            json.loads(candidate.read_text(encoding="utf-8"))
+                        )
+                    except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+                        continue
+        return None
 
     def list(self) -> list[BookRecipe]:
-        out: list[BookRecipe] = []
-        for p in sorted(self.root.glob("*.json")):
-            try:
-                out.append(BookRecipe.from_public(json.loads(p.read_text(encoding="utf-8"))))
-            except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
-                continue
-        return out
+        """Union of personal + org pack recipes (personal wins on id conflict)."""
+        by_id: dict[str, BookRecipe] = {}
+        # Org first, then personal overwrites — personal wins
+        for root in reversed(self.search_roots):
+            paths = list(root.glob("*.json")) + list((root / "recipes").glob("*.json"))
+            for p in sorted(paths):
+                if p.name == "manifest.json":
+                    continue
+                try:
+                    rec = BookRecipe.from_public(json.loads(p.read_text(encoding="utf-8")))
+                except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+                    continue
+                by_id[rec.id] = rec
+        return [by_id[k] for k in sorted(by_id)]
 
     def prefer(
         self,
@@ -168,8 +227,15 @@ def promote_from_run(
     tags: Sequence[str] | None = None,
     book: RecipeBook | None = None,
     early_stop_reason: str | None = None,
+    patience: int | None = None,
 ) -> BookRecipe:
-    """Create/update a personal recipe from a finished train run."""
+    """Create/update a personal recipe from a finished train run.
+
+    Stores structured ``stop_policy.experience`` so
+    :mod:`anvil.recipes.experience` can learn production patience.
+    """
+    from anvil.recipes.experience import parse_patience_from_reason
+
     book = book or RecipeBook()
     summary = _summarize_metrics(run_dir)
     if early_stop_reason and "early_stop_reason" not in summary:
@@ -182,6 +248,31 @@ def promote_from_run(
         policy["last_early_stop_reason"] = early_stop_reason
     if "mode" not in policy:
         policy["mode"] = "production"
+    # Structured experience for patience aggregation
+    exp = dict(policy.get("experience") or {})
+    if summary.get("n_steps") is not None:
+        exp.setdefault("n_steps", summary["n_steps"])
+    if summary.get("loss_first") is not None:
+        exp.setdefault("loss_first", summary["loss_first"])
+    if summary.get("loss_last") is not None:
+        exp.setdefault("loss_last", summary["loss_last"])
+    pat = patience
+    if pat is None:
+        pat = policy.get("patience") or policy.get("early_stop_patience")
+    if pat is None:
+        pat = parse_patience_from_reason(
+            early_stop_reason or summary.get("early_stop_reason")
+        )
+    if pat is not None:
+        try:
+            pat_i = int(pat)
+            policy["patience"] = pat_i
+            exp["patience"] = pat_i
+        except (TypeError, ValueError):
+            pass
+    if exp:
+        policy["experience"] = exp
+
     rec = BookRecipe(
         id=recipe_id,
         title=title or recipe_id,
@@ -199,9 +290,120 @@ def promote_from_run(
     return rec
 
 
+def install_org_pack(
+    pack_dir: str | Path,
+    *,
+    book: RecipeBook | None = None,
+    prefix: str | None = None,
+    tag: str = "org_pack",
+) -> list[BookRecipe]:
+    """Copy recipes from an org pack directory into the personal book.
+
+    Pack layout::
+
+        pack/
+          manifest.json          # optional {name, version, recipes: [ids]}
+          *.json                 # BookRecipe files
+          recipes/*.json         # alternate nest
+
+    Personal copies get tag ``org_pack`` (and optional id prefix).
+    """
+    pack = Path(pack_dir)
+    if not pack.is_dir():
+        raise FileNotFoundError(f"org pack not found: {pack}")
+    book = book or RecipeBook()
+    manifest_ids: set[str] | None = None
+    man = pack / "manifest.json"
+    if man.is_file():
+        try:
+            data = json.loads(man.read_text(encoding="utf-8"))
+            if isinstance(data.get("recipes"), list):
+                manifest_ids = {str(x) for x in data["recipes"]}
+        except (OSError, json.JSONDecodeError, TypeError, ValueError):
+            pass
+
+    paths = list(pack.glob("*.json")) + list((pack / "recipes").glob("*.json"))
+    installed: list[BookRecipe] = []
+    for p in sorted(paths):
+        if p.name == "manifest.json":
+            continue
+        try:
+            rec = BookRecipe.from_public(json.loads(p.read_text(encoding="utf-8")))
+        except (OSError, json.JSONDecodeError, KeyError, TypeError, ValueError):
+            continue
+        if manifest_ids is not None and rec.id not in manifest_ids:
+            continue
+        new_id = f"{prefix}{rec.id}" if prefix else rec.id
+        if not _SAFE_ID.fullmatch(new_id):
+            continue
+        tags = list(rec.tags)
+        if tag and tag not in tags:
+            tags.append(tag)
+        out = BookRecipe(
+            id=new_id,
+            title=rec.title,
+            pattern=rec.pattern,
+            family=rec.family,
+            job=rec.job,
+            knobs=dict(rec.knobs),
+            stop_policy=dict(rec.stop_policy),
+            notes=rec.notes,
+            source_run_id=rec.source_run_id,
+            source_run_dir=rec.source_run_dir,
+            tags=tags,
+            created_ts=time.time(),
+        )
+        book.save(out)
+        installed.append(out)
+    return installed
+
+
+def export_org_pack(
+    dest: str | Path,
+    *,
+    book: RecipeBook | None = None,
+    recipe_ids: Sequence[str] | None = None,
+    name: str = "org-pack",
+    version: str = "1",
+) -> Path:
+    """Write selected (or all) personal recipes into an org pack directory."""
+    book = book or RecipeBook()
+    dest_p = Path(dest)
+    dest_p.mkdir(parents=True, exist_ok=True)
+    recipes_dir = dest_p / "recipes"
+    recipes_dir.mkdir(exist_ok=True)
+    selected = list(book.list())
+    if recipe_ids is not None:
+        want = set(recipe_ids)
+        selected = [r for r in selected if r.id in want]
+    ids: list[str] = []
+    for r in selected:
+        path = recipes_dir / f"{r.id}.json"
+        path.write_text(
+            json.dumps(r.to_public(), indent=2, ensure_ascii=False) + "\n",
+            encoding="utf-8",
+        )
+        ids.append(r.id)
+    manifest = {
+        "name": name,
+        "version": version,
+        "schema_version": SCHEMA_VERSION,
+        "recipes": ids,
+        "created_ts": time.time(),
+    }
+    (dest_p / "manifest.json").write_text(
+        json.dumps(manifest, indent=2) + "\n", encoding="utf-8"
+    )
+    return dest_p
+
+
 __all__ = [
     "BookRecipe",
     "RecipeBook",
+    "book_search_roots",
     "default_book_root",
+    "export_org_pack",
+    "install_org_pack",
+    "org_pack_roots",
     "promote_from_run",
 ]

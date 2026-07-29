@@ -4,6 +4,8 @@ from anvil.recipes.book import (
     BookRecipe,
     RecipeBook,
     default_book_root,
+    export_org_pack,
+    install_org_pack,
     promote_from_run,
 )
 from anvil.recipes.catalog import (
@@ -66,12 +68,14 @@ __all__ = [
     "default_book_root",
     "default_recipe_id_for_shape",
     "example_vlm_ladder",
+    "export_org_pack",
     "gate_recipe",
     "get_meta_recipe",
     "get_recipe",
     "infer_model_family",
     "infer_shape",
     "inspect_base_model",
+    "install_org_pack",
     "list_meta_recipes",
     "list_patterns",
     "list_recipes",
