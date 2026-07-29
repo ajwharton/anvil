@@ -82,6 +82,13 @@ Detectors: `advantage_collapse`, `reward_up_probes_down`, `probe_regression`,
 `maybe_stop_on_southward` mid-train; cliff → `early_stop` reason
 `southward:<flag>`. Disable with `stop_on_southward=False` (calibration).
 
+**Checkpoint / resume (Expert-v2):** long SFT/GRPO without full replay.
+Pass `run_dir` + `checkpoint_every=N` on `run_sft` / `run_grpo` → backend
+`save_state` + `run_dir/resume.json` (steps_completed + checkpoint path).
+Later: same `run_dir`, same total `steps`, `resume=True` loads adapter and
+continues from `steps_completed`. Helpers: `anvil.recipes.checkpoint`.
+Metrics events: `checkpoint`, `resume`.
+
 **DPO math:** `LocalBackend` implements reference-free Bradley-Terry DPO
 (`loss_fn=dpo`); optional per-datum `ref_logprob` for classic π_ref form.
 FakeBackend keeps a CI stub.

@@ -81,6 +81,8 @@ def run_vlm_sft(
     service_client: Any | None = None,
     training_client: Any | None = None,
     close_clients: bool = True,
+    checkpoint_every: int | None = None,
+    resume: bool = False,
 ) -> SFTResult:
     """VLM SFT loop.
 
@@ -92,6 +94,7 @@ def run_vlm_sft(
     - ``probes``: held-out Examples sampled every ``probe_every`` steps → ``probes.jsonl``.
     - Client reuse for multi-stage queues: ``service_client`` / ``training_client`` /
       ``close_clients`` (same contract as GRPO / ``run_vlm_queue``).
+    - ``checkpoint_every`` / ``resume``: Expert-v2 long-job resume (see ``run_sft``).
     """
     card = inspect_base_model(base_model, fetch_remote=fetch_remote)
     plan = build_plan(base_model, card=card, fetch_remote=False, **(overrides or {}))
@@ -130,6 +133,8 @@ def run_vlm_sft(
         service_client=service_client,
         training_client=training_client,
         close_clients=close_clients,
+        checkpoint_every=checkpoint_every,
+        resume=resume,
     )
     if early_stop_rel_eps is not None:
         kwargs["early_stop_rel_eps"] = early_stop_rel_eps

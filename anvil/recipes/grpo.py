@@ -47,6 +47,11 @@ from anvil.protocol.types import (
     ModelInput,
     SamplingParams,
 )
+from anvil.recipes.checkpoint import (
+    apply_resume_to_client,
+    load_resume_state,
+    save_train_checkpoint,
+)
 from anvil.recipes.profiles import JobPattern, RecipePlan, plan_recipe
 
 RewardFn = Callable[[str, Sequence[int]], float]
@@ -95,6 +100,8 @@ class GRPOResult:
     adapter_id: str
     sync_count: int = 0
     early_stop_reason: str | None = None
+    resumed_from_step: int = 0
+    checkpoint_path: str | None = None
 
 
 # Default: after this many consecutive dead-signal steps, abandon the run.
@@ -220,6 +227,8 @@ def run_grpo(
     service_client: ServiceClient | None = None,
     training_client: Any | None = None,
     close_clients: bool = True,
+    checkpoint_every: int | None = None,
+    resume: bool = False,
 ) -> GRPOResult:
     """Run the GRPO/IS loop.
 
@@ -240,6 +249,10 @@ def run_grpo(
     Client reuse (recipe queue): pass ``service_client`` + ``training_client``
     to continue the same LoRA across stages; set ``close_clients=False`` so the
     queue owns teardown.
+
+    Checkpoint / resume (Expert-v2): ``run_dir`` + ``checkpoint_every=N`` writes
+    adapter ``save_state`` + ``resume.json`` every N completed steps; ``resume=True``
+    reloads adapter and continues from ``steps_completed`` toward total ``steps``.
     """
     if sync_every < 1:
         raise ValueError(f"sync_every must be >= 1, got {sync_every}")
@@ -247,6 +260,12 @@ def run_grpo(
         raise ValueError(f"probe_every must be >= 1, got {probe_every}")
     if early_stop_patience < 1:
         raise ValueError(f"early_stop_patience must be >= 1, got {early_stop_patience}")
+    if checkpoint_every is not None and checkpoint_every < 1:
+        raise ValueError(f"checkpoint_every must be >= 1, got {checkpoint_every}")
+    if checkpoint_every is not None and not run_dir:
+        raise ValueError("checkpoint_every requires run_dir")
+    if resume and not run_dir:
+        raise ValueError("resume=True requires run_dir (for resume.json)")
 
     plan = plan or build_plan(base_model, **(overrides or {}))
     k = plan.as_knobs()
@@ -283,15 +302,98 @@ def run_grpo(
         f"injected:{type(resolved_sample).__name__}" if resolved_sample is not None else None
     )
 
+    prior_losses: list[float] = []
+    prior_mean_rewards: list[float] = []
+    prior_dead: list[str | None] = []
     losses: list[float] = []
     mean_rewards: list[float] = []
     sync_count = 0
     last_ref: CheckpointRef | None = None
     dead_signals: list[str | None] = []
     stopped_reason: str | None = None
+    start_step = 0
+    last_ckpt_path: str | None = None
+    job = "grpo"
+
+    if resume and run_dir:
+        state = load_resume_state(run_dir)
+        if state is not None:
+            apply_resume_to_client(tc, state)
+            start_step = int(state.steps_completed)
+            prior_losses = list(state.losses)
+            prior_mean_rewards = list(state.mean_reward)
+            prior_dead = list(state.dead_signals)
+            if writer is not None:
+                writer.log_event(
+                    step=start_step,
+                    event="resume",
+                    reason="loaded_resume_json",
+                    job=job,
+                    steps_completed=start_step,
+                    checkpoint_path=state.checkpoint_path,
+                )
+            if start_step >= steps:
+                if sample_svc is not None:
+                    sample_svc.close()
+                if close_clients and owns_svc:
+                    svc.close()
+                return GRPOResult(
+                    plan=plan,
+                    steps_run=0,
+                    mean_reward=[],
+                    losses=[],
+                    adapter_id=str(tc.adapter_id),
+                    sync_count=0,
+                    early_stop_reason=None,
+                    resumed_from_step=start_step,
+                    checkpoint_path=state.checkpoint_path,
+                )
+            # Tier-1 sample worker needs a fresh snapshot after resume (last_ref empty).
+            if resolved_sample is not None and start_step < steps:
+                last_ref = push_adapter_snapshot(
+                    tc,
+                    resolved_sample,
+                    name=f"grpo-resume-{start_step}",
+                    sample_adapter_id=sample_aid,
+                )
+                sync_count += 1
+
+    def _maybe_checkpoint(step_completed: int, *, force: bool = False) -> None:
+        nonlocal last_ckpt_path
+        if run_dir is None:
+            return
+        if not force and checkpoint_every is None:
+            return
+        if (
+            not force
+            and checkpoint_every is not None
+            and step_completed % checkpoint_every != 0
+        ):
+            return
+        ref = save_train_checkpoint(
+            tc,
+            run_dir=run_dir,
+            job=job,
+            steps_completed=step_completed,
+            base_model=plan.base_model,
+            losses=prior_losses + losses,
+            mean_reward=prior_mean_rewards + mean_rewards,
+            dead_signals=prior_dead + dead_signals,
+        )
+        last_ckpt_path = ref.path
+        if writer is not None:
+            writer.log_event(
+                step=step_completed - 1 if step_completed > 0 else 0,
+                event="checkpoint",
+                reason="periodic" if not force else "final",
+                job=job,
+                steps_completed=step_completed,
+                checkpoint_path=ref.path,
+                checkpoint_name=ref.name,
+            )
 
     try:
-        for step_ix in range(steps):
+        for step_ix in range(start_step, steps):
             t0 = time.monotonic()
             adapter_synced = False
             snap_path: str | None = None
@@ -425,9 +527,12 @@ def run_grpo(
                     sample_endpoint=sample_ep_label if resolved_sample is not None else None,
                 )
 
+            completed = step_ix + 1
+            _maybe_checkpoint(completed)
+
             if early_stop:
                 reason = early_stop_reason(
-                    dead_signals, patience=early_stop_patience
+                    prior_dead + dead_signals, patience=early_stop_patience
                 )
                 if reason is not None:
                     stopped_reason = reason
@@ -463,6 +568,11 @@ def run_grpo(
                             trigger="southward",
                         )
                     break
+
+        if checkpoint_every is not None and run_dir and losses:
+            completed_total = start_step + len(losses)
+            if last_ckpt_path is None or completed_total % checkpoint_every != 0:
+                _maybe_checkpoint(completed_total, force=True)
     finally:
         if sample_svc is not None:
             sample_svc.close()
@@ -477,6 +587,8 @@ def run_grpo(
         adapter_id=str(tc.adapter_id),
         sync_count=sync_count,
         early_stop_reason=stopped_reason,
+        resumed_from_step=start_step,
+        checkpoint_path=last_ckpt_path,
     )
 
 

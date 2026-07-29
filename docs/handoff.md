@@ -22,22 +22,24 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 
 **Prioritize:** Expert-v1 / P.Recipes (Expert-v0 **closed**).
 
-## Where we are (2026-07-28)
+## Where we are (2026-07-29)
 
 | Done | Open (next) |
 |------|-------------|
-| Expert-v0/v1 observe + southward + DPO | Expert-v2: checkpoint/resume, scale ladder |
-| Meta-exec **default live runners** (`anvil meta-run`) | Bridge/OXE scale |
-| Book/meta HTTP+MCP+harness | Multi-hour lab smokes |
-| `run_vlm_queue` vision stage advance | |
+| Expert-v0/v1 observe + southward + DPO | Bridge/OXE scale ladder (Expert-v2) |
+| Meta-exec **default live runners** (`anvil meta-run`) | Throughput defaults / multi-hour lab smokes |
+| Book/meta HTTP+MCP+harness | Org packs + self-host notes |
+| `run_vlm_queue` vision stage advance | DPO recipe resume if needed |
+| **Checkpoint + resume** SFT/GRPO (`run_dir/resume.json`) | |
 | J-lens shelved (optional `-m jlens`) | |
 
 **Habit:** `python scripts/lab_smokes.py --profile quick` often.  
 **Meta ladder:** `anvil meta-run --example sft-grpo --endpoint fake://`  
+**Resume:** `run_sft` / `run_grpo` with `run_dir` + `checkpoint_every=N`, then `resume=True` (same total `steps`).  
 **J-lens:** `pytest -m jlens` (not default CI).
 
 **Recommended next Outcome:**  
-Expert-v2 checkpoint/resume or scale ladder on forge
+Expert-v2 scale ladder / multi-hour lab smokes on forge
 
 ## Pull-on-miss only
 

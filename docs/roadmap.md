@@ -106,7 +106,7 @@ Historical homes: P.Sufficiency open items, P.Decide open items, 3.C remainder.
 throughput; org-scale bases as an **ops profile**; personal/org recipe book
 used as the default plan source for repeat domains.
 
-- [ ] Checkpoint + resume (adapter + step) for long SFT/RL  
+- [x] Checkpoint + resume (adapter + step) for long SFT/RL — `anvil.recipes.checkpoint`; `run_sft` / `run_grpo` (`checkpoint_every`, `resume`, `run_dir/resume.json` + `save_state`)  
 - [ ] Batching / throughput defaults per shape (dense text, VLM, …)  
 - [ ] Scale ladder 1k → 5k → 50k+ exercised on forge  
 - [ ] Multi-hour lab smokes (`lab_smokes` + report)  
@@ -183,7 +183,7 @@ Cross-cutting goals still apply to every job type. They are **re-homed** above:
 
 ### P.Ops — Multi-hour / large-corpus jobs → **v2**
 
-- [ ] Checkpoint + resume  
+- [x] Checkpoint + resume → Expert-v2 (`anvil.recipes.checkpoint`, SFT/GRPO)  
 - [ ] Batching / throughput docs  
 - [ ] Multi-hour lab smoke profiles  
 - [ ] Optional multi-worker train/sample  
@@ -364,7 +364,7 @@ path. Re-open only against the high bar in the spike writeup.
 
 ### 3.D Multi-hour VLM jobs *(open — required; implements P.Ops for vision)*
 
-- [ ] Checkpoint + resume for VLM LoRA  
+- [x] Checkpoint + resume for VLM LoRA → via `run_sft` (`checkpoint_every` / `resume`; `run_vlm_sft` passes through)  
 - [ ] Batching/throughput notes for 3B VLM on Spark  
 - [ ] Multi-hour lab smoke against a real robotics slice  
 

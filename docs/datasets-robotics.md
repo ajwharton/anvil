@@ -151,7 +151,8 @@ vision must not lag text GRPO.
 - [ ] Bridge/Robo2VLM slice extracted to episode_pack on lab NVMe  
 - [ ] `run_vlm_sft` on ≥1k real rows with **observe** loss curve  
 - [ ] Held-out qualitative sample after export  
-- [ ] Multi-hour resume test  
+- [x] Multi-hour resume path (recipe-level) — `run_sft`/`run_grpo` `checkpoint_every` + `resume` (`anvil.recipes.checkpoint`); forge multi-hour lab smoke still open  
+
 
 ## Out of scope (for now)
 
