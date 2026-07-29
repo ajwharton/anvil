@@ -6,14 +6,19 @@ CI stays lightweight (``[dev,web]`` + fake://). This suite is for forge/hammer
 
 Profiles::
 
-  quick    — fake:// GRPO early-stop + recipe queue (~seconds, no GPU)
-  nightly  — quick + short real GRPO early-stop + 2-stage queue on 1.5B
-  full     — nightly + VLM SFT smoke + longer GRPO
+  quick       — fake:// GRPO/SFT/DPO/meta/southward/expert (~seconds, no GPU)
+  nightly     — quick + short real GRPO early-stop + 2-stage queue on 1.5B
+  full        — nightly + VLM SFT smoke
+  multi_hour  — quick + scale ladder demo + throughput defaults + resume contract
+                (wall-clock multi-hour on forge: scale_ladder.py --no-demo)
 
 Examples::
 
   # laptop / no GPU
   python scripts/lab_smokes.py --profile quick
+
+  # Expert-v2 ops (scale ladder + multi-hour resume contract)
+  python scripts/lab_smokes.py --profile multi_hour
 
   # forge nightly (cron-friendly)
   python scripts/lab_smokes.py --profile nightly --endpoint local:// \\
@@ -250,6 +255,119 @@ def smoke_fake_meta_live_runners(ctx: SmokeContext) -> SmokeResult:
             f"s0={res.outcomes[0].result.signal if res.outcomes else None}"
         ),
         meta={"stages_run": res.stages_run, "stopped_reason": res.stopped_reason},
+    )
+
+
+def smoke_fake_scale_ladder(ctx: SmokeContext) -> SmokeResult:
+    """Expert-v2: demo scale ladder 1k→5k→50k (tiny demo_rows, same code path)."""
+    t0 = time.monotonic()
+    from anvil.recipes.scale_ladder import build_ladder_plan, exercise_ladder
+
+    work = ctx.report_run / "scale-ladder"
+    plan = build_ladder_plan(rungs=["all"], demo=True, dataset="demo_bridge_like")
+    results = exercise_ladder(
+        plan,
+        work_dir=work,
+        endpoint="fake://",
+        train=True,
+    )
+    ok = len(results) == 3 and all(r.ok for r in results)
+    detail = " ".join(f"{r.rung.id}={r.rows_converted}r/{r.steps_run}s" for r in results)
+    return SmokeResult(
+        name="fake_scale_ladder",
+        ok=ok,
+        duration_s=time.monotonic() - t0,
+        detail=detail,
+        meta={
+            "rungs": [
+                {
+                    "id": r.rung.id,
+                    "rows": r.rows_converted,
+                    "steps": r.steps_run,
+                    "ok": r.ok,
+                }
+                for r in results
+            ]
+        },
+    )
+
+
+def smoke_fake_throughput_defaults(ctx: SmokeContext) -> SmokeResult:
+    """Expert-v2: shape×pattern throughput defaults are coherent."""
+    t0 = time.monotonic()
+    from anvil.recipes.throughput import list_throughput_profiles, throughput_defaults
+
+    profiles = list_throughput_profiles()
+    vlm = throughput_defaults(shape="dense_vlm", pattern="vlm_sft")
+    grpo = throughput_defaults(shape="dense_lm", pattern="rl_verifiable")
+    ok = (
+        len(profiles) >= 4
+        and vlm.batch_size == 1
+        and vlm.checkpoint_every >= 1
+        and grpo.learning_rate <= 1e-4
+        and "batch_size" in vlm.as_overrides()
+    )
+    return SmokeResult(
+        name="fake_throughput_defaults",
+        ok=ok,
+        duration_s=time.monotonic() - t0,
+        detail=f"n_profiles={len(profiles)} vlm_bs={vlm.batch_size} grpo_lr={grpo.learning_rate}",
+        meta={"n_profiles": len(profiles)},
+    )
+
+
+def smoke_fake_multi_hour_resume(ctx: SmokeContext) -> SmokeResult:
+    """Expert-v2 multi-hour ops stand-in: checkpoint mid-run, resume, finish budget.
+
+    Not wall-clock multi-hour — exercises the same resume contract forge long jobs use.
+    """
+    t0 = time.monotonic()
+    from anvil.protocol.messages import Example, Message, TextPart
+    from anvil.recipes.checkpoint import resume_path
+    from anvil.recipes.sft import run_sft
+
+    ex = Example(
+        messages=(
+            Message(role="user", content=(TextPart(text="scale?"),)),
+            Message(role="assistant", content=(TextPart(text="yes"),)),
+        )
+    )
+    run_dir = ctx.report_run / "multi-hour-resume"
+    # Phase 1: first half of budget
+    r1 = run_sft(
+        endpoint="fake://",
+        examples=[ex],
+        steps=20,
+        run_dir=str(run_dir),
+        early_stop=False,
+        stop_on_southward=False,
+        checkpoint_every=5,
+    )
+    ok1 = r1.steps_run == 20 and resume_path(run_dir).is_file()
+    # Phase 2: extend budget via resume (same contract as multi-hour restarts)
+    r2 = run_sft(
+        endpoint="fake://",
+        examples=[ex],
+        steps=40,
+        run_dir=str(run_dir),
+        early_stop=False,
+        stop_on_southward=False,
+        checkpoint_every=5,
+        resume=True,
+    )
+    ok = ok1 and r2.resumed_from_step >= 20 and r2.steps_run == 20
+    return SmokeResult(
+        name="fake_multi_hour_resume",
+        ok=ok,
+        duration_s=time.monotonic() - t0,
+        detail=(
+            f"phase1_steps={r1.steps_run} resumed_from={r2.resumed_from_step} "
+            f"phase2_steps={r2.steps_run} ckpt={r2.checkpoint_path}"
+        ),
+        meta={
+            "resumed_from_step": r2.resumed_from_step,
+            "phase2_steps": r2.steps_run,
+        },
     )
 
 
@@ -708,6 +826,9 @@ SMOKES: dict[str, SmokeFn] = {
     "fake_dpo_observe": smoke_fake_dpo_observe,
     "fake_meta_exec": smoke_fake_meta_exec,
     "fake_meta_live_runners": smoke_fake_meta_live_runners,
+    "fake_scale_ladder": smoke_fake_scale_ladder,
+    "fake_throughput_defaults": smoke_fake_throughput_defaults,
+    "fake_multi_hour_resume": smoke_fake_multi_hour_resume,
     "fake_southward": smoke_fake_southward,
     "fake_rl_queue": smoke_fake_rl_queue,
     "fake_expert_v0": smoke_fake_expert_v0,
@@ -716,45 +837,39 @@ SMOKES: dict[str, SmokeFn] = {
     "vlm_sft_local": smoke_vlm_sft_local,
 }
 
+_QUICK_CORE: tuple[str, ...] = (
+    "host_env",
+    "observe_root_writable",
+    "fake_early_stop",
+    "fake_sft_early_stop",
+    "fake_dpo_observe",
+    "fake_meta_exec",
+    "fake_meta_live_runners",
+    "fake_southward",
+    "fake_rl_queue",
+    "fake_expert_v0",
+)
+
 PROFILES: dict[str, tuple[str, ...]] = {
     # Run often: laptop / pre-push / CI-adjacent (fake only, seconds)
-    "quick": (
-        "host_env",
-        "observe_root_writable",
-        "fake_early_stop",
-        "fake_sft_early_stop",
-        "fake_dpo_observe",
-        "fake_meta_exec",
-        "fake_meta_live_runners",
-        "fake_southward",
-        "fake_rl_queue",
-        "fake_expert_v0",
+    "quick": _QUICK_CORE,
+    # Expert-v2: scale ladder + throughput defaults + multi-hour resume contract
+    "multi_hour": _QUICK_CORE
+    + (
+        "fake_scale_ladder",
+        "fake_throughput_defaults",
+        "fake_multi_hour_resume",
     ),
-    "nightly": (
-        "host_env",
-        "observe_root_writable",
-        "fake_early_stop",
-        "fake_sft_early_stop",
-        "fake_dpo_observe",
-        "fake_meta_exec",
-        "fake_meta_live_runners",
-        "fake_southward",
-        "fake_rl_queue",
-        "fake_expert_v0",
+    "nightly": _QUICK_CORE
+    + (
         "grpo_early_stop_local",
         "rl_queue_local",
     ),
-    "full": (
-        "host_env",
-        "observe_root_writable",
-        "fake_early_stop",
-        "fake_sft_early_stop",
-        "fake_dpo_observe",
-        "fake_meta_exec",
-        "fake_meta_live_runners",
-        "fake_southward",
-        "fake_rl_queue",
-        "fake_expert_v0",
+    "full": _QUICK_CORE
+    + (
+        "fake_scale_ladder",
+        "fake_throughput_defaults",
+        "fake_multi_hour_resume",
         "grpo_early_stop_local",
         "rl_queue_local",
         "vlm_sft_local",

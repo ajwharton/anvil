@@ -26,20 +26,21 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 
 | Done | Open (next) |
 |------|-------------|
-| Expert-v0/v1 observe + southward + DPO | Bridge/OXE scale ladder (Expert-v2) |
-| Meta-exec **default live runners** (`anvil meta-run`) | Throughput defaults / multi-hour lab smokes |
-| Book/meta HTTP+MCP+harness | Org packs + self-host notes |
-| `run_vlm_queue` vision stage advance | DPO recipe resume if needed |
-| **Checkpoint + resume** SFT/GRPO (`run_dir/resume.json`) | |
+| Expert-v0/v1 observe + southward + DPO | Real Bridge ≥1k on forge (operator) |
+| Meta-exec **default live runners** | Org packs + self-host notes |
+| **Scale ladder** 1k→5k→50k tooling + `multi_hour` smokes | Multi-worker train/sample if wall |
+| Throughput defaults per shape | DPO recipe resume if needed |
+| Checkpoint + resume SFT/GRPO | |
 | J-lens shelved (optional `-m jlens`) | |
 
 **Habit:** `python scripts/lab_smokes.py --profile quick` often.  
+**Expert-v2 ops:** `python scripts/lab_smokes.py --profile multi_hour`  
+**Scale ladder:** `docs/scale-ladder.md` · `python scripts/scale_ladder.py --demo`  
 **Meta ladder:** `anvil meta-run --example sft-grpo --endpoint fake://`  
-**Resume:** `run_sft` / `run_grpo` with `run_dir` + `checkpoint_every=N`, then `resume=True` (same total `steps`).  
-**J-lens:** `pytest -m jlens` (not default CI).
+**Resume:** `checkpoint_every=N` then `resume=True` (same total `steps`).  
 
 **Recommended next Outcome:**  
-Expert-v2 scale ladder / multi-hour lab smokes on forge
+Org recipe packs / self-host notes, or forge Bridge 1k operator run
 
 ## Pull-on-miss only
 

@@ -104,6 +104,12 @@ Stage metrics land under `<run_dir>/<stage_id>/`; graph events on
 **J-lens:** shelved measurement kit only (`docs/spikes/jlens-math.md`).
 Schema/CLI remain; default tests skip (`pytest -m jlens` to run).
 
+**Scale / multi-hour (Expert-v2):** rungs 1k→5k→50k in
+`anvil.recipes.scale_ladder` / `scripts/scale_ladder.py` (`--demo` CI,
+`--no-demo` forge). Throughput knobs: `anvil.recipes.throughput`. Lab profile
+`multi_hour` exercises ladder demo + resume contract.
+
+
 ---
 
 ## What to watch by job type

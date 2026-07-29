@@ -107,9 +107,9 @@ throughput; org-scale bases as an **ops profile**; personal/org recipe book
 used as the default plan source for repeat domains.
 
 - [x] Checkpoint + resume (adapter + step) for long SFT/RL — `anvil.recipes.checkpoint`; `run_sft` / `run_grpo` (`checkpoint_every`, `resume`, `run_dir/resume.json` + `save_state`)  
-- [ ] Batching / throughput defaults per shape (dense text, VLM, …)  
-- [ ] Scale ladder 1k → 5k → 50k+ exercised on forge  
-- [ ] Multi-hour lab smokes (`lab_smokes` + report)  
+- [x] Batching / throughput defaults per shape (`anvil.recipes.throughput`)  
+- [x] Scale ladder 1k → 5k → 50k+ tooling (`scale_ladder` + demo smoke; forge `--no-demo`)  
+- [x] Multi-hour lab smokes (`lab_smokes --profile multi_hour` + resume contract)  
 - [ ] Optional multi-worker train/sample when single-process is the wall  
 - [ ] Org self-host notes (governance, no secrets, multi-GPU reality)  
 - [ ] Org recipe packs + experience→default patience per family/pattern  
@@ -184,8 +184,8 @@ Cross-cutting goals still apply to every job type. They are **re-homed** above:
 ### P.Ops — Multi-hour / large-corpus jobs → **v2**
 
 - [x] Checkpoint + resume → Expert-v2 (`anvil.recipes.checkpoint`, SFT/GRPO)  
-- [ ] Batching / throughput docs  
-- [ ] Multi-hour lab smoke profiles  
+- [x] Batching / throughput docs (`throughput` + `docs/scale-ladder.md`)  
+- [x] Multi-hour lab smoke profiles (`multi_hour` / `full`)  
 - [ ] Optional multi-worker train/sample  
 
 ### P.Decide — Gear-shift as product
@@ -352,7 +352,7 @@ path. Re-open only against the high bar in the spike writeup.
 - [x] Production conversion pipeline (`anvil.data.convert` + `scripts/convert_robotics_corpus.py`: episode_pack / path JSONL → CAS + JSONL; resumable; subsample; license field)  
 - [x] Documented lab layout + Bridge-first path (`docs/datasets-robotics.md`)  
 - [ ] Lab corpus on disk in Anvil shape (operator extracts Bridge/OXE → episode_pack, then convert)  
-- [ ] Scale ladder 1k → 5k → 50k+ exercised on forge  
+- [x] Scale ladder 1k → 5k → 50k+ tooling (`scripts/scale_ladder.py`; forge operator run)  
 - [ ] Real-corpus smoke checklist green (`docs/datasets-robotics.md`)  
 
 ### 3.C Vision under live sufficiency *(partial — required; implements P.Sufficiency for VLM)*
@@ -362,11 +362,11 @@ path. Re-open only against the high bar in the spike writeup.
 - [x] Held-out frame probes during VLM train (`run_vlm_sft` probes= → `probes.jsonl`)  
 - [x] Early-stop / recipe advance hooks for vision stages (`run_vlm_queue`, same adapter)  
 
-### 3.D Multi-hour VLM jobs *(open — required; implements P.Ops for vision)*
+### 3.D Multi-hour VLM jobs *(partial — implements P.Ops for vision)*
 
 - [x] Checkpoint + resume for VLM LoRA → via `run_sft` (`checkpoint_every` / `resume`; `run_vlm_sft` passes through)  
-- [ ] Batching/throughput notes for 3B VLM on Spark  
-- [ ] Multi-hour lab smoke against a real robotics slice  
+- [x] Batching/throughput notes for 3B VLM on Spark (`throughput` + `docs/scale-ladder.md`)  
+- [x] Multi-hour lab smoke profile (`multi_hour`); real Bridge multi-hour still operator on forge
 
 **Near-term data sources:** BridgeData V2 first; OXE / Robo2VLM / LeRobot as converters land.
 
@@ -469,3 +469,4 @@ For a spin-off agent session:
 | 2026-07-28 | **Southward auto-stop** mid-train (SFT/VLM/DPO/GRPO); **DPO held-out probes** |
 | 2026-07-28 | **P1–P4:** LocalBackend DPO; book/meta HTTP+MCP tests; J-lens optional (`-m jlens`); `run_vlm_queue` |
 | 2026-07-28 | **Meta-exec default runners:** `meta_runners` + `anvil meta-run` + lab `fake_meta_live_runners` |
+| 2026-07-29 | **Expert-v2 ops:** scale ladder 1k→5k→50k tooling + throughput defaults + lab `multi_hour` profile |
