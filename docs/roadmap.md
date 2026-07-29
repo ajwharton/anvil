@@ -470,3 +470,4 @@ For a spin-off agent session:
 | 2026-07-28 | **P1–P4:** LocalBackend DPO; book/meta HTTP+MCP tests; J-lens optional (`-m jlens`); `run_vlm_queue` |
 | 2026-07-28 | **Meta-exec default runners:** `meta_runners` + `anvil meta-run` + lab `fake_meta_live_runners` |
 | 2026-07-29 | **Expert-v2 ops:** scale ladder 1k→5k→50k tooling + throughput defaults + lab `multi_hour` profile |
+| 2026-07-29 | **Forge VLM ≥1k:** expert_v0_1k.jsonl + Qwen2.5-VL-3B observe/probes/export/checkpoint (`vlm-1k-real-20260729-190945`) |
