@@ -129,9 +129,9 @@ vision must not lag text GRPO.
 |------|-------------------------|
 | Lab corpus on NVMe in Anvil shape (Bridge / OXE subsample / Robo2VLM) | **Expert-v0** (converter shipped; operator extract) |
 | Production convert pipeline (episode_pack / path JSONL → CAS + JSONL, resumable) | **done** (historical 3.B) |
-| Scale ladder 1k → 5k → 50k+ exercised on forge | **Expert-v2** (CLI supports `--max-rows`) |
-| VLM/SFT `metrics.jsonl` + live `/observe` (**done**); vision probes still open | **Expert-v0** probes gap |
-| Checkpoint/resume + multi-hour VLM job ops | **Expert-v2** |
+| Scale ladder 1k → 5k → 50k+ tooling + forge runbook | **done** (`docs/scale-ladder.md`, `scripts/scale_ladder.py`) |
+| VLM/SFT `metrics.jsonl` + live `/observe` + probes | **done** (Expert-v0/v1) |
+| Checkpoint/resume + multi-hour lab profile | **done** (`checkpoint` + `lab_smokes --profile multi_hour`) |
 | Offline robot RL + action tokenization + vision on-policy RL | **Path: robotics** (historical Phase 4) |
 
 ## Smoke checklist
@@ -149,9 +149,10 @@ vision must not lag text GRPO.
 - [x] Documented converter CLI (`scripts/convert_robotics_corpus.py`: subsample, resume, license)  
 - [x] Synthetic episode_pack → `anvil_jsonl` + CAS (CI + `--demo`)  
 - [ ] Bridge/Robo2VLM slice extracted to episode_pack on lab NVMe  
-- [ ] `run_vlm_sft` on ≥1k real rows with **observe** loss curve  
+- [ ] `run_vlm_sft` on ≥1k **real** Bridge rows with observe (operator; ladder tooling ready)  
 - [ ] Held-out qualitative sample after export  
-- [x] Multi-hour resume path (recipe-level) — `run_sft`/`run_grpo` `checkpoint_every` + `resume` (`anvil.recipes.checkpoint`); forge multi-hour lab smoke still open  
+- [x] Multi-hour resume path + lab smoke — `checkpoint_every`/`resume` + `fake_multi_hour_resume` / `multi_hour` profile  
+- [x] Scale ladder demo smoke (`fake_scale_ladder`); forge: `scale_ladder.py --no-demo`
 
 
 ## Out of scope (for now)
