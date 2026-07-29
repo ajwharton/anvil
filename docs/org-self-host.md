@@ -58,12 +58,15 @@ patience embedded in `last_early_stop_reason`) are aggregated (median) in
 `suggest_for_model(...)[\"experience_priors\"]`. Calibration-mode recipes are
 ignored so overshoot nights do not poison production priors.
 
-## Multi-GPU reality (honest)
+## Multi-GPU / multi-worker reality (honest)
 
-- Today’s default path is **single-process** LocalBackend + optional vLLM sample
-  worker (`sample_endpoint`). That is the right shape for Spark-class boxes.
-- Optional multi-worker train is still open (roadmap Expert-v2). Prefer vertical
-  scale (batch, seq, rank) + resume before horizontal train shards.
+- Default path: **single-process** LocalBackend train + optional vLLM sample
+  worker(s). Right shape for Spark-class boxes.
+- **Horizontal sample:** `run_grpo(sample_endpoints=[…])` →
+  :class:`~anvil.workers.pool.SampleWorkerPool` (round-robin sample, fan-out
+  adapter snapshot). See [`multi-worker.md`](multi-worker.md).
+- Full data-parallel **train** shards are still out of scope; prefer vertical
+  scale (batch, seq, rank) + resume first.
 - Keep observe on one `ANVIL_OBSERVE_ROOT` NFS/local disk so agents share SSOT.
 
 ## Governance

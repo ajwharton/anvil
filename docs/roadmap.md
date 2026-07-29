@@ -110,7 +110,8 @@ used as the default plan source for repeat domains.
 - [x] Batching / throughput defaults per shape (`anvil.recipes.throughput`)  
 - [x] Scale ladder 1k → 5k → 50k+ tooling (`scale_ladder` + demo smoke; forge `--no-demo`)  
 - [x] Multi-hour lab smokes (`lab_smokes --profile multi_hour` + resume contract)  
-- [ ] Optional multi-worker train/sample when single-process is the wall  
+- [x] Optional multi-worker **sample** pool when generation is the wall  
+      (`SampleWorkerPool` + `run_grpo(sample_endpoints=[…])`; train stays single-process)
 - [x] Org self-host notes (governance, no secrets, multi-GPU reality) — `docs/org-self-host.md`  
 - [x] Org recipe packs + experience→default patience per family/pattern  
       (`install_org_pack` / `ANVIL_ORG_RECIPE_PACK` + `experience.patience_prior_for_model`)
@@ -187,7 +188,7 @@ Cross-cutting goals still apply to every job type. They are **re-homed** above:
 - [x] Checkpoint + resume → Expert-v2 (`anvil.recipes.checkpoint`, SFT/GRPO)  
 - [x] Batching / throughput docs (`throughput` + `docs/scale-ladder.md`)  
 - [x] Multi-hour lab smoke profiles (`multi_hour` / `full`)  
-- [ ] Optional multi-worker train/sample  
+- [x] Optional multi-worker sample pool (`docs/multi-worker.md`)
 
 ### P.Decide — Gear-shift as product
 
@@ -473,3 +474,4 @@ For a spin-off agent session:
 | 2026-07-29 | **Expert-v2 ops:** scale ladder 1k→5k→50k tooling + throughput defaults + lab `multi_hour` profile |
 | 2026-07-29 | **Forge VLM ≥1k:** expert_v0_1k.jsonl + Qwen2.5-VL-3B observe/probes/export/checkpoint (`vlm-1k-real-20260729-190945`) |
 | 2026-07-29 | **Org packs + experience patience:** install/export packs, ANVIL_ORG_RECIPE_PACK, suggest experience_priors; docs/org-self-host.md |
+| 2026-07-29 | **Multi-worker sample pool:** SampleWorkerPool + run_grpo(sample_endpoints=…); docs/multi-worker.md |

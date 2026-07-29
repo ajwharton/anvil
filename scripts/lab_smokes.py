@@ -316,6 +316,42 @@ def smoke_fake_throughput_defaults(ctx: SmokeContext) -> SmokeResult:
     )
 
 
+def smoke_fake_multi_sample_pool(ctx: SmokeContext) -> SmokeResult:
+    """Expert-v2: dual Fake sample workers + GRPO adapter sync fan-out."""
+    t0 = time.monotonic()
+    from anvil.backends.fake import FakeBackend
+    from anvil.recipes.grpo import run_grpo
+    from anvil.workers.pool import SampleWorkerPool
+
+    root = ctx.report_run / "multi-sample"
+    root.mkdir(parents=True, exist_ok=True)
+    pool = SampleWorkerPool(
+        [FakeBackend(root=root / "s0"), FakeBackend(root=root / "s1")],
+        label="lab-pool",
+    )
+    res = run_grpo(
+        endpoint=f"fake://{root / 'train'}",
+        steps=4,
+        group_size=2,
+        sample_backend=pool,
+        sync_every=1,
+        run_dir=str(root / "run"),
+        early_stop=False,
+        stop_on_southward=False,
+    )
+    ok = res.steps_run == 4 and pool.sync_calls == 4 and pool.sample_calls >= 4
+    return SmokeResult(
+        name="fake_multi_sample_pool",
+        ok=ok,
+        duration_s=time.monotonic() - t0,
+        detail=(
+            f"steps={res.steps_run} syncs={pool.sync_calls} "
+            f"samples={pool.sample_calls} workers={pool.n_workers}"
+        ),
+        meta=pool.stats(),
+    )
+
+
 def smoke_fake_multi_hour_resume(ctx: SmokeContext) -> SmokeResult:
     """Expert-v2 multi-hour ops stand-in: checkpoint mid-run, resume, finish budget.
 
@@ -828,6 +864,7 @@ SMOKES: dict[str, SmokeFn] = {
     "fake_meta_live_runners": smoke_fake_meta_live_runners,
     "fake_scale_ladder": smoke_fake_scale_ladder,
     "fake_throughput_defaults": smoke_fake_throughput_defaults,
+    "fake_multi_sample_pool": smoke_fake_multi_sample_pool,
     "fake_multi_hour_resume": smoke_fake_multi_hour_resume,
     "fake_southward": smoke_fake_southward,
     "fake_rl_queue": smoke_fake_rl_queue,
@@ -858,6 +895,7 @@ PROFILES: dict[str, tuple[str, ...]] = {
     + (
         "fake_scale_ladder",
         "fake_throughput_defaults",
+        "fake_multi_sample_pool",
         "fake_multi_hour_resume",
     ),
     "nightly": _QUICK_CORE
@@ -869,6 +907,7 @@ PROFILES: dict[str, tuple[str, ...]] = {
     + (
         "fake_scale_ladder",
         "fake_throughput_defaults",
+        "fake_multi_sample_pool",
         "fake_multi_hour_resume",
         "grpo_early_stop_local",
         "rl_queue_local",
