@@ -42,8 +42,9 @@ Competitors ship trainers and sometimes “recipes” as static YAML for one scr
 | **Personal recipe book** | Operator-local library: promoted runs, family-level habits, org packs. **Sovereign**—not required to leave the lab. |
 | **Experience** | Observe artifacts + stop reasons + optional overshoot notes that *justify* a recipe version. |
 
-Today: atlas + `plan_recipe` / gates / GRPO **recipe queue** (a thin meta-recipe) exist.  
-Open: personal book storage, save-from-run, family-scoped experience → defaults, richer meta-recipes with audit.
+Today: atlas + personal book + promote-from-run + **org packs** +
+**experience → production patience** (`suggest_for_model` priors) + meta-recipe
+executor. Calibration-mode recipes do not shift production patience.
 
 ---
 

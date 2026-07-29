@@ -722,9 +722,15 @@ def suggest_for_model(
 
     personal: list[dict[str, Any]] = []
     book_root = None
+    experience_priors: dict[str, Any] | None = None
     if include_personal_book:
         try:
             from anvil.recipes.book import RecipeBook
+            from anvil.recipes.experience import (
+                collect_experience_from_book,
+                patience_prior_for_model,
+            )
+            from anvil.recipes.sft import DEFAULT_SFT_EARLY_STOP_PATIENCE
 
             book = RecipeBook()
             book_root = str(book.root)
@@ -750,6 +756,22 @@ def suggest_for_model(
                         "source_run_id": br.source_run_id,
                     }
                 )
+            # Experience → default patience for the top personal pattern (or vlm/sft)
+            top_pat = (
+                personal[0]["pattern"]
+                if personal
+                else ("vlm_sft" if has_vision else "sft_chat")
+            )
+            prior = patience_prior_for_model(
+                base_model,
+                pattern=str(top_pat),
+                atlas_fallback=DEFAULT_SFT_EARLY_STOP_PATIENCE,
+                book=book,
+            )
+            experience_priors = {
+                "patience": prior.to_public(),
+                "n_experience_samples": len(collect_experience_from_book(book)),
+            }
         except OSError:
             personal = []
 
@@ -770,6 +792,7 @@ def suggest_for_model(
         "personal_book": personal,
         "personal_book_root": book_root,
         "catalog_count": len(list_patterns()),  # pattern count; see list_recipes for full
+        "experience_priors": experience_priors,
     }
     if card is not None:
         out["card"] = card.to_public()

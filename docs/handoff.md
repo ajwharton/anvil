@@ -26,21 +26,20 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 
 | Done | Open (next) |
 |------|-------------|
-| Expert-v0/v1 observe + southward + DPO | Org packs + self-host notes |
-| Meta-exec **default live runners** | Multi-worker train/sample if wall |
-| **Scale ladder** + `multi_hour` smokes | DPO recipe resume if needed |
+| Expert-v0/v1 observe + southward + DPO | Multi-worker train/sample if wall |
+| Meta-exec **default live runners** | DPO recipe resume if needed |
+| **Scale ladder** + `multi_hour` smokes | |
 | **Forge VLM ≥1k** observe + export + ckpt | |
+| **Org packs** + experience→patience + self-host notes | |
 | Checkpoint + resume SFT/GRPO/VLM | |
 | J-lens shelved (optional `-m jlens`) | |
 
 **Habit:** `python scripts/lab_smokes.py --profile quick` often.  
-**Forge VLM 1k (2026-07-29):** run `vlm-1k-real-20260729-190945` —  
-  JSONL 1000 rows, Qwen2.5-VL-3B, loss 0.84→0.014, `n_image_refs>0`, probes+export+`resume.json`.  
-**Expert-v2 ops:** `python scripts/lab_smokes.py --profile multi_hour`  
-**Scale ladder:** `docs/scale-ladder.md`  
+**Org packs:** `ANVIL_ORG_RECIPE_PACK=packs/demo-org-qwen-vl` · `docs/org-self-host.md`  
+**Experience priors:** `suggest_for_model(...)[\"experience_priors\"]`  
 
 **Recommended next Outcome:**  
-Org recipe packs + experience→default patience, or org self-host notes
+Multi-worker sample/train if wall, or DPO resume parity
 
 ## Pull-on-miss only
 

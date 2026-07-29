@@ -111,8 +111,9 @@ used as the default plan source for repeat domains.
 - [x] Scale ladder 1k → 5k → 50k+ tooling (`scale_ladder` + demo smoke; forge `--no-demo`)  
 - [x] Multi-hour lab smokes (`lab_smokes --profile multi_hour` + resume contract)  
 - [ ] Optional multi-worker train/sample when single-process is the wall  
-- [ ] Org self-host notes (governance, no secrets, multi-GPU reality)  
-- [ ] Org recipe packs + experience→default patience per family/pattern  
+- [x] Org self-host notes (governance, no secrets, multi-GPU reality) — `docs/org-self-host.md`  
+- [x] Org recipe packs + experience→default patience per family/pattern  
+      (`install_org_pack` / `ANVIL_ORG_RECIPE_PACK` + `experience.patience_prior_for_model`)
 
 Historical homes: P.Ops, 3.D, part of 3.B scale ladder.
 
@@ -471,3 +472,4 @@ For a spin-off agent session:
 | 2026-07-28 | **Meta-exec default runners:** `meta_runners` + `anvil meta-run` + lab `fake_meta_live_runners` |
 | 2026-07-29 | **Expert-v2 ops:** scale ladder 1k→5k→50k tooling + throughput defaults + lab `multi_hour` profile |
 | 2026-07-29 | **Forge VLM ≥1k:** expert_v0_1k.jsonl + Qwen2.5-VL-3B observe/probes/export/checkpoint (`vlm-1k-real-20260729-190945`) |
+| 2026-07-29 | **Org packs + experience patience:** install/export packs, ANVIL_ORG_RECIPE_PACK, suggest experience_priors; docs/org-self-host.md |

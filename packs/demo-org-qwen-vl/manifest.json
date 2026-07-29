@@ -1,0 +1,7 @@
+{
+  "name": "demo-org-qwen-vl",
+  "version": "1",
+  "schema_version": 1,
+  "description": "Demo org pack: Qwen2.5-VL production priors from lab dogfood",
+  "recipes": ["org-vlm-tabletop-v1", "org-vlm-edge-short-v1"]
+}
