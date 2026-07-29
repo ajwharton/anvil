@@ -70,12 +70,17 @@ python scripts/expert_v0_smoke.py \
 
 ## Checklist (pass/fail)
 
-- [ ] Data placed: JSONL rows with `cas://` images only (no blobs in git)  
-- [ ] `metrics.jsonl` has `job=vlm_sft` steps with `loss`, `wall_time_s`, `n_image_refs`  
-- [ ] Held-out `probes.jsonl` records appear every `probe_every` steps  
-- [ ] Observe index lists the run; SSE stream works (or MCP tail works)  
-- [ ] Adapter export path exists (PEFT files on `local://`)  
-- [ ] Human or agent can state why they would stop or continue (transcript)
+- [x] Data placed: JSONL rows with `cas://` images only (no blobs in git) — forge `expert_v0_1k.jsonl` (1000)  
+- [x] `metrics.jsonl` has `job=vlm_sft` steps with `loss`, `wall_time_s`, `n_image_refs`  
+- [x] Held-out `probes.jsonl` records appear every `probe_every` steps  
+- [x] Observe index lists the run; SSE stream works (or MCP tail works)  
+- [x] Adapter export path exists (PEFT files on `local://`)  
+- [x] Human or agent can state why they would stop or continue (transcript)  
+
+**Forge reference run (2026-07-29):** `vlm-1k-real-20260729-190945`  
+- Model: `/mnt/data/models/Qwen2.5-VL-3B-Instruct` · 40 steps · rank 16 · max-train 24 (+4 holdout probes)  
+- Loss 0.84 → 0.014 · checkpoints every 10 · PEFT export under `/mnt/data/anvil-runs/…`  
+- Re-run: `expert_v0_smoke.py --endpoint local:// --skip-convert --output-jsonl …/expert_v0_1k.jsonl --checkpoint-every 10 …`
 
 ---
 

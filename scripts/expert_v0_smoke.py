@@ -118,6 +118,17 @@ def main(argv: list[str] | None = None) -> int:
         help="disable early-stop (same as calibration with full --steps)",
     )
     p.add_argument(
+        "--checkpoint-every",
+        type=int,
+        default=None,
+        help="Expert-v2: save_state + resume.json every N steps (requires run_dir)",
+    )
+    p.add_argument(
+        "--resume",
+        action="store_true",
+        help="Expert-v2: continue from run_dir/resume.json (same total --steps)",
+    )
+    p.add_argument(
         "--promote-recipe",
         default=None,
         help="save personal recipe id into ANVIL_RECIPE_BOOK after run",
@@ -254,6 +265,8 @@ def main(argv: list[str] | None = None) -> int:
         early_stop=False if args.no_early_stop else None,
         early_stop_mode=args.early_stop_mode,
         early_stop_patience=args.early_stop_patience,
+        checkpoint_every=args.checkpoint_every,
+        resume=bool(args.resume),
     )
 
     metrics = run_dir / "metrics.jsonl"

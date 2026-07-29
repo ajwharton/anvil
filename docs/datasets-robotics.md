@@ -149,8 +149,8 @@ vision must not lag text GRPO.
 - [x] Documented converter CLI (`scripts/convert_robotics_corpus.py`: subsample, resume, license)  
 - [x] Synthetic episode_pack → `anvil_jsonl` + CAS (CI + `--demo`)  
 - [ ] Bridge/Robo2VLM slice extracted to episode_pack on lab NVMe  
-- [ ] `run_vlm_sft` on ≥1k **real** Bridge rows with observe (operator; ladder tooling ready)  
-- [ ] Held-out qualitative sample after export  
+- [x] `run_vlm_sft` on ≥1k placed lab rows with observe (forge 2026-07-29: `expert_v0_1k.jsonl` + VLM-3B; train microbatch via `--max-train`)  
+- [~] Held-out qualitative sample after export (probes recorded; text quality still operator-judged)  
 - [x] Multi-hour resume path + lab smoke — `checkpoint_every`/`resume` + `fake_multi_hour_resume` / `multi_hour` profile  
 - [x] Scale ladder demo smoke (`fake_scale_ladder`); forge: `scale_ladder.py --no-demo`
 

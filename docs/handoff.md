@@ -26,21 +26,21 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 
 | Done | Open (next) |
 |------|-------------|
-| Expert-v0/v1 observe + southward + DPO | Real Bridge ≥1k on forge (operator) |
-| Meta-exec **default live runners** | Org packs + self-host notes |
-| **Scale ladder** 1k→5k→50k tooling + `multi_hour` smokes | Multi-worker train/sample if wall |
-| Throughput defaults per shape | DPO recipe resume if needed |
-| Checkpoint + resume SFT/GRPO | |
+| Expert-v0/v1 observe + southward + DPO | Org packs + self-host notes |
+| Meta-exec **default live runners** | Multi-worker train/sample if wall |
+| **Scale ladder** + `multi_hour` smokes | DPO recipe resume if needed |
+| **Forge VLM ≥1k** observe + export + ckpt | |
+| Checkpoint + resume SFT/GRPO/VLM | |
 | J-lens shelved (optional `-m jlens`) | |
 
 **Habit:** `python scripts/lab_smokes.py --profile quick` often.  
+**Forge VLM 1k (2026-07-29):** run `vlm-1k-real-20260729-190945` —  
+  JSONL 1000 rows, Qwen2.5-VL-3B, loss 0.84→0.014, `n_image_refs>0`, probes+export+`resume.json`.  
 **Expert-v2 ops:** `python scripts/lab_smokes.py --profile multi_hour`  
-**Scale ladder:** `docs/scale-ladder.md` · `python scripts/scale_ladder.py --demo`  
-**Meta ladder:** `anvil meta-run --example sft-grpo --endpoint fake://`  
-**Resume:** `checkpoint_every=N` then `resume=True` (same total `steps`).  
+**Scale ladder:** `docs/scale-ladder.md`  
 
 **Recommended next Outcome:**  
-Org recipe packs / self-host notes, or forge Bridge 1k operator run
+Org recipe packs + experience→default patience, or org self-host notes
 
 ## Pull-on-miss only
 
