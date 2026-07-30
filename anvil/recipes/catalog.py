@@ -396,6 +396,32 @@ RECIPES: tuple[RecipeSpec, ...] = (
         ),
     ),
     RecipeSpec(
+        id="vision_rl_on_policy",
+        title="Vision on-policy RL (GRPO)",
+        summary=(
+            "Multimodal sample + keyword/rubric/action-bin rewards; "
+            "run_vision_grpo / vision stage queue."
+        ),
+        pattern=JobPattern.RL_VERIFIABLE,
+        shapes_recommended=(ModelShape.EDGE_STUDENT, ModelShape.DENSE_VLM),
+        shapes_stretch=(ModelShape.UNKNOWN,),
+        shapes_blocked=(ModelShape.MOE_LM,),
+        needs_vision=True,
+        needs_reward=True,
+        max_param_b_recommended=4.5,
+        max_param_b_hard=14.0,
+        default_rank=16,
+        default_lr=5e-5,
+        default_export="peft",
+        group="edge",
+        tags=("robot", "vision", "grpo", "on-policy", "rubric"),
+        notes=(
+            "Entry: anvil.recipes.vision_rl.run_vision_grpo. Image refs in prompts; "
+            "rewards on detokenized text (no learned vision RM in v0). Train on lab; "
+            "do not dump multi-hour vision RL logs onto the house robot."
+        ),
+    ),
+    RecipeSpec(
         id="distill_to_edge",
         title="Distill lab teacher → edge student",
         summary="Teacher (lab VLM/LM) produces targets; train small student for FPS/power.",

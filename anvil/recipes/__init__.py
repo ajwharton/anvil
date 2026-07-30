@@ -53,6 +53,13 @@ from anvil.recipes.robot_offline import (
     toy_robot_trajectories,
     trajectories_to_robot_examples,
 )
+from anvil.recipes.vision_rl import (
+    VisionRLQueueRecipe,
+    VisionRollout,
+    run_vision_grpo,
+    run_vision_rl_queue,
+    toy_vision_rollouts,
+)
 
 __all__ = [
     "BookRecipe",
@@ -74,6 +81,8 @@ __all__ = [
     "RecipeSpec",
     "RobotOfflineResult",
     "StageRunResult",
+    "VisionRLQueueRecipe",
+    "VisionRollout",
     "default_book_root",
     "default_recipe_id_for_shape",
     "example_vlm_ladder",
@@ -95,8 +104,11 @@ __all__ = [
     "run_dpo",
     "run_meta_recipe",
     "run_robot_offline",
+    "run_vision_grpo",
+    "run_vision_rl_queue",
     "save_meta_recipe",
     "suggest_for_model",
     "toy_robot_trajectories",
+    "toy_vision_rollouts",
     "trajectories_to_robot_examples",
 ]
