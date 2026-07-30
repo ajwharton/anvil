@@ -20,6 +20,11 @@ from anvil.client.training import TrainingClient
 from anvil.observe.metrics import RunMetricsWriter
 from anvil.protocol.messages import Example, Message, TextPart
 from anvil.protocol.types import AdamParams, Datum, LoraTargets, SamplingParams
+from anvil.recipes.checkpoint import (
+    apply_resume_to_client,
+    load_resume_state,
+    save_train_checkpoint,
+)
 from anvil.recipes.profiles import JobPattern, RecipePlan, plan_recipe
 from anvil.recipes.sft import (
     DEFAULT_SFT_EARLY_STOP_ABS_EPS,
@@ -53,6 +58,8 @@ class DPOResult:
     early_stop_reason: str | None = None
     mean_length_bias: float | None = None
     n_probe_records: int = 0
+    resumed_from_step: int = 0
+    checkpoint_path: str | None = None
 
 
 def build_plan(base_model: str, **overrides: Any) -> RecipePlan:
@@ -121,6 +128,8 @@ def run_dpo(
     probe_every: int = 1,
     stop_on_southward: bool | None = None,
     southward_min_steps: int = 8,
+    checkpoint_every: int | None = None,
+    resume: bool = False,
 ) -> DPOResult:
     """DPO-style loop: preferred+rejected batch → named ``dpo`` loss → observe.
 
@@ -130,9 +139,19 @@ def run_dpo(
 
     ``stop_on_southward`` (production default with ``run_dir``) aborts on cliff
     flags such as ``length_bias_spike`` or probe regression.
+
+    Checkpoint / resume (Expert-v2 parity with SFT/GRPO): ``run_dir`` +
+    ``checkpoint_every=N`` writes adapter ``save_state`` + ``resume.json``;
+    ``resume=True`` continues from ``steps_completed`` toward total ``steps``.
     """
     if probe_every < 1:
         raise ValueError(f"probe_every must be >= 1, got {probe_every}")
+    if checkpoint_every is not None and checkpoint_every < 1:
+        raise ValueError(f"checkpoint_every must be >= 1, got {checkpoint_every}")
+    if checkpoint_every is not None and not run_dir:
+        raise ValueError("checkpoint_every requires run_dir")
+    if resume and not run_dir:
+        raise ValueError("resume=True requires run_dir (for resume.json)")
     mode = str(early_stop_mode or "production").lower().strip()
     if mode not in {"production", "calibration"}:
         raise ValueError(f"early_stop_mode must be production|calibration, got {early_stop_mode!r}")
@@ -180,18 +199,88 @@ def run_dpo(
     )
     writer = RunMetricsWriter(run_dir) if run_dir else None
     n = steps if steps is not None else min(5, plan.max_steps)
+    prior_losses: list[float] = []
     losses: list[float] = []
     stopped: str | None = None
     steps_run = 0
     n_probe_records = 0
     max_tok = int(getattr(plan, "max_tokens", None) or 32)
+    start_step = 0
+    last_ckpt_path: str | None = None
+    job = "dpo"
 
-    for step_ix in range(n):
+    if resume and run_dir:
+        state = load_resume_state(run_dir)
+        if state is not None:
+            apply_resume_to_client(tc, state)
+            start_step = int(state.steps_completed)
+            prior_losses = list(state.losses)
+            if writer is not None:
+                writer.log_event(
+                    step=start_step,
+                    event="resume",
+                    reason="loaded_resume_json",
+                    job=job,
+                    steps_completed=start_step,
+                    checkpoint_path=state.checkpoint_path,
+                )
+            if start_step >= n:
+                svc.close()
+                return DPOResult(
+                    plan=plan,
+                    steps_run=0,
+                    losses=[],
+                    adapter_id=str(tc.adapter_id),
+                    export_path=None,
+                    run_dir=run_dir,
+                    early_stop_reason=None,
+                    mean_length_bias=length_bias,
+                    n_probe_records=0,
+                    resumed_from_step=start_step,
+                    checkpoint_path=state.checkpoint_path,
+                )
+
+    def _all_losses() -> list[float]:
+        return prior_losses + losses
+
+    def _maybe_checkpoint(step_completed: int, *, force: bool = False) -> None:
+        nonlocal last_ckpt_path
+        if run_dir is None:
+            return
+        if not force and checkpoint_every is None:
+            return
+        if (
+            not force
+            and checkpoint_every is not None
+            and step_completed % checkpoint_every != 0
+        ):
+            return
+        ref = save_train_checkpoint(
+            tc,
+            run_dir=run_dir,
+            job=job,
+            steps_completed=step_completed,
+            base_model=plan.base_model,
+            losses=_all_losses(),
+        )
+        last_ckpt_path = ref.path
+        if writer is not None:
+            writer.log_event(
+                step=step_completed - 1 if step_completed > 0 else 0,
+                event="checkpoint",
+                reason="periodic" if not force else "final",
+                job=job,
+                steps_completed=step_completed,
+                checkpoint_path=ref.path,
+                checkpoint_name=ref.name,
+            )
+
+    for step_ix in range(start_step, n):
         t0 = time.monotonic()
         fb = tc.forward_backward(batch, loss_fn="dpo").result()
         tc.optim_step(AdamParams(learning_rate=plan.learning_rate)).result()
         losses.append(fb.loss)
-        steps_run = step_ix + 1
+        steps_run = step_ix + 1 - start_step
         if writer is not None:
             fb_metrics = {
                 str(kk): float(vv)
@@ -208,7 +297,7 @@ def run_dpo(
                 length_bias=length_bias,
                 fb_metrics=fb_metrics,
                 wall_time_s=time.monotonic() - t0,
-                job="dpo",
+                job=job,
             )
             if probe_list and step_ix % probe_every == 0:
                 sc = tc.save_weights_and_get_sampling_client(name=f"dpo-probe-{step_ix}")
@@ -231,12 +320,16 @@ def run_dpo(
                         text=text,
                         reward=_match_score(text, pp.preferred),
                         target=pp.preferred,
-                        job="dpo",
+                        job=job,
                     )
                     n_probe_records += 1
+
+        completed = step_ix + 1
+        _maybe_checkpoint(completed)
+
         if early_stop:
             reason = sft_early_stop_reason(
-                losses,
+                _all_losses(),
                 patience=early_stop_patience,
                 rel_eps=early_stop_rel_eps,
                 abs_eps=early_stop_abs_eps,
@@ -250,7 +343,7 @@ def run_dpo(
                         reason=stopped,
                         mode=mode,
                         patience=early_stop_patience,
-                        job="dpo",
+                        job=job,
                         length_bias=length_bias,
                     )
                 break
@@ -272,11 +365,16 @@ def run_dpo(
                         event="early_stop",
                         reason=sw,
                         mode=mode,
-                        job="dpo",
+                        job=job,
                         trigger="southward",
                         length_bias=length_bias,
                     )
                 break
+
+    if checkpoint_every is not None and run_dir and steps_run > 0:
+        completed_total = start_step + steps_run
+        if last_ckpt_path is None or completed_total % checkpoint_every != 0:
+            _maybe_checkpoint(completed_total, force=True)
 
     export_path = None
     if export_dir:
@@ -294,6 +392,8 @@ def run_dpo(
         early_stop_reason=stopped,
         mean_length_bias=length_bias,
         n_probe_records=n_probe_records,
+        resumed_from_step=start_step,
+        checkpoint_path=last_ckpt_path,
     )
 
 

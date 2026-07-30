@@ -26,21 +26,20 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 
 | Done | Open (next) |
 |------|-------------|
-| Expert-v0/v1 observe + southward + DPO | DPO recipe resume if needed |
-| Meta-exec **default live runners** | Full DP multi-GPU **train** (not planned) |
-| **Scale ladder** + `multi_hour` smokes | |
-| **Forge VLM ≥1k** observe + export + ckpt | |
+| Expert-v0/v1 observe + southward + DPO | Full DP multi-GPU **train** (not planned) |
+| Meta-exec **default live runners** | Phase 4 robot offline / edge (path work) |
+| **Scale ladder** + `multi_hour` smokes | Org-scale multi-hour VLM soak (operator) |
+| **Forge VLM ≥1k** + multi-worker sample pool | |
 | **Org packs** + experience→patience | |
-| **Multi-worker sample pool** (`sample_endpoints`) | |
-| Checkpoint + resume SFT/GRPO/VLM | |
+| Checkpoint + resume **SFT/VLM/GRPO/DPO** | |
 | J-lens shelved (optional `-m jlens`) | |
 
 **Habit:** `python scripts/lab_smokes.py --profile quick` often.  
-**Multi-worker sample:** `docs/multi-worker.md` · `run_grpo(sample_endpoints=[…])`  
-**Org packs:** `ANVIL_ORG_RECIPE_PACK` · `docs/org-self-host.md`  
+**Resume:** SFT/VLM/GRPO/DPO all support `checkpoint_every` + `resume=True`.  
+**Multi-worker sample:** `docs/multi-worker.md`  
 
 **Recommended next Outcome:**  
-DPO resume parity, or forge dual-vLLM dogfood of sample pool
+Robot offline / action path (Phase 4), or agentic watch→decide→act forge dogfood
 
 ## Pull-on-miss only
 

@@ -17,6 +17,7 @@ from anvil.recipes.checkpoint import (
     save_train_checkpoint,
     write_resume_state,
 )
+from anvil.recipes.dpo import PreferencePair, run_dpo
 from anvil.recipes.grpo import run_grpo
 from anvil.recipes.sft import run_sft
 
@@ -250,3 +251,67 @@ def test_resume_json_is_valid_json_object(tmp_path: Path) -> None:
     raw = json.loads((tmp_path / "run" / RESUME_FILENAME).read_text(encoding="utf-8"))
     assert raw["schema_version"] == 1
     assert "checkpoint" in raw and "path" in raw["checkpoint"]
+
+
+def test_run_dpo_checkpoint_and_resume(tmp_path: Path) -> None:
+    """DPO resume parity: continue from resume.json without replaying early steps."""
+    root = tmp_path / "fake-root"
+    run_dir = tmp_path / "dpo-run"
+    endpoint = f"fake://{root}"
+    pairs = [
+        PreferencePair(prompt="hi", preferred="ok", rejected="a much longer bad answer"),
+    ]
+    part1 = run_dpo(
+        endpoint=endpoint,
+        pairs=pairs,
+        steps=3,
+        run_dir=str(run_dir),
+        early_stop=False,
+        stop_on_southward=False,
+        checkpoint_every=1,
+    )
+    assert part1.steps_run == 3
+    assert part1.checkpoint_path is not None
+    assert (run_dir / RESUME_FILENAME).is_file()
+    state = load_resume_state(run_dir)
+    assert state is not None
+    assert state.job == "dpo"
+    assert state.steps_completed == 3
+    assert len(state.losses) == 3
+
+    part2 = run_dpo(
+        endpoint=endpoint,
+        pairs=pairs,
+        steps=5,
+        run_dir=str(run_dir),
+        early_stop=False,
+        stop_on_southward=False,
+        checkpoint_every=1,
+        resume=True,
+    )
+    assert part2.resumed_from_step == 3
+    assert part2.steps_run == 2
+    assert len(part2.losses) == 2
+
+    metrics = read_jsonl(run_dir / "metrics.jsonl")
+    assert any(r.get("event") == "resume" for r in metrics)
+    assert any(r.get("event") == "checkpoint" for r in metrics)
+    steps = [r["step"] for r in metrics if r.get("type") == "step"]
+    assert steps == [0, 1, 2, 3, 4]
+    final = load_resume_state(run_dir)
+    assert final is not None
+    assert final.steps_completed == 5
+    assert len(final.losses) == 5
+
+
+def test_run_dpo_checkpoint_every_requires_run_dir() -> None:
+    try:
+        run_dpo(
+            endpoint="fake://",
+            steps=1,
+            early_stop=False,
+            checkpoint_every=1,
+        )
+        raise AssertionError("expected ValueError")
+    except ValueError as e:
+        assert "run_dir" in str(e)
