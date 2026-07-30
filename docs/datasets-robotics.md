@@ -159,6 +159,21 @@ python scripts/robot_pack_smoke.py --pack /path/to/house_pack \
 
 Python: `anvil.data.robot_pack.house_pack_to_trajectories` / `house_pack_to_jsonl`.
 
+#### j30 `vision/out` → house pack
+
+If the robot already logs under `~/vision/out` (llm RGB+see text, loop
+escalations, live_pull frames + captions.json):
+
+```bash
+# operator: rsync vision/out from the robot to a *local* path (no secrets in git)
+rsync -avz <robot-user>@<robot-host>:~/vision/out/ ./j30-out/
+
+python scripts/j30_vision_out_to_pack.py --source ./j30-out --out ./house_pack
+python scripts/robot_pack_smoke.py --pack ./house_pack --steps 20
+```
+
+Never commit house frames or LAN host credentials.
+
 ## Product goals
 
 Robotics data is one **application** of Anvil’s **live sufficiency** thesis
