@@ -395,7 +395,8 @@ path. Re-open only against the high bar in the spike writeup.
 - [x] Export path documented + packaged (`docs/edge-export.md`, `anvil.export.edge`, GGUF/ONNX/TRT recipes + env converters)  
 - [x] Small-student path (SmolVLM-256M defaults; distill notes in catalog `distill_to_edge`)  
 - [x] Optional `JetsonSampleBackend` sample stub (Ollama / dry-run)  
-- [ ] On-device GGUF load + FPS/power numbers (operator on j30)
+- [x] Edge sample FPS smoke (lab-side `j30_edge_fps_smoke` / `measure_sample_fps`; dry-run CI; live URL optional)  
+- [ ] On-device soak numbers under robotics retention (operator; storage-capped)
 
 ## Phase 5 — Multi-tenant lab (optional)
 
