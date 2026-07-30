@@ -373,22 +373,26 @@ RECIPES: tuple[RecipeSpec, ...] = (
     RecipeSpec(
         id="robot_offline_edge",
         title="Robot offline · edge loop",
-        summary="Offline trajectories with image refs → SFT/offline RL; export toward Jetson.",
+        summary=(
+            "Offline trajectories → text-tokenized actions (bins v1) → LoRA SFT; "
+            "prefer SmolVLM-256M on severe memory robots."
+        ),
         pattern=JobPattern.ROBOT_OFFLINE,
         shapes_recommended=(ModelShape.EDGE_STUDENT,),
         shapes_stretch=(ModelShape.DENSE_VLM,),
         shapes_blocked=(ModelShape.MOE_LM, ModelShape.DENSE_LM),
         needs_vision=True,
-        max_param_b_recommended=4.5,
-        max_param_b_hard=10.0,
-        default_rank=16,
+        max_param_b_recommended=0.5,
+        max_param_b_hard=4.5,
+        default_rank=8,
+        default_lr=2e-4,
         default_export="onnx",
         group="edge",
-        tags=("robot", "edge", "offline"),
+        tags=("robot", "edge", "offline", "smol", "action-tokens"),
         notes=(
-            "Trajectories as examples with image refs in the media store; same schema "
-            "lab->edge; export ONNX/TRT. Never actuate from raw samples without a "
-            "supervisor."
+            "Entry: anvil.recipes.robot_offline.run_robot_offline. Trajectories with "
+            "image refs + ActionTokenizer (256 bins default). Same schema lab→edge; "
+            "export ONNX/TRT later. Never actuate from raw samples without a supervisor."
         ),
     ),
     RecipeSpec(

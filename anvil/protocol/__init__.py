@@ -1,5 +1,6 @@
 """Protocol types and multimodal message schema."""
 
+from anvil.protocol.action_tokens import ActionTokenizer, default_edge_tokenizer
 from anvil.protocol.messages import (
     ContentPart,
     Example,
@@ -34,6 +35,7 @@ from anvil.protocol.types import (
 )
 
 __all__ = [
+    "ActionTokenizer",
     "AdamParams",
     "AdapterId",
     "CheckpointRef",
@@ -63,5 +65,6 @@ __all__ = [
     "Trajectory",
     "TrajectoryStep",
     "content_part_from_public",
+    "default_edge_tokenizer",
     "trajectories_to_examples",
 ]

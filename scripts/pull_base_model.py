@@ -39,6 +39,8 @@ DEFAULT_HF_CACHE = "/mnt/data/hf_cache"
 DEFAULT_REMOTE_PYTHON = "/mnt/data/tools/hf-venv/bin/python"
 
 KNOWN = {
+    "smolvlm-256m": "HuggingFaceTB/SmolVLM-256M-Instruct",
+    "smollm2-135m": "HuggingFaceTB/SmolLM2-135M-Instruct",
     "qwen2.5-vl-3b": "Qwen/Qwen2.5-VL-3B-Instruct",
     "qwen2.5-vl-3b-awq": "Qwen/Qwen2.5-VL-3B-Instruct-AWQ",
     "qwen2.5-vl-7b": "Qwen/Qwen2.5-VL-7B-Instruct",

@@ -46,9 +46,17 @@ from anvil.recipes.profiles import (
     plan_recipe,
     suggest_for_model,
 )
+from anvil.recipes.robot_offline import (
+    DEFAULT_ROBOT_BASE,
+    RobotOfflineResult,
+    run_robot_offline,
+    toy_robot_trajectories,
+    trajectories_to_robot_examples,
+)
 
 __all__ = [
     "BookRecipe",
+    "DEFAULT_ROBOT_BASE",
     "DPOResult",
     "GateLevel",
     "GateResult",
@@ -64,6 +72,7 @@ __all__ = [
     "RecipeBook",
     "RecipePlan",
     "RecipeSpec",
+    "RobotOfflineResult",
     "StageRunResult",
     "default_book_root",
     "default_recipe_id_for_shape",
@@ -85,6 +94,9 @@ __all__ = [
     "recipes_for_shape",
     "run_dpo",
     "run_meta_recipe",
+    "run_robot_offline",
     "save_meta_recipe",
     "suggest_for_model",
+    "toy_robot_trajectories",
+    "trajectories_to_robot_examples",
 ]
