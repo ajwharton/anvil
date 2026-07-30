@@ -19,13 +19,6 @@ from anvil.recipes.catalog import (
     recipes_for_shape,
 )
 from anvil.recipes.dpo import DPOResult, PreferencePair, run_dpo
-from anvil.recipes.robot_offline import (
-    DEFAULT_ROBOT_BASE,
-    RobotOfflineResult,
-    run_robot_offline,
-    toy_robot_trajectories,
-    trajectories_to_robot_examples,
-)
 from anvil.recipes.meta import (
     MetaEdge,
     MetaRecipe,
@@ -52,6 +45,13 @@ from anvil.recipes.profiles import (
     list_patterns,
     plan_recipe,
     suggest_for_model,
+)
+from anvil.recipes.robot_offline import (
+    DEFAULT_ROBOT_BASE,
+    RobotOfflineResult,
+    run_robot_offline,
+    toy_robot_trajectories,
+    trajectories_to_robot_examples,
 )
 
 __all__ = [

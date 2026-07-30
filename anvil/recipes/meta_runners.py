@@ -21,8 +21,8 @@ from anvil.recipes.dpo import PreferencePair, run_dpo
 from anvil.recipes.grpo import run_grpo
 from anvil.recipes.meta import MetaStage
 from anvil.recipes.meta_exec import StageRunResult
-from anvil.recipes.sft import run_sft
 from anvil.recipes.robot_offline import run_robot_offline, toy_robot_trajectories
+from anvil.recipes.sft import run_sft
 from anvil.recipes.vlm_sft import run_vlm_sft, toy_vlm_examples
 
 

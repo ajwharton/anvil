@@ -1,5 +1,6 @@
 """Protocol types and multimodal message schema."""
 
+from anvil.protocol.action_tokens import ActionTokenizer, default_edge_tokenizer
 from anvil.protocol.messages import (
     ContentPart,
     Example,
@@ -9,7 +10,6 @@ from anvil.protocol.messages import (
     TextPart,
     content_part_from_public,
 )
-from anvil.protocol.action_tokens import ActionTokenizer, default_edge_tokenizer
 from anvil.protocol.trajectory import Trajectory, TrajectoryStep, trajectories_to_examples
 from anvil.protocol.types import (
     AdamParams,

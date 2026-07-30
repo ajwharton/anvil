@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 from anvil.protocol.action_tokens import ActionTokenizer, default_edge_tokenizer
-from anvil.protocol.trajectory import Trajectory, TrajectoryStep, trajectories_to_examples
+from anvil.protocol.trajectory import Trajectory, TrajectoryStep
 from anvil.recipes.catalog import get_recipe
 from anvil.recipes.profiles import JobPattern, ModelShape, infer_shape, plan_recipe
 from anvil.recipes.robot_offline import (
