@@ -26,20 +26,21 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 
 | Done | Open (next) |
 |------|-------------|
-| Expert-v0/v1 observe + southward + DPO | Multi-worker train/sample if wall |
-| Meta-exec **default live runners** | DPO recipe resume if needed |
+| Expert-v0/v1 observe + southward + DPO | DPO recipe resume if needed |
+| Meta-exec **default live runners** | Full DP multi-GPU **train** (not planned) |
 | **Scale ladder** + `multi_hour` smokes | |
 | **Forge VLM ≥1k** observe + export + ckpt | |
-| **Org packs** + experience→patience + self-host notes | |
+| **Org packs** + experience→patience | |
+| **Multi-worker sample pool** (`sample_endpoints`) | |
 | Checkpoint + resume SFT/GRPO/VLM | |
 | J-lens shelved (optional `-m jlens`) | |
 
 **Habit:** `python scripts/lab_smokes.py --profile quick` often.  
-**Org packs:** `ANVIL_ORG_RECIPE_PACK=packs/demo-org-qwen-vl` · `docs/org-self-host.md`  
-**Experience priors:** `suggest_for_model(...)[\"experience_priors\"]`  
+**Multi-worker sample:** `docs/multi-worker.md` · `run_grpo(sample_endpoints=[…])`  
+**Org packs:** `ANVIL_ORG_RECIPE_PACK` · `docs/org-self-host.md`  
 
 **Recommended next Outcome:**  
-Multi-worker sample/train if wall, or DPO resume parity
+DPO resume parity, or forge dual-vLLM dogfood of sample pool
 
 ## Pull-on-miss only
 

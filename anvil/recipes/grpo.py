@@ -214,6 +214,7 @@ def run_grpo(
     probe_every: int = 1,
     detokenize: Callable[[Sequence[int]], str] | None = None,
     sample_endpoint: str | None = None,
+    sample_endpoints: Sequence[str] | None = None,
     sample_backend: Backend | None = None,
     sync_every: int = 1,
     sample_adapter_id: str | None = None,
@@ -241,6 +242,10 @@ def run_grpo(
     ``sample_backend``. Every ``sync_every`` steps the live LoRA is written
     via ``snapshot_for_sample`` and pushed with ``load_snapshot``. Leave both
     unset for Tier-0 in-process sampling from the train backend.
+
+    Multi-worker sample (Expert-v2): pass ``sample_endpoints=[url, url, …]``
+    for a :class:`~anvil.workers.pool.SampleWorkerPool` (round-robin sample,
+    fan-out ``load_snapshot``). Prefer this when generation is the wall.
 
     Early stop (default on): if advantage signal is dead for
     ``early_stop_patience`` consecutive steps — reward ceiling, floor, or
@@ -291,8 +296,21 @@ def run_grpo(
         stop_on_southward = bool(early_stop and run_dir)
 
     sample_svc: ServiceClient | None = None
+    sample_pool_owned = False
     resolved_sample: Backend | None = sample_backend
-    if resolved_sample is None and sample_endpoint:
+    eps = [str(e).strip() for e in (sample_endpoints or []) if str(e).strip()]
+    if resolved_sample is None and eps:
+        if len(eps) == 1:
+            sample_svc = ServiceClient(endpoint=eps[0], queue=False)
+            resolved_sample = sample_svc.backend
+            sample_endpoint = sample_endpoint or eps[0]
+        else:
+            from anvil.workers.pool import build_sample_pool
+
+            resolved_sample = build_sample_pool(eps)
+            sample_pool_owned = True
+            sample_endpoint = sample_endpoint or f"pool:{len(eps)}"
+    elif resolved_sample is None and sample_endpoint:
         sample_svc = ServiceClient(endpoint=sample_endpoint, queue=False)
         resolved_sample = sample_svc.backend
     sample_aid = (
@@ -301,6 +319,8 @@ def run_grpo(
     sample_ep_label = sample_endpoint or (
         f"injected:{type(resolved_sample).__name__}" if resolved_sample is not None else None
     )
+    if eps and len(eps) > 1:
+        sample_ep_label = f"pool[{len(eps)}]:{','.join(eps)}"
 
     prior_losses: list[float] = []
     prior_mean_rewards: list[float] = []
@@ -335,6 +355,10 @@ def run_grpo(
             if start_step >= steps:
                 if sample_svc is not None:
                     sample_svc.close()
+                if sample_pool_owned and resolved_sample is not None:
+                    from anvil.workers.pool import close_sample_pool
+
+                    close_sample_pool(resolved_sample)  # type: ignore[arg-type]
                 if close_clients and owns_svc:
                     svc.close()
                 return GRPOResult(
@@ -576,6 +600,10 @@ def run_grpo(
     finally:
         if sample_svc is not None:
             sample_svc.close()
+        if sample_pool_owned and resolved_sample is not None:
+            from anvil.workers.pool import close_sample_pool
+
+            close_sample_pool(resolved_sample)  # type: ignore[arg-type]
         if close_clients and owns_svc:
             svc.close()
 

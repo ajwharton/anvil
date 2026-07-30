@@ -109,6 +109,10 @@ Schema/CLI remain; default tests skip (`pytest -m jlens` to run).
 `--no-demo` forge). Throughput knobs: `anvil.recipes.throughput`. Lab profile
 `multi_hour` exercises ladder demo + resume contract.
 
+**Multi-worker sample:** when GRPO generation is the wall, pass
+`sample_endpoints=[http://…, http://…]` → round-robin sample pool + fan-out
+`load_snapshot` (`docs/multi-worker.md`). Train remains single-process.
+
 
 ---
 
