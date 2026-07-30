@@ -106,7 +106,7 @@ Historical homes: P.Sufficiency open items, P.Decide open items, 3.C remainder.
 throughput; org-scale bases as an **ops profile**; personal/org recipe book
 used as the default plan source for repeat domains.
 
-- [x] Checkpoint + resume (adapter + step) for long SFT/RL — `anvil.recipes.checkpoint`; `run_sft` / `run_grpo` (`checkpoint_every`, `resume`, `run_dir/resume.json` + `save_state`)  
+- [x] Checkpoint + resume (adapter + step) for long SFT/RL/**DPO** — `anvil.recipes.checkpoint`; `run_sft` / `run_vlm_sft` / `run_grpo` / `run_dpo`  
 - [x] Batching / throughput defaults per shape (`anvil.recipes.throughput`)  
 - [x] Scale ladder 1k → 5k → 50k+ tooling (`scale_ladder` + demo smoke; forge `--no-demo`)  
 - [x] Multi-hour lab smokes (`lab_smokes --profile multi_hour` + resume contract)  
@@ -475,3 +475,4 @@ For a spin-off agent session:
 | 2026-07-29 | **Forge VLM ≥1k:** expert_v0_1k.jsonl + Qwen2.5-VL-3B observe/probes/export/checkpoint (`vlm-1k-real-20260729-190945`) |
 | 2026-07-29 | **Org packs + experience patience:** install/export packs, ANVIL_ORG_RECIPE_PACK, suggest experience_priors; docs/org-self-host.md |
 | 2026-07-29 | **Multi-worker sample pool:** SampleWorkerPool + run_grpo(sample_endpoints=…); docs/multi-worker.md |
+| 2026-07-29 | **DPO checkpoint/resume** parity with SFT/GRPO (`run_dpo` checkpoint_every + resume) |

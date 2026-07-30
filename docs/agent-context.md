@@ -113,6 +113,10 @@ Schema/CLI remain; default tests skip (`pytest -m jlens` to run).
 `sample_endpoints=[http://…, http://…]` → round-robin sample pool + fan-out
 `load_snapshot` (`docs/multi-worker.md`). Train remains single-process.
 
+**Resume (all methods):** `run_sft` / `run_vlm_sft` / `run_grpo` / `run_dpo`
+with `run_dir` + `checkpoint_every=N`, later `resume=True` and same total
+`steps` — continues from `resume.json` without full replay.
+
 
 ---
 
