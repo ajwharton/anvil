@@ -48,8 +48,8 @@ def _default_model() -> str:
 
 def _soak_rollouts():
     """Scene / hazard rubrics aligned with house-robot caption style."""
-    from anvil.recipes.vision_rl import VisionRollout
     from anvil.recipes.vision_rewards import RubricCriterion
+    from anvil.recipes.vision_rl import VisionRollout
 
     dig = "f" * 64
     ref = f"cas://sha256/{dig}.png"  # schema placeholder; sample is text-token today
@@ -122,8 +122,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     args = p.parse_args(argv)
 
-    from anvil.recipes.vision_rl import run_vision_grpo
     from anvil.recipes.verifiable import detokenize_via_tokenizer
+    from anvil.recipes.vision_rl import run_vision_grpo
 
     model = args.model or _default_model()
     run_id = args.run_id or f"vision-grpo-soak-{datetime.now(timezone.utc).strftime('%Y%m%d-%H%M%S')}"
