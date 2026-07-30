@@ -40,6 +40,19 @@ export ANVIL_JETSON_MODEL=smolvlm-256m
 
 CI uses `JetsonSampleConfig(dry_run=True)`.
 
+## Edge device storage (j30 / Orin)
+
+| Do on robot | Do on lab (forge / Mac) |
+|-------------|-------------------------|
+| Serve small GGUF (smol ~256M) | Train LoRA, build packs, write `run_dir` |
+| Short vision bursts under **robotics** retention | Hold episode packs + media CAS |
+| Prune `~/vision/out` after pull | Convert `vision/out` → house pack |
+
+The j30 is **ops-owned by robotics**, not Anvil. Anvil agents must not invent
+long-running capture jobs or leave multi-GB logs on device. SDKs (Orbbec,
+etc.) already dominate disk; treat free space as scarce even when `df` looks
+comfortable.
+
 ## Smoke
 
 ```bash
