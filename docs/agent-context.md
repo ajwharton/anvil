@@ -73,6 +73,11 @@ Cycle (details in [`watch_loop.md`](../prompts/agent/watch_loop.md)):
 4. **Act or wait** — one primary change at a time; fix infra before switching methods.  
 5. **Log** — class, evidence (metric names + values), action or no-op.
 
+**Rule brain (CI / no LLM):** `anvil.agent.decide.classify_metrics` /
+`decide_from_run_dir` implements the same classes. Dogfood:
+`python scripts/agent_dogfood.py --steps 5` → writes `decisions.jsonl`.
+Swap in a frontier model via `anvil agent` when you bring the brain.
+
 **Scalars lie.** If reward/loss looks good but probe text is garbage, format-hacked, or off-task → treat as **Cliff**.
 
 Detectors: `advantage_collapse`, `reward_up_probes_down`, `probe_regression`,

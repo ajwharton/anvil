@@ -1051,15 +1051,62 @@ class LocalBackend:
         sess = self._get(adapter_id)
         out = Path(path)
         out.mkdir(parents=True, exist_ok=True)
-        if format == ExportFormat.PEFT:
-            sess.model.save_pretrained(out)  # real PEFT dir: adapter_config + safetensors
-        elif format == ExportFormat.MERGED_HF:
+        base = getattr(sess.config, "base_model", None)
+
+        def _save_peft(dest: Path) -> None:
+            sess.model.save_pretrained(dest)
+
+        def _save_merged(dest: Path) -> None:
             merged = sess.model.merge_and_unload()
-            merged.save_pretrained(out)
-            sess.tokenizer.save_pretrained(out)
-        else:
-            raise NotImplementedError(
-                f"export format {format.value!r} not supported by LocalBackend v0; "
-                f"GGUF/ONNX/TRT land with the Phase 4 edge path"
+            merged.save_pretrained(dest)
+            sess.tokenizer.save_pretrained(dest)
+
+        if format == ExportFormat.PEFT:
+            _save_peft(out)
+            return ExportResult(format=format, path=str(out), adapter_id=adapter_id.value)
+
+        # Phase 4.C: edge package (merge + manifest + optional converter hooks)
+        from anvil.export.edge import package_edge_export
+
+        if format == ExportFormat.MERGED_HF:
+            # Flat merged dir for lab consumers; still write manifest alongside.
+            try:
+                _save_merged(out)
+            except Exception:
+                # Fall back to edge package layout
+                bundle = package_edge_export(
+                    fmt=format,
+                    root=out,
+                    adapter_id=adapter_id.value,
+                    base_model=base,
+                    save_peft=_save_peft,
+                    save_merged=_save_merged,
+                )
+                return bundle.result
+            from anvil.export.edge import build_manifest
+
+            man = build_manifest(
+                fmt=format,
+                adapter_id=adapter_id.value,
+                base_model=base,
+                root=out,
+                peft_path=None,
+                merged_path=out,
             )
-        return ExportResult(format=format, path=str(out), adapter_id=adapter_id.value)
+            man.write(out / "edge_manifest.json")
+            return ExportResult(format=format, path=str(out), adapter_id=adapter_id.value)
+
+        if format in {ExportFormat.GGUF, ExportFormat.ONNX, ExportFormat.TRT}:
+            bundle = package_edge_export(
+                fmt=format,
+                root=out,
+                adapter_id=adapter_id.value,
+                base_model=base,
+                save_peft=_save_peft,
+                save_merged=_save_merged,
+            )
+            return bundle.result
+
+        raise NotImplementedError(
+            f"export format {format.value!r} not supported by LocalBackend"
+        )

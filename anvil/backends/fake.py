@@ -305,25 +305,49 @@ class FakeBackend:
         sess = self._get(adapter_id)
         out = Path(path)
         out.mkdir(parents=True, exist_ok=True)
-        if format == ExportFormat.PEFT:
+        base = sess.config.base_model
+
+        def _save_peft(dest: Path) -> None:
+            dest.mkdir(parents=True, exist_ok=True)
             meta = {
-                "base_model_name_or_path": sess.config.base_model,
+                "base_model_name_or_path": base,
                 "r": sess.config.lora.rank,
                 "lora_alpha": sess.config.lora.effective_alpha(),
                 "anvil_adapter_id": adapter_id.value,
                 "step": sess.step,
             }
-            (out / "adapter_config.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
-            (out / "adapter_model.fake.json").write_text(
+            (dest / "adapter_config.json").write_text(
+                json.dumps(meta, indent=2), encoding="utf-8"
+            )
+            (dest / "adapter_model.fake.json").write_text(
                 json.dumps({str(k): v for k, v in sess.weights.items()}),
                 encoding="utf-8",
             )
-        else:
-            (out / "export_meta.json").write_text(
-                json.dumps({"format": format.value, "step": sess.step}),
+
+        if format == ExportFormat.PEFT:
+            _save_peft(out)
+            return ExportResult(format=format, path=str(out), adapter_id=adapter_id.value)
+
+        # Phase 4.C edge package for merged / gguf / onnx / trt
+        from anvil.export.edge import package_edge_export
+
+        def _save_merged(dest: Path) -> None:
+            dest.mkdir(parents=True, exist_ok=True)
+            (dest / "merged_meta.json").write_text(
+                json.dumps({"format": "merged_hf", "step": sess.step, "base": base}),
                 encoding="utf-8",
             )
-        return ExportResult(format=format, path=str(out), adapter_id=adapter_id.value)
+            _save_peft(dest / "peft_shadow")
+
+        bundle = package_edge_export(
+            fmt=format,
+            root=out,
+            adapter_id=adapter_id.value,
+            base_model=base,
+            save_peft=_save_peft,
+            save_merged=_save_merged if format != ExportFormat.PEFT else None,
+        )
+        return bundle.result
 
 
 class _LCG:
