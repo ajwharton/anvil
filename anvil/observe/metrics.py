@@ -82,12 +82,14 @@ class RunMetricsWriter:
         adapter_synced: bool | None = None,
         snapshot_path: str | None = None,
         sample_endpoint: str | None = None,
+        job: str = "grpo",
+        n_image_refs: int = 0,
     ) -> dict[str, Any]:
         fb = dict(fb_metrics or {})
         record: dict[str, Any] = {
             "schema_version": SCHEMA_VERSION,
             "type": "step",
-            "job": "grpo",
+            "job": str(job or "grpo"),
             "ts": time.time(),
             "step": int(step),
             "reward_mean": float(reward_mean),
@@ -95,6 +97,7 @@ class RunMetricsWriter:
             "group_reward_std_mean": float(group_reward_std_mean),
             "loss": float(loss),
             "n_datums": int(n_datums),
+            "n_image_refs": int(n_image_refs),
             "is_mean_ratio": fb.get("mean_ratio"),
             "fb": fb,
             "wall_time_s": wall_time_s,

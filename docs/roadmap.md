@@ -384,11 +384,12 @@ path. Re-open only against the high bar in the spike writeup.
 - [x] Held-out **episode** split → probes (success-proxy sample under live adapter)  
 - [x] In-house **house robot pack** (`anvil.data.robot_pack` + `scripts/robot_pack_smoke.py`; real device operator)
 
-### 4.B On-policy vision RL *(open — required)*
+### 4.B On-policy vision RL *(mostly closed)*
 
-- [ ] Multimodal sample for vision rollouts  
-- [ ] Vision-aware rewards / rubrics  
-- [ ] Recipe queue for vision/robot stages  
+- [x] Multimodal sample for vision rollouts (`ModelInput` + image refs in `run_grpo` / `run_vision_grpo`)  
+- [x] Vision-aware rewards / rubrics (`vision_rewards` keyword / rubric / action-bin)  
+- [x] Recipe queue for vision/robot stages (`run_vision_rl_queue`)  
+- [ ] Lab-scale vision GRPO on real VLM + media store (operator on forge)
 
 ### 4.C Edge / Jetson *(mostly closed)*
 

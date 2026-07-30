@@ -55,6 +55,27 @@ from anvil.recipes.checkpoint import (
 from anvil.recipes.profiles import JobPattern, RecipePlan, plan_recipe
 
 RewardFn = Callable[[str, Sequence[int]], float]
+# One reward for all prompts, or one reward per prompt (same length as prompts).
+RewardSpec = RewardFn | Sequence[RewardFn]
+# Text-token prompts or full multimodal ModelInput (image refs + text tokens).
+PromptSpec = Sequence[int] | ModelInput
+
+
+def as_model_input(prompt: PromptSpec) -> ModelInput:
+    """Normalize a GRPO prompt to :class:`ModelInput` (text tokens or multimodal)."""
+    if isinstance(prompt, ModelInput):
+        return prompt
+    return ModelInput.from_ints(list(prompt))
+
+
+def resolve_reward_fn(reward: RewardSpec | None, prompt_index: int) -> RewardFn:
+    if reward is None:
+        return _exact_match_toy
+    if callable(reward):
+        return reward  # type: ignore[return-value]
+    if not reward:
+        return _exact_match_toy
+    return reward[min(prompt_index, len(reward) - 1)]
 
 
 def datum_from_rollout(
@@ -202,17 +223,18 @@ def push_adapter_snapshot(
 def run_grpo(
     *,
     base_model: str = "Qwen/Qwen3.5-4B",
-    prompts: Sequence[Sequence[int]] | None = None,
-    reward_fn: RewardFn | None = None,
+    prompts: Sequence[PromptSpec] | None = None,
+    reward_fn: RewardSpec | None = None,
     group_size: int = 4,
     steps: int = 3,
     endpoint: str = "fake://",
     plan: RecipePlan | None = None,
     overrides: dict[str, Any] | None = None,
     run_dir: str | None = None,
-    probes: Sequence[Sequence[int]] | None = None,
+    probes: Sequence[PromptSpec] | None = None,
     probe_every: int = 1,
     detokenize: Callable[[Sequence[int]], str] | None = None,
+    job: str = "grpo",
     sample_endpoint: str | None = None,
     sample_endpoints: Sequence[str] | None = None,
     sample_backend: Backend | None = None,
@@ -289,11 +311,12 @@ def run_grpo(
                 mm_projector=k["mm_projector_lora"],
             ),
         )
-    reward_fn = reward_fn or _exact_match_toy
+    reward_spec: RewardSpec = reward_fn if reward_fn is not None else _exact_match_toy
     prompts = list(prompts) if prompts else [list(range(10, 26))]
     writer = RunMetricsWriter(run_dir) if run_dir else None
     if stop_on_southward is None:
         stop_on_southward = bool(early_stop and run_dir)
+    job_label = str(job or "grpo")
 
     sample_svc: ServiceClient | None = None
     sample_pool_owned = False
@@ -333,7 +356,6 @@ def run_grpo(
     stopped_reason: str | None = None
     start_step = 0
     last_ckpt_path: str | None = None
-    job = "grpo"
 
     if resume and run_dir:
         state = load_resume_state(run_dir)
@@ -348,7 +370,7 @@ def run_grpo(
                     step=start_step,
                     event="resume",
                     reason="loaded_resume_json",
-                    job=job,
+                    job=job_label,
                     steps_completed=start_step,
                     checkpoint_path=state.checkpoint_path,
                 )
@@ -397,7 +419,7 @@ def run_grpo(
         ref = save_train_checkpoint(
             tc,
             run_dir=run_dir,
-            job=job,
+            job=job_label,
             steps_completed=step_completed,
             base_model=plan.base_model,
             losses=prior_losses + losses,
@@ -410,7 +432,7 @@ def run_grpo(
                 step=step_completed - 1 if step_completed > 0 else 0,
                 event="checkpoint",
                 reason="periodic" if not force else "final",
-                job=job,
+                job=job_label,
                 steps_completed=step_completed,
                 checkpoint_path=ref.path,
                 checkpoint_name=ref.name,
@@ -454,8 +476,10 @@ def run_grpo(
             step_rewards: list[float] = []
             group_stds: list[float] = []
 
-            for prompt_tokens in prompts:
-                prompt = ModelInput.from_ints(prompt_tokens)
+            for prompt_ix, prompt_spec in enumerate(prompts):
+                prompt = as_model_input(prompt_spec)
+                prompt_tokens = prompt.token_ids()
+                rf = resolve_reward_fn(reward_spec, prompt_ix)
                 sample = sc.sample(
                     prompt,
                     SamplingParams(
@@ -467,7 +491,8 @@ def run_grpo(
                 ).result()
                 rewards = []
                 for seq in sample.sequences:
-                    r = reward_fn("", seq.tokens)
+                    text = detokenize(seq.tokens) if detokenize is not None else ""
+                    r = rf(text, seq.tokens)
                     rewards.append(r)
                     step_rewards.append(r)
                 group_stds.append(statistics.pstdev(rewards) if len(rewards) > 1 else 0.0)
@@ -489,20 +514,23 @@ def run_grpo(
 
             # Probe the LIVE policy (weights used for this step's rollouts)
             if writer is not None and probes and step_ix % probe_every == 0:
-                for probe_ix, probe_tokens in enumerate(probes):
+                for probe_ix, probe_spec in enumerate(probes):
+                    probe_in = as_model_input(probe_spec)
                     out = sc.sample(
-                        ModelInput.from_ints(probe_tokens),
+                        probe_in,
                         SamplingParams(max_tokens=plan.max_tokens, temperature=0.0, seed=0),
                         num_samples=1,
                     ).result()
                     seq = out.sequences[0] if out.sequences else None
                     toks = tuple(seq.tokens) if seq is not None else ()
+                    text = detokenize(toks) if detokenize is not None else None
+                    prf = resolve_reward_fn(reward_spec, probe_ix)
                     writer.log_probe(
                         step=step_ix,
                         probe_idx=probe_ix,
                         tokens=toks,
-                        text=detokenize(toks) if detokenize else None,
-                        reward=reward_fn("", toks),
+                        text=text,
+                        reward=prf(text or "", toks),
                     )
 
             reward_mean = sum(step_rewards) / max(len(step_rewards), 1)
@@ -535,6 +563,14 @@ def run_grpo(
             losses.append(step_loss)
             mean_rewards.append(reward_mean)
             if writer is not None:
+                n_img = 0
+                for p in prompts:
+                    mi = as_model_input(p)
+                    n_img += sum(
+                        1
+                        for c in mi.chunks
+                        if type(c).__name__ in {"ImageRefChunk", "ImageChunk"}
+                    )
                 writer.log_step(
                     step=step_ix,
                     reward_mean=reward_mean,
@@ -549,6 +585,8 @@ def run_grpo(
                     adapter_synced=adapter_synced if resolved_sample is not None else None,
                     snapshot_path=snap_path,
                     sample_endpoint=sample_ep_label if resolved_sample is not None else None,
+                    job=job_label,
+                    n_image_refs=n_img,
                 )
 
             completed = step_ix + 1

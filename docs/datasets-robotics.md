@@ -208,7 +208,7 @@ vision must not lag text GRPO.
 | Checkpoint/resume + multi-hour lab profile | **done** (`checkpoint` + `lab_smokes --profile multi_hour`) |
 | Offline robot SFT + action tokens (smol edge) | **Phase 4.A** done |
 | House pack + edge export + agent dogfood | **Phase 4.A/C** + agentic path |
-| Vision on-policy RL | **Phase 4.B** open |
+| Vision on-policy RL (multimodal GRPO + rubrics + queue) | **Phase 4.B** mostly done (`run_vision_grpo`) |
 
 ## Smoke checklist
 
