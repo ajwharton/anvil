@@ -161,18 +161,36 @@ Python: `anvil.data.robot_pack.house_pack_to_trajectories` / `house_pack_to_json
 
 #### j30 `vision/out` → house pack
 
-If the robot already logs under `~/vision/out` (llm RGB+see text, loop
-escalations, live_pull frames + captions.json):
+**Ops ownership:** the reComputer j30 (and `~/vision`) is run by the
+**robotics** project. Anvil does not own on-device logging policy.
+
+**Storage:** Orin Nano-class devices fill up fast if frame dumps are left
+running. Anvil’s contract is **pull a small snapshot → convert on lab → train
+on lab**. Do not use the robot as an Anvil run dir, HF cache, or multi-hour
+JPEG ring buffer unless robotics explicitly budgets the space.
+
+If a **short** capture already exists under `~/vision/out` (llm RGB+see text,
+loop escalations, optional live_pull):
 
 ```bash
-# operator: rsync vision/out from the robot to a *local* path (no secrets in git)
-rsync -avz <robot-user>@<robot-host>:~/vision/out/ ./j30-out/
+# lab machine only — no secrets/IPs in git
+# Prefer size-capped rsync; prune on-device after pull (robotics policy).
+rsync -avz --max-size=5m <robot-user>@<robot-host>:~/vision/out/ ./j30-out/
 
 python scripts/j30_vision_out_to_pack.py --source ./j30-out --out ./house_pack
 python scripts/robot_pack_smoke.py --pack ./house_pack --steps 20
+# train/export on forge; ship a small GGUF/adapter back — not the reverse
 ```
 
-Never commit house frames or LAN host credentials.
+**Do not:**
+
+- Enable continuous high-rate frame logging “for Anvil” without a retention
+  cap (count, MB, or TTL) owned by robotics
+- Leave Anvil `run_dir` / media CAS / model weights on the j30
+- Commit house frames or LAN credentials
+
+Default capture style for packs: **low res** (e.g. 320×240), **few frames per
+episode**, text captions/detections over raw video.
 
 ## Product goals
 

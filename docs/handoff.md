@@ -39,6 +39,7 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 **Habit:** `python scripts/lab_smokes.py --profile quick` often.  
 **Resume:** SFT/VLM/GRPO/DPO all support `checkpoint_every` + `resume=True`.  
 **Robot:** `scripts/robot_pack_smoke.py` · edge: `docs/edge-export.md` · agent: `scripts/agent_dogfood.py`.  
+**j30 ops:** robotics project owns the device; Anvil = pull-off → pack → lab train; respect storage (no log dump on Orin).  
 **Multi-worker sample:** `docs/multi-worker.md`  
 
 **Recommended next Outcome:**  

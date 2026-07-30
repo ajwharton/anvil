@@ -1,9 +1,14 @@
 """In-house robot episode packs (j30 / edge vision loop → Anvil).
 
-The Orin-class house robot logs **frames + optional detections/captions**
+The Orin-class house robot may produce **frames + optional detections/captions**
 and, when teleop or scripted motion exists, **action vectors**. This module
-turns a small on-disk pack into :class:`~anvil.protocol.trajectory.Trajectory`
-objects and Anvil JSONL for ``run_robot_offline`` / VLM SFT.
+turns a small **lab-side** on-disk pack into
+:class:`~anvil.protocol.trajectory.Trajectory` objects and Anvil JSONL for
+``run_robot_offline`` / VLM SFT.
+
+**Device ops:** edge robots (j30) are owned by the **robotics** project. Packs
+are assembled **off-device** after a capped pull. Do not treat the robot as an
+Anvil log sink — free disk and RAM are scarce; prefer few low-res frames.
 
 Pack layout (episode pack, Bridge-like intermediate)::
 

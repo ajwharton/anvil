@@ -6,6 +6,8 @@ probe the same adapter-shaped policy language as lab without shipping a full
 local GPU stack to the robot.
 
 Train still happens on forge/lab; export PEFT/GGUF, then sample here.
+Do **not** write Anvil ``run_dir`` / media CAS / training logs on the edge
+device — robotics owns disk policy; free space is scarce.
 
 Environment
 -----------

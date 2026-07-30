@@ -1,11 +1,25 @@
 #!/usr/bin/env python3
-"""Convert a local j30 ``vision/out`` tree → Anvil house episode pack.
+"""Convert a **local** j30 ``vision/out`` tree → Anvil house episode pack.
 
-Does **not** SSH or store host credentials. Operator pulls frames first::
+**Ownership / storage (read this):**
 
-  rsync -avz user@jetson:~/vision/out/ ./j30-out/
+- The j30 (and on-device ``~/vision``) is under **robotics project operational
+  control**, not Anvil. Anvil only consumes **already-pulled** snapshots.
+- The Orin is **storage- and RAM-constrained**. Logging frames is expensive.
+  Prefer short bursts → rsync **off-device** → prune on the robot. Do **not**
+  leave multi-GB capture trees, train run dirs, or HF caches on the device.
+- This script never SSHes, never writes to the robot, and never stores
+  credentials. Host IPs/passwords must not enter the Anvil git tree.
+
+Operator flow (lab Mac / forge — not on the robot)::
+
+  # 1) pull a *small* snapshot (robotics ops decides retention on device)
+  rsync -avz --max-size=5m user@jetson:~/vision/out/ ./j30-out/
+  # 2) convert locally
   python scripts/j30_vision_out_to_pack.py --source ./j30-out --out ./house_pack
+  # 3) train offline on lab, not on j30
   python scripts/robot_pack_smoke.py --pack ./house_pack --steps 20
+  # 4) optional: after pull, prune on-device out/ per robotics policy
 
 Expected source layout (subset OK)::
 

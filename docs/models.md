@@ -50,6 +50,7 @@ Workers resolve that id via lab paths / HF cache on the train host — clients d
 - Prefer **SmolVLM-256M** (or 500M) onboard when RAM is tight; use **3B** on forge as teacher if you distill later.
 - Edge export: PEFT/merged → AWQ / ONNX / TRT (Phase 4.C).
 - Same Anvil multimodal message schema lab ↔ edge; action targets are **text tokens** (bins).
+- **Storage:** do not keep Anvil train runs, multi-GB media, or HF caches on the robot. Device logging policy is **robotics-owned**; Anvil only consumes pulled snapshots (see `docs/datasets-robotics.md`, `docs/edge-export.md`).
 
 ## Optional lab bases
 

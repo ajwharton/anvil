@@ -43,6 +43,7 @@ Not a full MoE train stack on day one.
 - Prefer **small PRs**; design / product thesis changes go through `docs/` before large code.
 - Do not brand Anvil with third-party product names or claim proprietary API compatibility.
 - Vision and robot/Jetson paths stay **first-class in design**; don’t strip them to ship text-only forever.
+- **Edge device storage** — house robots (e.g. j30) are **ops-owned by the robotics project**, not Anvil. Prefer **pull-off → train on lab**; do not treat the robot as a log/training dump. Cap and prune on-device captures; never commit device blobs or LAN secrets.
 - Agent **force** past architecture gates must stay **audited**.
 
 ## Facts (one screen)
