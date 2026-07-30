@@ -376,12 +376,13 @@ path. Re-open only against the high bar in the spike writeup.
 
 **Product bar:** offline (then on-policy) robot learning under four verbs + edge export; live sufficiency still applies. Prioritize after Expert-v0 unless the domain *is* the robot.
 
-### 4.A Offline robot learning *(open — required)*
+### 4.A Offline robot learning *(in progress)*
 
-- [ ] Offline trajectory format productized (schema exists; **trainer + `robot_offline` recipe**)  
-- [ ] **Action tokenization recipe** (text-tokenized actions v1; no proprietary API claims)  
-- [ ] Offline loop on real subset with observe metrics  
-- [ ] Held-out episode / success-proxy eval next to train metrics  
+- [x] Offline trajectory format productized (schema + **`run_robot_offline`** + catalog `robot_offline_edge`)  
+- [x] **Action tokenization recipe** (`ActionTokenizer` bins v1 + continuous text; no proprietary API claims)  
+- [x] Offline loop with observe metrics (`metrics.jsonl` / probes; `fake://` green; lab pack operator)  
+- [x] Held-out **episode** split → probes (success-proxy sample under live adapter)  
+- [ ] Real in-house robot pack (smol ~256M) operator smoke on device / lab host
 
 ### 4.B On-policy vision RL *(open — required)*
 
@@ -458,6 +459,7 @@ For a spin-off agent session:
 | 2026-07-18 | **J-Lens measurement stack:** v3 `solve` GO on answer readout (scoring artifacts fixed); J1 schema + spike bridge. Later same day: rank-resolved strong hits + 1.5B proper fit — J2 order still fails (mean 0.167). |
 | 2026-07-19 | **J-Lens spike parked:** 7B mixed fit (~4.9 h, WikiText+math) + solve → 6/6 strong answer hits, mean order **0.5**, sanity 0.95–1.0; J2 entry still not met. **Shelve J2–J5**; keep J1 + CLI. Product focus = RL debugger without J-Lens. Writeup §Fifth pass |
 | 2026-07-26 | **Live sufficiency thesis:** product.md + roadmap §P.Sufficiency / P.Ops / P.Decide — instrument all post-training mid-run; decide “enough” and shift gears; southward-turn detection; not fire-and-forget full budgets. Vision 3.B–3.D and Phase 4 robot goals inherit this SSOT |
+| 2026-07-29 | **Phase 4.A opened:** `ActionTokenizer` (bins v1) + `run_robot_offline`; default base SmolVLM-256M for memory-constrained robot; held-out episode probes; catalog `robot_offline_edge` rank 8 |
 | 2026-07-26 | **P3.6 / 3.C (metrics):** `RunMetricsWriter.log_sft_step`; `run_sft`/`run_vlm_sft(run_dir=…)` → `metrics.jsonl` (loss, wall, n_image_refs, job=sft|vlm_sft); observe UI charts loss for SFT/VLM; `vlm_smoke`/`robot_vlm_sft_demo` `--run-id`. Probes + vision early-stop still open |
 | 2026-07-26 | **P3.5 / 3.B (convert):** `anvil.data.convert` + `scripts/convert_robotics_corpus.py` — episode_pack / path_jsonl → CAS + Anvil JSONL; resume state; max-rows / frames-per-episode; license field; `--demo` synthetic pack. Lab Bridge extract + 1k train still operator/forge |
 | 2026-07-26 | **Facing:** purpose one-liner — sovereign domain experts from base models (`product.md`, README, start, …) |

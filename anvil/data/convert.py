@@ -76,7 +76,13 @@ class ConvertConfig:
     """Default license/attribution string when meta omits it."""
 
     action_decimals: int = 4
-    """Rounding for vector → text actions."""
+    """Rounding for vector → text actions (continuous scheme)."""
+
+    action_scheme: str = "continuous"
+    """``continuous`` (decimal text) or ``bins`` (OpenVLA-style discrete tokens)."""
+
+    action_n_bins: int = 256
+    """Bin count when ``action_scheme='bins'``."""
 
     resume: bool = True
     """Skip episode_ids / keys already recorded in the state file."""
@@ -126,8 +132,24 @@ class _ConvertState:
         path.write_text(json.dumps(self.to_public(), indent=2) + "\n", encoding="utf-8")
 
 
-def format_action_text(action: Any, *, decimals: int = 4) -> str:
-    """Turn an action (vector, dict, or string) into a stable text response."""
+def format_action_text(
+    action: Any,
+    *,
+    decimals: int = 4,
+    scheme: str = "continuous",
+    n_bins: int = 256,
+) -> str:
+    """Turn an action (vector, dict, or string) into a stable text response.
+
+    ``scheme='bins'`` delegates to
+    :class:`~anvil.protocol.action_tokens.ActionTokenizer` (Phase 4.A).
+    """
+    if scheme == "bins":
+        from anvil.protocol.action_tokens import ActionTokenizer
+
+        return ActionTokenizer(scheme="bins", n_bins=n_bins, decimals=decimals).encode(
+            action
+        )
     if action is None:
         raise ValueError("action is None")
     if isinstance(action, str):
@@ -258,6 +280,8 @@ def _row_response(
     actions: Sequence[Any],
     frame_index: int,
     decimals: int,
+    scheme: str = "continuous",
+    n_bins: int = 256,
 ) -> str:
     for key in ("response", "answer", "action_text", "output"):
         if key in meta and meta[key] is not None:
@@ -268,7 +292,9 @@ def _row_response(
             act = actions[frame_index]
         else:
             act = actions[min(frame_index, len(actions) - 1)]
-        return format_action_text(act, decimals=decimals)
+        return format_action_text(
+            act, decimals=decimals, scheme=scheme, n_bins=n_bins
+        )
     instr = _instruction_from_meta(meta)
     if instr:
         # Last-resort: language-only target (caption-style); prefer real actions
@@ -325,6 +351,8 @@ def convert_episode_pack(
                     actions=actions,
                     frame_index=fi if cfg.row_mode == "per_frame" else 0,
                     decimals=cfg.action_decimals,
+                    scheme=cfg.action_scheme,
+                    n_bins=cfg.action_n_bins,
                 )
                 row = {
                     "instruction": instr,
@@ -422,7 +450,12 @@ def convert_path_jsonl(
                 or row_in.get("output")
             )
             if resp is None and row_in.get("action") is not None:
-                resp = format_action_text(row_in["action"], decimals=cfg.action_decimals)
+                resp = format_action_text(
+                    row_in["action"],
+                    decimals=cfg.action_decimals,
+                    scheme=cfg.action_scheme,
+                    n_bins=cfg.action_n_bins,
+                )
             if not str(instr).strip() or resp is None:
                 n_skipped += 1
                 continue

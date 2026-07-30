@@ -22,6 +22,7 @@ from anvil.recipes.grpo import run_grpo
 from anvil.recipes.meta import MetaStage
 from anvil.recipes.meta_exec import StageRunResult
 from anvil.recipes.sft import run_sft
+from anvil.recipes.robot_offline import run_robot_offline, toy_robot_trajectories
 from anvil.recipes.vlm_sft import run_vlm_sft, toy_vlm_examples
 
 
@@ -176,8 +177,11 @@ class DefaultMetaRunner:
             if pattern in {"export", "save", "done"}:
                 return self._run_export(stage, stage_dir)
 
-            if pattern in {"vlm_sft", "vlm_classifier", "robot_offline"}:
+            if pattern in {"vlm_sft", "vlm_classifier"}:
                 return self._run_vlm(stage, stage_dir, base)
+
+            if pattern in {"robot_offline"}:
+                return self._run_robot_offline(stage, stage_dir, base)
 
             if pattern in {"rl_verifiable", "grpo", "rl"}:
                 return self._run_grpo(stage, stage_dir, base)
@@ -266,6 +270,61 @@ class DefaultMetaRunner:
             "steps_run": res.steps_run,
             "adapter_id": res.adapter_id,
             "early_stop_reason": res.early_stop_reason,
+        }
+        self.history.append({"stage": stage.id, **metrics})
+        return StageRunResult(signal=sig, metrics=metrics)
+
+    def _run_robot_offline(
+        self, stage: MetaStage, stage_dir: str | None, base: str
+    ) -> StageRunResult:
+        cfg = self.config
+        svc, tc = self._ensure_sft_client(base)
+        # Prefer explicit VLM examples if provided; else synthetic trajectories.
+        if cfg.vlm_examples is not None:
+            res = run_robot_offline(
+                base_model=base,
+                examples=list(cfg.vlm_examples),
+                steps=cfg.vlm_steps,
+                endpoint=cfg.endpoint,
+                fetch_remote=cfg.fetch_remote,
+                run_dir=stage_dir,
+                early_stop=True,
+                early_stop_mode="production",
+                early_stop_patience=cfg.early_stop_patience,
+                stop_on_southward=cfg.stop_on_southward,
+                service_client=svc,
+                training_client=tc,
+                close_clients=False,
+                overrides=cfg.extra_overrides or None,
+            )
+        else:
+            res = run_robot_offline(
+                base_model=base,
+                trajectories=toy_robot_trajectories(),
+                steps=cfg.vlm_steps,
+                endpoint=cfg.endpoint,
+                fetch_remote=cfg.fetch_remote,
+                run_dir=stage_dir,
+                early_stop=True,
+                early_stop_mode="production",
+                early_stop_patience=cfg.early_stop_patience,
+                stop_on_southward=cfg.stop_on_southward,
+                service_client=svc,
+                training_client=tc,
+                close_clients=False,
+                overrides=cfg.extra_overrides or None,
+            )
+        self._adapter_id = res.adapter_id
+        if res.export_path:
+            self.last_export_path = res.export_path
+        sig = signal_from_early_stop(res.early_stop_reason, default="robot_offline_complete")
+        metrics = {
+            "pattern": "robot_offline",
+            "steps_run": res.steps_run,
+            "adapter_id": res.adapter_id,
+            "early_stop_reason": res.early_stop_reason,
+            "n_train_examples": res.n_train_examples,
+            "n_heldout_episodes": res.n_heldout_episodes,
         }
         self.history.append({"stage": stage.id, **metrics})
         return StageRunResult(signal=sig, metrics=metrics)

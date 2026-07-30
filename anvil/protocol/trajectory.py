@@ -96,12 +96,18 @@ class Trajectory:
         *,
         response_key: str = "action",
         include_all_frames: bool = False,
+        action_tokenizer: Any | None = None,
+        require_images: bool = True,
     ) -> list[Example]:
         """Map trajectory steps → multimodal SFT Examples (image + instruction → text).
 
         Default: one example per step that has an instruction and a stringifiable
         action (or meta[response_key]). Frame set is that step's obs refs (or all
         episode frames if ``include_all_frames``).
+
+        When ``action_tokenizer`` is set (see
+        :class:`~anvil.protocol.action_tokens.ActionTokenizer`), vector actions
+        become text-tokenized targets (bins or continuous).
         """
         examples: list[Example] = []
         episode_refs = self.all_image_refs() if include_all_frames else ()
@@ -112,10 +118,12 @@ class Trajectory:
             resp = step.meta.get(response_key, step.action)
             if resp is None:
                 continue
-            if not isinstance(resp, str):
+            if action_tokenizer is not None:
+                resp = action_tokenizer.encode(resp)
+            elif not isinstance(resp, str):
                 resp = str(resp)
             refs = episode_refs if include_all_frames else step.observation_refs
-            if not refs:
+            if require_images and not refs:
                 continue
             content: list[Any] = [TextPart(text=str(instr))]
             for ref in refs:
@@ -139,7 +147,8 @@ class Trajectory:
 
 
 def trajectories_to_examples(
-    trajectories: Sequence[Trajectory], **kwargs: Any
+    trajectories: Sequence[Trajectory],
+    **kwargs: Any,
 ) -> list[Example]:
     out: list[Example] = []
     for tr in trajectories:

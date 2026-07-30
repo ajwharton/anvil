@@ -87,6 +87,33 @@ _PROFILES: dict[tuple[str, str], ThroughputDefaults] = {
         tokens_per_step_hint=2 * 512,
         steps_per_hour_hint=200,
     ),
+    ("edge_student", "robot_offline"): ThroughputDefaults(
+        shape="edge_student",
+        pattern="robot_offline",
+        batch_size=1,
+        max_seq_len=384,
+        rank=8,
+        learning_rate=2e-4,
+        checkpoint_every=25,
+        notes=(
+            "Robot offline on smol ~250M: rank 8, short seq, freeze vision; "
+            "text-tokenized action bins; never actuate without supervisor."
+        ),
+        tokens_per_step_hint=384,
+        steps_per_hour_hint=300,
+    ),
+    ("dense_vlm", "robot_offline"): ThroughputDefaults(
+        shape="dense_vlm",
+        pattern="robot_offline",
+        batch_size=1,
+        max_seq_len=512,
+        rank=16,
+        learning_rate=1e-4,
+        checkpoint_every=25,
+        notes="Lab VLM robot offline (3B class teacher / offline pack); freeze encoder.",
+        tokens_per_step_hint=512,
+        steps_per_hour_hint=100,
+    ),
     ("dense_lm", "rl_verifiable"): ThroughputDefaults(
         shape="dense_lm",
         pattern="rl_verifiable",

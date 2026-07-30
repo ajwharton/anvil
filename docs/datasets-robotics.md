@@ -17,14 +17,16 @@ LocalMediaStore  ← frames as cas://sha256/…
 Example JSONL  or  Trajectory JSON
         │
         ▼
-recipes: vlm_sft / (later) robot_offline RL
+recipes: vlm_sft / robot_offline (text-tokenized actions)
 ```
 
 Helpers:
 
 - `anvil.data.convert` / `scripts/convert_robotics_corpus.py` — **episode pack or path JSONL → CAS + Anvil JSONL** (resumable, subsample)
 - `anvil.data.ingest` (`examples_from_vlm_jsonl`, `put_images_from_paths`)
-- `anvil.protocol.trajectory.Trajectory.to_vlm_sft_examples`
+- `anvil.protocol.trajectory.Trajectory.to_vlm_sft_examples` (+ optional `ActionTokenizer`)
+- `anvil.protocol.action_tokens.ActionTokenizer` — OpenVLA-style **bins** (default 256 over [-1,1]) or continuous decimal text
+- `anvil.recipes.robot_offline.run_robot_offline` — trajectories → tokenized targets → LoRA CE; default base **SmolVLM-256M**
 
 ## Recommended open corpora
 
@@ -113,10 +115,32 @@ Or build `Trajectory` objects in Python and call `to_vlm_sft_examples()`.
 | Goal | Format | Recipe |
 |------|--------|--------|
 | Instruction-following / caption / grasp rubric | Example (image + text → text) | `vlm_sft` / classifier-style |
-| Offline trajectory policy learning | Trajectory + rewards | Phase 4 `robot_offline` (schema now; trainer later) |
+| Offline trajectory policy learning | Trajectory + rewards | `run_robot_offline` + `ActionTokenizer` (bins v1) |
 | On-policy vision RL | live sample + reward | Phase 2 GRPO loop + multimodal sample (later) |
 
 OpenVLA-style **action tokenization** is a recipe concern (how `response` is spelled), not a change to the four verbs.
+
+### Memory-constrained robot (smol ~250M)
+
+In-house robots that only fit **~256M** should use:
+
+| Piece | Choice |
+|-------|--------|
+| Base | `HuggingFaceTB/SmolVLM-256M-Instruct` (or SmolLM text-only via `text_only=True`) |
+| Recipe | `robot_offline_edge` / `run_robot_offline` |
+| Actions | `ActionTokenizer(scheme="bins", n_bins=256)` |
+| Knobs | rank 8, freeze vision, short seq (see `throughput` edge×robot_offline) |
+
+```python
+from anvil.recipes.robot_offline import run_robot_offline, toy_robot_trajectories
+
+res = run_robot_offline(
+    trajectories=toy_robot_trajectories(),  # or your Trajectory list
+    steps=50,
+    endpoint="local://",  # lab / on-robot backend
+    run_dir="/path/to/run",
+)
+```
 
 ## Product goals
 
@@ -132,7 +156,8 @@ vision must not lag text GRPO.
 | Scale ladder 1k → 5k → 50k+ tooling + forge runbook | **done** (`docs/scale-ladder.md`, `scripts/scale_ladder.py`) |
 | VLM/SFT `metrics.jsonl` + live `/observe` + probes | **done** (Expert-v0/v1) |
 | Checkpoint/resume + multi-hour lab profile | **done** (`checkpoint` + `lab_smokes --profile multi_hour`) |
-| Offline robot RL + action tokenization + vision on-policy RL | **Path: robotics** (historical Phase 4) |
+| Offline robot SFT + action tokens (smol edge) | **Phase 4.A** (`run_robot_offline` shipped; real pack operator) |
+| Vision on-policy RL + Jetson export | **Path: robotics** (Phase 4.B / 4.C) |
 
 ## Smoke checklist
 

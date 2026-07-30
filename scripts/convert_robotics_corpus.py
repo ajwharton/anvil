@@ -102,6 +102,18 @@ def main(argv: list[str] | None = None) -> int:
         help="one JSONL row per frame or one keyframe per episode",
     )
     p.add_argument(
+        "--action-scheme",
+        choices=("continuous", "bins"),
+        default="continuous",
+        help="how to spell vector actions as response text (bins = OpenVLA-style)",
+    )
+    p.add_argument(
+        "--action-n-bins",
+        type=int,
+        default=256,
+        help="bin count when --action-scheme=bins",
+    )
+    p.add_argument(
         "--no-resume",
         action="store_true",
         help="ignore state file; truncate output and start clean",
@@ -164,6 +176,8 @@ def main(argv: list[str] | None = None) -> int:
         row_mode=args.row_mode,
         dataset=args.dataset,
         license_note=args.license,
+        action_scheme=args.action_scheme,
+        action_n_bins=args.action_n_bins,
         resume=not args.no_resume,
         state_path=Path(args.state) if args.state else None,
     )
@@ -180,7 +194,7 @@ def main(argv: list[str] | None = None) -> int:
     print(f"jsonl: {result.output_jsonl}")
     print(f"state: {result.state_path}")
     print(
-        "next: python scripts/robot_vlm_sft_demo.py --source jsonl "
+        "next: python scripts/robot_offline_demo.py  # or robot_vlm_sft_demo.py --source jsonl "
         f"--jsonl {result.output_jsonl} --media-root {result.media_root}"
     )
     return 0

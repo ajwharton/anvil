@@ -110,9 +110,31 @@ class RecipePlan:
 
 # --- architecture inference -------------------------------------------------
 
-_VLM_MARKERS = ("-vl", "vl-", "vision", "vlm", "qwen2.5-vl", "qwen2-vl", "internvl")
+_VLM_MARKERS = (
+    "-vl",
+    "vl-",
+    "vision",
+    "vlm",
+    "qwen2.5-vl",
+    "qwen2-vl",
+    "internvl",
+    "smolvlm",
+    "paligemma",
+)
 _MOE_MARKERS = ("moe", "a3b", "a22b", "mixtral", "deepseek-v")
-_EDGE_MARKERS = ("0.5b", "1.5b", "1b", "2b", "3b")  # size cues, not perfect
+# Size cues for edge / memory-constrained robots (incl. Smol 135M–500M).
+_EDGE_MARKERS = (
+    "0.5b",
+    "1.5b",
+    "1b",
+    "2b",
+    "3b",
+    "135m",
+    "256m",
+    "360m",
+    "500m",
+    "1.7b",
+)
 
 
 def infer_shape(base_model: str) -> ModelShape:
@@ -125,6 +147,9 @@ def infer_shape(base_model: str) -> ModelShape:
     is_small = any(m in name for m in _EDGE_MARKERS) and not any(
         x in name for x in ("7b", "8b", "13b", "14b", "32b", "70b", "72b")
     )
+    # Smol* without an explicit size still targets edge / on-robot.
+    if "smolvlm" in s or "smollm" in name:
+        is_small = True
 
     if is_moe and not is_vlm:
         return ModelShape.MOE_LM
@@ -572,7 +597,23 @@ def _derive(
         if pattern == JobPattern.ROBOT_OFFLINE:
             steps = 300
             export = "onnx" if shape == ModelShape.EDGE_STUDENT else "peft"
-            rationale.append("Robot offline: keep image refs in media store; same schema lab→edge.")
+            if shape == ModelShape.EDGE_STUDENT:
+                # Memory-constrained robot (smol ~250M): tighter rank/seq.
+                lora = LoraShape(
+                    rank=min(lora.rank, 8),
+                    language=True,
+                    vision_encoder=False,
+                    mm_projector=True,
+                )
+                seq = min(seq, 512)
+                batch = min(batch, 2)
+                lr = max(lr, 1e-4)
+            rationale.append(
+                "Robot offline: text-tokenized actions (bins v1); image refs in media store; same schema lab→edge."
+            )
+            rationale.append(
+                "Prefer SmolVLM-256M-class bases on severe memory robots; freeze vision encoder."
+            )
             cautions.append("Never actuate robot from raw sample without a supervisor.")
     elif pattern == JobPattern.RL_VERIFIABLE:
         mods = ("text",) if shape in {ModelShape.DENSE_LM, ModelShape.MOE_LM, ModelShape.UNKNOWN} else ("text", "image")
