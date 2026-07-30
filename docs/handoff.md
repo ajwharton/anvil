@@ -34,6 +34,7 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 | Checkpoint + resume **SFT/VLM/GRPO/DPO** | |
 | **Phase 4.A** robot_offline + action tokens | |
 | **House pack** + **edge export** + **agent dogfood** | |
+| **Phase 4.B** vision GRPO + rubrics + queue | Lab VLM vision RL soak (operator) |
 | J-lens shelved (optional `-m jlens`) | |
 
 **Habit:** `python scripts/lab_smokes.py --profile quick` often.  
@@ -43,7 +44,7 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 **Multi-worker sample:** `docs/multi-worker.md`  
 
 **Recommended next Outcome:**  
-Phase 4.B on-policy vision RL, or j30 operator GGUF smoke with real camera pack
+j30 operator GGUF FPS/power (storage-safe), then agentic forge dogfood soak
 
 ## Pull-on-miss only
 
