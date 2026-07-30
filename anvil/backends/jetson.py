@@ -232,3 +232,61 @@ def _images_from_input(model_input: Any) -> list[str]:
         if path and Path(path).is_file():
             out.append(base64.b64encode(Path(path).read_bytes()).decode("ascii"))
     return out
+
+
+def measure_sample_fps(
+    *,
+    config: JetsonSampleConfig | None = None,
+    n: int = 5,
+    prompt: str = "Describe this room in one short sentence.",
+    image_b64: str | None = None,
+    image_path: str | Path | None = None,
+    warmup: int = 1,
+) -> dict[str, Any]:
+    """Time N edge samples; return latency/FPS stats (lab-side report only).
+
+    Does **not** write files on the robot. Prefer running from the lab with
+    ``ANVIL_JETSON_URL`` pointed at the device Ollama. Cap ``n`` small.
+    """
+    import time
+
+    cfg = config or JetsonSampleConfig()
+    if n < 1:
+        raise ValueError("n must be >= 1")
+    images: list[str] = []
+    if image_b64:
+        images = [image_b64]
+    elif image_path is not None:
+        p = Path(image_path)
+        if p.is_file():
+            images = [base64.b64encode(p.read_bytes()).decode("ascii")]
+
+    be = JetsonSampleBackend(cfg)
+    # no create_lora needed for raw generate path — use _generate directly
+    lat_ms: list[float] = []
+    last_text = ""
+    total = n + max(0, warmup)
+    for i in range(total):
+        t0 = time.perf_counter()
+        last_text = be._generate(prompt, images=images, params=SamplingParams(max_tokens=32))
+        dt = (time.perf_counter() - t0) * 1000.0
+        if i >= warmup:
+            lat_ms.append(dt)
+    if not lat_ms:
+        lat_ms = [0.0]
+    mean = sum(lat_ms) / len(lat_ms)
+    mn, mx = min(lat_ms), max(lat_ms)
+    return {
+        "model": cfg.model,
+        "url": cfg.url if not cfg.dry_run else "dry_run",
+        "n": len(lat_ms),
+        "warmup": warmup,
+        "latency_ms_mean": round(mean, 1),
+        "latency_ms_min": round(mn, 1),
+        "latency_ms_max": round(mx, 1),
+        "fps_mean": round(1000.0 / mean, 3) if mean > 0 else 0.0,
+        "fps_peak": round(1000.0 / mn, 3) if mn > 0 else 0.0,
+        "had_image": bool(images),
+        "last_text_preview": (last_text or "")[:160],
+        "storage_note": "no files written on edge; report is caller-owned (lab only)",
+    }

@@ -58,6 +58,10 @@ comfortable.
 ```bash
 python scripts/edge_export_demo.py --format gguf
 python scripts/robot_pack_smoke.py --steps 2   # pack → offline → (optional export)
+
+# Edge sample FPS (lab-side; dry-run default — no robot writes)
+python scripts/j30_edge_fps_smoke.py --dry-run --n 3
+# Live: ANVIL_JETSON_URL=http://<robot>:11434 python scripts/j30_edge_fps_smoke.py --n 5 --image ./frame.jpg
 ```
 
 ## Safety

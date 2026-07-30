@@ -28,13 +28,13 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 |------|-------------|
 | Expert-v0/v1 observe + southward + DPO | Full DP multi-GPU **train** (not planned) |
 | Meta-exec **default live runners** | Org-scale multi-hour VLM soak (operator) |
-| **Scale ladder** + `multi_hour` smokes | Phase 4.B on-policy vision RL |
-| **Forge VLM ≥1k** + multi-worker sample pool | On-device GGUF FPS/power (j30 operator) |
+| **Scale ladder** + `multi_hour` smokes | Lab vision GRPO soak (forge) |
+| **Forge VLM ≥1k** + multi-worker sample pool | Live edge FPS under robotics retention |
 | **Org packs** + experience→patience | |
 | Checkpoint + resume **SFT/VLM/GRPO/DPO** | |
-| **Phase 4.A** robot_offline + action tokens | |
-| **House pack** + **edge export** + **agent dogfood** | |
+| **Phase 4.A–C** robot offline / export / storage policy | |
 | **Phase 4.B** vision GRPO + rubrics + queue | Lab VLM vision RL soak (operator) |
+| Edge FPS smoke + multi-cycle agent dogfood | Live j30 FPS when Ollama up (robotics) |
 | J-lens shelved (optional `-m jlens`) | |
 
 **Habit:** `python scripts/lab_smokes.py --profile quick` often.  
@@ -44,7 +44,7 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 **Multi-worker sample:** `docs/multi-worker.md`  
 
 **Recommended next Outcome:**  
-j30 operator GGUF FPS/power (storage-safe), then agentic forge dogfood soak
+Live j30 FPS with `ANVIL_JETSON_URL` (storage-safe), or forge vision GRPO soak on a real VLM
 
 ## Pull-on-miss only
 
