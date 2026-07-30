@@ -31,6 +31,7 @@ from anvil.recipes.vision_rewards import (
 )
 
 DetokenizeFn = Callable[[Sequence[int]], str]
+TokenizeFn = Callable[[str], Sequence[int]]
 
 
 @dataclass(frozen=True, slots=True)
@@ -50,10 +51,23 @@ class VisionRollout:
     prompt_token_ids: tuple[int, ...] = ()
     """Optional explicit token ids for the instruction (CI / fake://)."""
 
-    def to_model_input(self, *, default_prompt_tokens: Sequence[int] | None = None) -> ModelInput:
-        toks = list(self.prompt_token_ids) if self.prompt_token_ids else list(
-            default_prompt_tokens or range(10, 26)
-        )
+    def to_model_input(
+        self,
+        *,
+        default_prompt_tokens: Sequence[int] | None = None,
+        tokenize: Callable[[str], Sequence[int]] | None = None,
+    ) -> ModelInput:
+        if self.prompt_token_ids:
+            toks = list(self.prompt_token_ids)
+        elif tokenize is not None:
+            toks = [int(t) for t in tokenize(self.instruction)]
+        elif default_prompt_tokens is not None:
+            toks = list(default_prompt_tokens)
+        else:
+            # CI / fake:// fallback — not for real models
+            toks = list(range(10, 26))
+        if not toks:
+            raise ValueError(f"VisionRollout {self.id!r} produced empty prompt tokens")
         chunks: list[Any] = [EncodedTextChunk(tokens=tuple(int(t) for t in toks))]
         for ref in self.image_refs:
             chunks.append(ImageRefChunk(ref=str(ref), detail="auto"))
@@ -114,6 +128,7 @@ def run_vision_grpo(
     endpoint: str = "fake://",
     run_dir: str | None = None,
     detokenize: DetokenizeFn | None = None,
+    tokenize: TokenizeFn | None = None,
     overrides: dict[str, Any] | None = None,
     fetch_remote: bool = False,
     early_stop: bool = True,
@@ -126,20 +141,27 @@ def run_vision_grpo(
     sample_endpoints: Sequence[str] | None = None,
     checkpoint_every: int | None = None,
     resume: bool = False,
+    modalities: tuple[str, ...] | None = None,
 ) -> GRPOResult:
     """On-policy GRPO with multimodal prompts + vision rewards.
 
     ``fake://`` uses synthetic token detokenization when ``detokenize`` is None.
-    Lab hosts should pass a real tokenizer decode (or HF ``detokenize_via_tokenizer``).
+    Lab hosts should pass a real tokenizer decode (and preferably ``tokenize``)
+    so instruction text is real HF ids, not the CI toy range.
+
+    Note: LocalBackend sample currently scores on **text tokens** in the
+    prompt; image refs are carried for schema/observe (n_image_refs) and for
+    future pixel-fused sample. Rubric rewards still apply to completions.
     """
     rolls = list(rollouts) if rollouts is not None else toy_vision_rollouts()
     if not rolls:
         raise ValueError("run_vision_grpo requires at least one VisionRollout")
 
     detok = detokenize if detokenize is not None else toy_detokenize
-    prompts = [r.to_model_input() for r in rolls]
+    prompts = [r.to_model_input(tokenize=tokenize) for r in rolls]
     rewards = [r.make_reward(detokenize=detok) for r in rolls]
-    ov = {**(overrides or {}), "modalities": ("text", "image")}
+    mods = modalities if modalities is not None else ("text", "image")
+    ov = {**(overrides or {}), "modalities": mods}
     plan = plan_recipe(
         base_model=base_model,
         pattern=JobPattern.RL_VERIFIABLE,
