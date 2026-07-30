@@ -376,13 +376,13 @@ path. Re-open only against the high bar in the spike writeup.
 
 **Product bar:** offline (then on-policy) robot learning under four verbs + edge export; live sufficiency still applies. Prioritize after Expert-v0 unless the domain *is* the robot.
 
-### 4.A Offline robot learning *(in progress)*
+### 4.A Offline robot learning *(mostly closed)*
 
 - [x] Offline trajectory format productized (schema + **`run_robot_offline`** + catalog `robot_offline_edge`)  
 - [x] **Action tokenization recipe** (`ActionTokenizer` bins v1 + continuous text; no proprietary API claims)  
 - [x] Offline loop with observe metrics (`metrics.jsonl` / probes; `fake://` green; lab pack operator)  
 - [x] Held-out **episode** split → probes (success-proxy sample under live adapter)  
-- [ ] Real in-house robot pack (smol ~256M) operator smoke on device / lab host
+- [x] In-house **house robot pack** (`anvil.data.robot_pack` + `scripts/robot_pack_smoke.py`; real device operator)
 
 ### 4.B On-policy vision RL *(open — required)*
 
@@ -390,11 +390,12 @@ path. Re-open only against the high bar in the spike writeup.
 - [ ] Vision-aware rewards / rubrics  
 - [ ] Recipe queue for vision/robot stages  
 
-### 4.C Edge / Jetson *(open — required for dual product thesis)*
+### 4.C Edge / Jetson *(mostly closed)*
 
-- [ ] Export path documented (ONNX / TRT / GGUF / PEFT merge as applicable)  
-- [ ] Distill or small-student path for edge FPS/power notes  
-- [ ] Optional `backend=jetson` sample stub (may be remote process)  
+- [x] Export path documented + packaged (`docs/edge-export.md`, `anvil.export.edge`, GGUF/ONNX/TRT recipes + env converters)  
+- [x] Small-student path (SmolVLM-256M defaults; distill notes in catalog `distill_to_edge`)  
+- [x] Optional `JetsonSampleBackend` sample stub (Ollama / dry-run)  
+- [ ] On-device GGUF load + FPS/power numbers (operator on j30)
 
 ## Phase 5 — Multi-tenant lab (optional)
 
@@ -460,6 +461,7 @@ For a spin-off agent session:
 | 2026-07-19 | **J-Lens spike parked:** 7B mixed fit (~4.9 h, WikiText+math) + solve → 6/6 strong answer hits, mean order **0.5**, sanity 0.95–1.0; J2 entry still not met. **Shelve J2–J5**; keep J1 + CLI. Product focus = RL debugger without J-Lens. Writeup §Fifth pass |
 | 2026-07-26 | **Live sufficiency thesis:** product.md + roadmap §P.Sufficiency / P.Ops / P.Decide — instrument all post-training mid-run; decide “enough” and shift gears; southward-turn detection; not fire-and-forget full budgets. Vision 3.B–3.D and Phase 4 robot goals inherit this SSOT |
 | 2026-07-29 | **Phase 4.A opened:** `ActionTokenizer` (bins v1) + `run_robot_offline`; default base SmolVLM-256M for memory-constrained robot; held-out episode probes; catalog `robot_offline_edge` rank 8 |
+| 2026-07-30 | **Phase 4 pack+export+agentic:** house robot pack; edge export packages (GGUF/ONNX/TRT manifest); Jetson sample stub; rule-based watch→decide→act dogfood (`anvil.agent.decide`, `scripts/agent_dogfood.py`) |
 | 2026-07-26 | **P3.6 / 3.C (metrics):** `RunMetricsWriter.log_sft_step`; `run_sft`/`run_vlm_sft(run_dir=…)` → `metrics.jsonl` (loss, wall, n_image_refs, job=sft|vlm_sft); observe UI charts loss for SFT/VLM; `vlm_smoke`/`robot_vlm_sft_demo` `--run-id`. Probes + vision early-stop still open |
 | 2026-07-26 | **P3.5 / 3.B (convert):** `anvil.data.convert` + `scripts/convert_robotics_corpus.py` — episode_pack / path_jsonl → CAS + Anvil JSONL; resume state; max-rows / frames-per-episode; license field; `--demo` synthetic pack. Lab Bridge extract + 1k train still operator/forge |
 | 2026-07-26 | **Facing:** purpose one-liner — sovereign domain experts from base models (`product.md`, README, start, …) |

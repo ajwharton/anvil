@@ -29,19 +29,20 @@ Use this when starting a **new agent session** dedicated to Anvil (separate from
 | Expert-v0/v1 observe + southward + DPO | Full DP multi-GPU **train** (not planned) |
 | Meta-exec **default live runners** | Org-scale multi-hour VLM soak (operator) |
 | **Scale ladder** + `multi_hour` smokes | Phase 4.B on-policy vision RL |
-| **Forge VLM ≥1k** + multi-worker sample pool | Phase 4.C export / Jetson |
-| **Org packs** + experience→patience | Real robot pack smoke (smol 256M) |
+| **Forge VLM ≥1k** + multi-worker sample pool | On-device GGUF FPS/power (j30 operator) |
+| **Org packs** + experience→patience | |
 | Checkpoint + resume **SFT/VLM/GRPO/DPO** | |
-| **Phase 4.A** `run_robot_offline` + `ActionTokenizer` | |
+| **Phase 4.A** robot_offline + action tokens | |
+| **House pack** + **edge export** + **agent dogfood** | |
 | J-lens shelved (optional `-m jlens`) | |
 
 **Habit:** `python scripts/lab_smokes.py --profile quick` often.  
 **Resume:** SFT/VLM/GRPO/DPO all support `checkpoint_every` + `resume=True`.  
-**Robot offline:** `run_robot_offline` default base SmolVLM-256M; action bins v1.  
+**Robot:** `scripts/robot_pack_smoke.py` · edge: `docs/edge-export.md` · agent: `scripts/agent_dogfood.py`.  
 **Multi-worker sample:** `docs/multi-worker.md`  
 
 **Recommended next Outcome:**  
-Real in-house robot pack on smol 256M, or Phase 4.C edge export, or agentic forge dogfood
+Phase 4.B on-policy vision RL, or j30 operator GGUF smoke with real camera pack
 
 ## Pull-on-miss only
 

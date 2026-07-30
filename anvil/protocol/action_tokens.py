@@ -14,8 +14,6 @@ import re
 from dataclasses import asdict, dataclass
 from typing import Any, Literal, Mapping, Sequence
 
-from anvil.data.convert import format_action_text
-
 ActionScheme = Literal["bins", "continuous"]
 
 # OpenVLA-style defaults: 256 bins over a clipped continuous range.
@@ -93,6 +91,9 @@ class ActionTokenizer:
             # Already tokenized (bin indices or continuous text) — pass through.
             return s
         if self.scheme == "continuous":
+            # Lazy import: avoid protocol ↔ data package cycle at import time.
+            from anvil.data.convert import format_action_text
+
             return format_action_text(action, decimals=self.decimals)
         vec = _as_float_vector(action)
         if not vec:

@@ -14,6 +14,9 @@ from anvil.data.ingest import (
     write_examples_jsonl,
 )
 
+# robot_pack is imported from anvil.data.robot_pack directly (avoids
+# protocol.action_tokens ↔ data package import cycles).
+
 __all__ = [
     "ConvertConfig",
     "ConvertResult",

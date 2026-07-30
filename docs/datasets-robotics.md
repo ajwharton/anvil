@@ -142,6 +142,23 @@ res = run_robot_offline(
 )
 ```
 
+### In-house (j30-style) pack
+
+```text
+house_pack/
+  ep_0001/
+    meta.json     # language_instruction, actions[], captions[], detections[]
+    frames/0000.jpg
+```
+
+```bash
+python scripts/robot_pack_smoke.py --steps 2
+python scripts/robot_pack_smoke.py --pack /path/to/house_pack \
+  --endpoint local:// --model HuggingFaceTB/SmolVLM-256M-Instruct --steps 50
+```
+
+Python: `anvil.data.robot_pack.house_pack_to_trajectories` / `house_pack_to_jsonl`.
+
 ## Product goals
 
 Robotics data is one **application** of Anvil’s **live sufficiency** thesis
@@ -156,8 +173,9 @@ vision must not lag text GRPO.
 | Scale ladder 1k → 5k → 50k+ tooling + forge runbook | **done** (`docs/scale-ladder.md`, `scripts/scale_ladder.py`) |
 | VLM/SFT `metrics.jsonl` + live `/observe` + probes | **done** (Expert-v0/v1) |
 | Checkpoint/resume + multi-hour lab profile | **done** (`checkpoint` + `lab_smokes --profile multi_hour`) |
-| Offline robot SFT + action tokens (smol edge) | **Phase 4.A** (`run_robot_offline` shipped; real pack operator) |
-| Vision on-policy RL + Jetson export | **Path: robotics** (Phase 4.B / 4.C) |
+| Offline robot SFT + action tokens (smol edge) | **Phase 4.A** done |
+| House pack + edge export + agent dogfood | **Phase 4.A/C** + agentic path |
+| Vision on-policy RL | **Phase 4.B** open |
 
 ## Smoke checklist
 

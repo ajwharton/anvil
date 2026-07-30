@@ -2,6 +2,14 @@
 
 from anvil.backends.base import Backend
 from anvil.backends.fake import FakeBackend
+from anvil.backends.jetson import JetsonSampleBackend, JetsonSampleConfig
 from anvil.backends.local import LocalBackend, ModelTooSmallError
 
-__all__ = ["Backend", "FakeBackend", "LocalBackend", "ModelTooSmallError"]
+__all__ = [
+    "Backend",
+    "FakeBackend",
+    "JetsonSampleBackend",
+    "JetsonSampleConfig",
+    "LocalBackend",
+    "ModelTooSmallError",
+]
