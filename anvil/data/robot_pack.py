@@ -339,6 +339,33 @@ def house_pack_to_jsonl(
     return result
 
 
+def _write_tiny_png(path: Path, rgb: tuple[int, int, int] = (30, 90, 200)) -> None:
+    """Minimal solid 1×1 PNG without Pillow (CI has no PIL by default)."""
+    import struct
+    import zlib
+
+    r, g, b = rgb
+    # IHDR + IDAT for 1x1 RGB
+    def chunk(tag: bytes, data: bytes) -> bytes:
+        return (
+            struct.pack(">I", len(data))
+            + tag
+            + data
+            + struct.pack(">I", zlib.crc32(tag + data) & 0xFFFFFFFF)
+        )
+
+    ihdr = struct.pack(">IIBBBBB", 1, 1, 8, 2, 0, 0, 0)  # 1x1, 8-bit RGB
+    raw = bytes([0, r, g, b])  # filter none + pixel
+    png = (
+        b"\x89PNG\r\n\x1a\n"
+        + chunk(b"IHDR", ihdr)
+        + chunk(b"IDAT", zlib.compress(raw))
+        + chunk(b"IEND", b"")
+    )
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_bytes(png)
+
+
 def write_demo_house_pack(
     root: Path,
     *,
@@ -346,9 +373,7 @@ def write_demo_house_pack(
     frames_per: int = 3,
     with_actions: bool = True,
 ) -> Path:
-    """Synthetic j30-like pack for CI / laptop (tiny PNG frames)."""
-    from PIL import Image
-
+    """Synthetic j30-like pack for CI / laptop (tiny PNG frames, no Pillow)."""
     root = Path(root)
     root.mkdir(parents=True, exist_ok=True)
     colors = [
@@ -368,7 +393,7 @@ def write_demo_house_pack(
         detections = []
         for j in range(frames_per):
             path = frames_dir / f"{j:04d}.png"
-            Image.new("RGB", (64, 48), rgb).save(path, format="PNG")
+            _write_tiny_png(path, rgb)
             captions.append(f"{scenes[i % len(scenes)]} view {j}")
             if with_actions:
                 # 7-DoF-ish vector in [-1, 1]
