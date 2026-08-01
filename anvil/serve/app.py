@@ -9,7 +9,7 @@ Run::
     anvil serve --backend local --host 0.0.0.0 --port 8741
 
 LAN trust model: no auth in v0 (home cluster). Bind to 127.0.0.1 if the
-machine is not on a trusted LAN. See docs/cluster.md.
+machine is not on a trusted LAN. See docs/org-self-host.md.
 """
 
 from __future__ import annotations

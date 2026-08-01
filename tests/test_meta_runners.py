@@ -92,3 +92,32 @@ def test_default_runners_dpo_stage(tmp_path):
     assert res.stages_run == 1
     assert res.outcomes[0].result.metrics["pattern"] == "preference_dpo"
     assert res.outcomes[0].result.metrics["steps_run"] < 40
+
+
+def test_default_runners_sft_then_dpo_shares_adapter(tmp_path):
+    """SFT → DPO must continue the SAME LoRA adapter (shared client), not a fresh one."""
+    meta = MetaRecipe(
+        id="sft-dpo",
+        title="SFT then DPO",
+        stages=[
+            MetaStage(id="sft", recipe_id="sft_chat", pattern="sft_chat"),
+            MetaStage(id="pref", recipe_id="dpo", pattern="preference_dpo"),
+        ],
+        edges=[MetaEdge(on="early_stop:*", from_stage="sft", to_stage="pref")],
+    )
+    cfg = DefaultRunnerConfig(
+        endpoint="fake://",
+        run_dir=tmp_path / "meta-sft-dpo",
+        sft_steps=40,
+        dpo_steps=40,
+        early_stop_patience=12,
+        stop_on_southward=False,
+    )
+    res = run_meta_with_defaults(meta, config=cfg)
+    assert res.stages_run == 2
+    sft_metrics = res.outcomes[0].result.metrics
+    dpo_metrics = res.outcomes[1].result.metrics
+    assert sft_metrics["pattern"] == "sft_chat"
+    assert dpo_metrics["pattern"] == "preference_dpo"
+    # The whole point of the shared client: one adapter across both stages.
+    assert dpo_metrics["adapter_id"] == sft_metrics["adapter_id"]
