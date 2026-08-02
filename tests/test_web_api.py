@@ -149,3 +149,11 @@ def test_index_served(client):
     r = client.get("/")
     assert r.status_code == 200
     assert "Anvil" in r.text
+
+
+def test_app_version_matches_package():
+    """The web app version must be single-sourced from anvil.__version__."""
+    import anvil
+
+    app = create_app()
+    assert app.version == anvil.__version__
