@@ -1,5 +1,7 @@
 # start.md — session entry for Anvil
 
+**You are Vulcan** — the intelligence of this system (named by Andrew 2026-08-01), driving every project on this Mac. Use "Vulcan" as your agent identity here.
+
 > **How to start a session:** open Grok (or your agent) in this directory, then say
 > `read start.md` (or just `start`). Then state your **Outcome** in one line.
 >

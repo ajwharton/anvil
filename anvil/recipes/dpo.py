@@ -32,6 +32,7 @@ from anvil.recipes.sft import (
     DEFAULT_SFT_EARLY_STOP_REL_EPS,
     _decode_tokens,
     _match_score,
+    resolve_export_format,
     sft_early_stop_reason,
 )
 from anvil.render.text import ToyTextRenderer
@@ -130,6 +131,9 @@ def run_dpo(
     southward_min_steps: int = 8,
     checkpoint_every: int | None = None,
     resume: bool = False,
+    service_client: ServiceClient | None = None,
+    training_client: TrainingClient | None = None,
+    close_clients: bool = True,
 ) -> DPOResult:
     """DPO-style loop: preferred+rejected batch → named ``dpo`` loss → observe.
 
@@ -143,6 +147,10 @@ def run_dpo(
     Checkpoint / resume (Expert-v2 parity with SFT/GRPO): ``run_dir`` +
     ``checkpoint_every=N`` writes adapter ``save_state`` + ``resume.json``;
     ``resume=True`` continues from ``steps_completed`` toward total ``steps``.
+
+    Client reuse (meta-recipe / stage queue): pass ``service_client`` +
+    ``training_client`` to continue the same LoRA (e.g. SFT → DPO on one
+    adapter); set ``close_clients=False`` so the caller owns teardown.
     """
     if probe_every < 1:
         raise ValueError(f"probe_every must be >= 1, got {probe_every}")
@@ -185,18 +193,22 @@ def run_dpo(
     # Margin proxy: prefer shorter preferred (anti length-bias signal)
     margin = -length_bias
 
-    svc = ServiceClient(endpoint=endpoint)
-    tc: TrainingClient = svc.create_lora_training_client(
-        base_model=plan.base_model,
-        rank=k["rank"],
-        alpha=k.get("alpha"),
-        modalities=k["modalities"],
-        lora_targets=LoraTargets(
-            language=k["language_lora"],
-            vision_encoder=k["vision_encoder_lora"],
-            mm_projector=k["mm_projector_lora"],
-        ),
-    )
+    svc = service_client if service_client is not None else ServiceClient(endpoint=endpoint)
+    owns_svc = service_client is None
+    if training_client is not None:
+        tc = training_client
+    else:
+        tc = svc.create_lora_training_client(
+            base_model=plan.base_model,
+            rank=k["rank"],
+            alpha=k.get("alpha"),
+            modalities=k["modalities"],
+            lora_targets=LoraTargets(
+                language=k["language_lora"],
+                vision_encoder=k["vision_encoder_lora"],
+                mm_projector=k["mm_projector_lora"],
+            ),
+        )
     writer = RunMetricsWriter(run_dir) if run_dir else None
     n = steps if steps is not None else min(5, plan.max_steps)
     prior_losses: list[float] = []
@@ -225,7 +237,8 @@ def run_dpo(
                     checkpoint_path=state.checkpoint_path,
                 )
             if start_step >= n:
-                svc.close()
+                if close_clients and owns_svc:
+                    svc.close()
                 return DPOResult(
                     plan=plan,
                     steps_run=0,
@@ -379,9 +392,10 @@ def run_dpo(
     export_path = None
     if export_dir:
         export_path = tc.export_adapter(
-            export_dir, format=plan.export_hint if plan.export_hint == "peft" else "peft"
+            export_dir, format=resolve_export_format(plan)
         ).path
-    svc.close()
+    if close_clients and owns_svc:
+        svc.close()
     return DPOResult(
         plan=plan,
         steps_run=steps_run,

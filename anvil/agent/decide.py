@@ -72,8 +72,6 @@ def step_rows(rows: Sequence[Mapping[str, Any]]) -> list[dict[str, Any]]:
         if t in (None, "step", "train"):
             if "loss" in r or "reward_mean" in r or "step" in r:
                 out.append(dict(r))
-        elif t == "step":
-            out.append(dict(r))
     return out
 
 

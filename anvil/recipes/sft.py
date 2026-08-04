@@ -179,6 +179,21 @@ def _match_score(text: str | None, gold: str | None) -> float | None:
     return 0.0
 
 
+def resolve_export_format(plan: RecipePlan) -> Any:
+    """Map a plan's ``export_hint`` to an :class:`ExportFormat`.
+
+    Honors the recipe's edge export intent (e.g. ``onnx`` for edge students)
+    instead of always exporting PEFT. Unknown hints fall back to PEFT.
+    """
+    from anvil.protocol.types import ExportFormat
+
+    hint = str(getattr(plan, "export_hint", None) or "peft").lower().strip()
+    try:
+        return ExportFormat(hint)
+    except ValueError:
+        return ExportFormat.PEFT
+
+
 def run_sft(
     *,
     base_model: str = "Qwen/Qwen2.5-VL-3B-Instruct",
@@ -460,7 +475,7 @@ def run_sft(
     export_path = None
     if export_dir:
         export_path = tc.export_adapter(
-            export_dir, format=plan.export_hint if plan.export_hint == "peft" else "peft"
+            export_dir, format=resolve_export_format(plan)
         ).path
 
     if close_clients and owns_svc:

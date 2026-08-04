@@ -20,6 +20,7 @@ from fastapi.responses import FileResponse, HTMLResponse, StreamingResponse
 from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel, Field
 
+from anvil import __version__
 from anvil.observe.metrics import (
     JLENS_FILENAME,
     METRICS_FILENAME,
@@ -228,7 +229,7 @@ def create_app() -> FastAPI:
     app = FastAPI(
         title="Anvil",
         description="Anvil post-training control plane",
-        version="0.0.1",
+        version=__version__,
     )
     store = get_store()
 

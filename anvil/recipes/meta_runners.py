@@ -370,6 +370,9 @@ class DefaultMetaRunner:
     ) -> StageRunResult:
         cfg = self.config
         pairs = list(cfg.dpo_pairs) if cfg.dpo_pairs is not None else _toy_dpo_pairs()
+        # Reuse the shared SFT client so DPO continues the same LoRA adapter
+        # (SFT → preference on one ladder), matching the other stage runners.
+        svc, tc = self._ensure_sft_client(base)
         res = run_dpo(
             base_model=base,
             pairs=pairs,
@@ -381,6 +384,9 @@ class DefaultMetaRunner:
             early_stop_patience=cfg.early_stop_patience,
             stop_on_southward=cfg.stop_on_southward,
             overrides=cfg.extra_overrides or None,
+            service_client=svc,
+            training_client=tc,
+            close_clients=False,
         )
         self._adapter_id = res.adapter_id
         if res.export_path:

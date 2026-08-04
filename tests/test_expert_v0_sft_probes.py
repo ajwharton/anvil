@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
@@ -91,6 +92,43 @@ def test_run_sft_rejects_bad_probe_every():
 
     with pytest.raises(ValueError, match="probe_every"):
         run_sft(endpoint="fake://", steps=1, probe_every=0, probes=[_ex("a", "b")])
+
+
+def test_run_sft_honors_export_hint(tmp_path):
+    """run_sft must export the recipe's export_hint (e.g. onnx), not always PEFT."""
+    export = tmp_path / "sft-onnx"
+    res = run_sft(
+        endpoint="fake://",
+        examples=[_ex("2+2?", "4")],
+        steps=1,
+        export_dir=str(export),
+        overrides={"export_hint": "onnx"},
+    )
+    assert res.export_path is not None
+    man = Path(res.export_path) / "edge_manifest.json"
+    assert man.is_file(), "onnx export should produce an edge bundle (manifest)"
+    data = json.loads(man.read_text(encoding="utf-8"))
+    assert data["format"] == "onnx"
+    assert (Path(res.export_path) / "peft" / "adapter_config.json").is_file()
+
+
+def test_run_dpo_honors_export_hint(tmp_path):
+    """run_dpo must export the recipe's export_hint, not always PEFT."""
+    from anvil.recipes.dpo import PreferencePair, run_dpo
+
+    export = tmp_path / "dpo-onnx"
+    res = run_dpo(
+        endpoint="fake://",
+        pairs=[PreferencePair(prompt="2+2?", preferred="4", rejected="five is bigger")],
+        steps=1,
+        export_dir=str(export),
+        overrides={"export_hint": "onnx"},
+    )
+    assert res.export_path is not None
+    man = Path(res.export_path) / "edge_manifest.json"
+    assert man.is_file(), "onnx export should produce an edge bundle (manifest)"
+    data = json.loads(man.read_text(encoding="utf-8"))
+    assert data["format"] == "onnx"
 
 
 def test_expert_v0_smoke_script(tmp_path):
