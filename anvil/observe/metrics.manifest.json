@@ -1,0 +1,91 @@
+{
+  "schema_version": 1,
+  "description": "Anvil observe metrics manifest. Declares which fields in metrics.jsonl step records are exported to Prometheus. The digdug anvil-exporter pulls this file (or uses its bundled copy) to know which gauges to emit. When you add a new metric to RunMetricsWriter, add it here and the dashboard picks it up automatically.",
+  "source": "anvil/observe/metrics.jsonl step records (via GET /api/observe/{run_id}/metrics)",
+  "metrics": [
+    {
+      "field": "reward_mean",
+      "prom_name": "anvil_reward_mean",
+      "type": "gauge",
+      "help": "Mean rollout reward per step",
+      "jobs": ["grpo"]
+    },
+    {
+      "field": "reward_std",
+      "prom_name": "anvil_reward_std",
+      "type": "gauge",
+      "help": "Std of rollout rewards per step",
+      "jobs": ["grpo"]
+    },
+    {
+      "field": "group_reward_std_mean",
+      "prom_name": "anvil_group_reward_std_mean",
+      "type": "gauge",
+      "help": "Mean within-group reward std - advantage-collapse tripwire",
+      "jobs": ["grpo"]
+    },
+    {
+      "field": "loss",
+      "prom_name": "anvil_loss",
+      "type": "gauge",
+      "help": "Training loss per step",
+      "jobs": ["grpo", "sft", "vlm_sft", "dpo"]
+    },
+    {
+      "field": "is_mean_ratio",
+      "prom_name": "anvil_is_mean_ratio",
+      "type": "gauge",
+      "help": "Importance-sampling mean ratio (drift from ~1 = sample/train desync)",
+      "jobs": ["grpo"]
+    },
+    {
+      "field": "n_datums",
+      "prom_name": "anvil_n_datums",
+      "type": "gauge",
+      "help": "Number of datums processed this step",
+      "jobs": ["grpo", "sft", "vlm_sft", "dpo"]
+    },
+    {
+      "field": "n_tokens",
+      "prom_name": "anvil_n_tokens",
+      "type": "gauge",
+      "help": "Number of tokens processed this step (SFT/VLM)",
+      "jobs": ["sft", "vlm_sft"]
+    },
+    {
+      "field": "n_pairs",
+      "prom_name": "anvil_n_pairs",
+      "type": "gauge",
+      "help": "Number of preference pairs this step (DPO)",
+      "jobs": ["dpo"]
+    },
+    {
+      "field": "length_bias",
+      "prom_name": "anvil_length_bias",
+      "type": "gauge",
+      "help": "Preferred minus rejected length (DPO length-hack signal)",
+      "jobs": ["dpo"]
+    },
+    {
+      "field": "margin",
+      "prom_name": "anvil_margin",
+      "type": "gauge",
+      "help": "Preference margin proxy (DPO)",
+      "jobs": ["dpo"]
+    },
+    {
+      "field": "step",
+      "prom_name": "anvil_step",
+      "type": "gauge",
+      "help": "Current training step",
+      "jobs": ["grpo", "sft", "vlm_sft", "dpo"]
+    },
+    {
+      "field": "wall_time_s",
+      "prom_name": "anvil_wall_time_s",
+      "type": "gauge",
+      "help": "Wall time in seconds",
+      "jobs": ["grpo", "sft", "vlm_sft", "dpo"]
+    }
+  ]
+}
