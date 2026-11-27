@@ -18,6 +18,8 @@ Nothing in this module imports those at module load time.
 
 from __future__ import annotations
 
+import contextlib
+import copy
 import json
 import os
 import secrets
@@ -25,7 +27,7 @@ import uuid
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Any, Sequence
+from typing import Any, Iterator, Sequence
 
 from anvil.protocol.types import (
     AdamParams,
@@ -536,7 +538,8 @@ class LocalBackend:
         w = torch.tensor([weights], dtype=torch.float32, device=self.device)
         logits = sess.model(input_ids=input_ids, attention_mask=attn).logits
         logp = torch.log_softmax(logits.float(), dim=-1)
-        tok_lp = logp.gather(-1, labels.unsqueeze(-1)).squeeze(-1)
+        gather_idx = labels.clamp_min(0).unsqueeze(-1)
+        tok_lp = logp.gather(-1, gather_idx).squeeze(-1)
         supervised = labels != -100
         mask = w * supervised.float()
         denom = mask.sum().clamp_min(1e-8)
@@ -730,7 +733,8 @@ class LocalBackend:
         logp = torch.log_softmax(comp_logits.float(), dim=-1)
         cur_lp = logp.gather(-1, targets_t.unsqueeze(-1)).squeeze(-1)
 
-        ratio = torch.exp(cur_lp - old_lp_t)
+        log_ratio = (cur_lp - old_lp_t).clamp(-20.0, 20.0)
+        ratio = torch.exp(log_ratio)
         if loss_name == LossFn.PPO.value:
             unclipped = ratio * adv_t
             clipped = torch.clamp(ratio, 1.0 - _PPO_EPS, 1.0 + _PPO_EPS) * adv_t
@@ -860,6 +864,34 @@ class LocalBackend:
                 sess.loaded_snapshot = latest
         return sess.model, sess.tokenizer
 
+    @contextlib.contextmanager
+    def _using_sample_weights(
+        self, base_model: str, adapter_id: AdapterId | None
+    ) -> Iterator[tuple[Any, Any]]:
+        """Temporarily load the latest sampler snapshot without clobbering live weights."""
+        _, _, peft = _deps()
+        if adapter_id is None:
+            yield self._model_for_sample(base_model, None)
+            return
+
+        sess = self._get(adapter_id)
+        if not sess.sampler_snapshots:
+            yield sess.model, sess.tokenizer
+            return
+
+        latest = next(reversed(sess.sampler_snapshots))
+        live_sd = {
+            k: v.detach().cpu().clone()
+            for k, v in peft.get_peft_model_state_dict(sess.model).items()
+        }
+        peft.set_peft_model_state_dict(sess.model, sess.sampler_snapshots[latest])
+        sess.loaded_snapshot = latest
+        try:
+            yield sess.model, sess.tokenizer
+        finally:
+            peft.set_peft_model_state_dict(sess.model, live_sd)
+            sess.loaded_snapshot = None
+
     def sample(
         self,
         *,
@@ -879,7 +911,6 @@ class LocalBackend:
         """
         torch, transformers, _ = _deps()
         stop_strings = tuple(s for s in (sampling_params.stop or ()) if s)
-        model, tokenizer = self._model_for_sample(base_model, adapter_id)
 
         prompt_ids = prompt.token_ids()
         if not prompt_ids:
@@ -895,34 +926,35 @@ class LocalBackend:
         if num_samples < 1:
             raise ValueError(f"num_samples must be >= 1, got {num_samples}")
 
-        was_training = model.training
-        model.eval()
-        sequences: list[SampledSequence] = []
-        prompt_lps = None
-        try:
-            with torch.no_grad():
-                if include_prompt_logprobs:
-                    input_ids = torch.tensor(
-                        [prompt_ids], dtype=torch.long, device=self.device
-                    )
-                    prompt_lps = self._prompt_logprobs(model, input_ids)
-                for i in range(num_samples):
-                    self._seed_for_sample(torch, sampling_params.seed, i, do_sample)
-                    sequences.append(
-                        self._generate_one(
-                            model,
-                            tokenizer,
-                            transformers,
-                            prompt_ids=prompt_ids,
-                            prompt_len=prompt_len,
-                            sampling_params=sampling_params,
-                            do_sample=do_sample,
-                            stop_strings=stop_strings,
+        with self._using_sample_weights(base_model, adapter_id) as (model, tokenizer):
+            was_training = model.training
+            model.eval()
+            sequences: list[SampledSequence] = []
+            prompt_lps = None
+            try:
+                with torch.no_grad():
+                    if include_prompt_logprobs:
+                        input_ids = torch.tensor(
+                            [prompt_ids], dtype=torch.long, device=self.device
                         )
-                    )
-        finally:
-            if was_training:
-                model.train()
+                        prompt_lps = self._prompt_logprobs(model, input_ids)
+                    for i in range(num_samples):
+                        self._seed_for_sample(torch, sampling_params.seed, i, do_sample)
+                        sequences.append(
+                            self._generate_one(
+                                model,
+                                tokenizer,
+                                transformers,
+                                prompt_ids=prompt_ids,
+                                prompt_len=prompt_len,
+                                sampling_params=sampling_params,
+                                do_sample=do_sample,
+                                stop_strings=stop_strings,
+                            )
+                        )
+            finally:
+                if was_training:
+                    model.train()
         return SampleResult(sequences=tuple(sequences), prompt_logprobs=prompt_lps)
 
     @staticmethod
@@ -1026,18 +1058,20 @@ class LocalBackend:
         adapter_id: AdapterId | None,
         prompt: ModelInput,
     ) -> list[float | None]:
-        model, _ = self._model_for_sample(base_model, adapter_id)
         prompt_ids = prompt.token_ids()
         if not prompt_ids:
             raise ValueError("empty prompt")
         torch, _, _ = _deps()
         input_ids = torch.tensor([prompt_ids], dtype=torch.long, device=self.device)
-        was_training = model.training
-        model.eval()
-        with torch.no_grad():
-            lps = self._prompt_logprobs(model, input_ids)
-        if was_training:
-            model.train()
+        with self._using_sample_weights(base_model, adapter_id) as (model, _):
+            was_training = model.training
+            model.eval()
+            try:
+                with torch.no_grad():
+                    lps = self._prompt_logprobs(model, input_ids)
+            finally:
+                if was_training:
+                    model.train()
         return list(lps)
 
     # --- export ------------------------------------------------------------------
@@ -1057,9 +1091,24 @@ class LocalBackend:
             sess.model.save_pretrained(dest)
 
         def _save_merged(dest: Path) -> None:
-            merged = sess.model.merge_and_unload()
-            merged.save_pretrained(dest)
-            sess.tokenizer.save_pretrained(dest)
+            # Avoid in-place merge_and_unload() on the live PeftModel, which
+            # permanently strips LoRA layers and corrupts subsequent training.
+            if hasattr(sess.model, "merge_adapter") and hasattr(sess.model, "unmerge_adapter"):
+                sess.model.merge_adapter()
+                try:
+                    base_obj = (
+                        sess.model.get_base_model()
+                        if hasattr(sess.model, "get_base_model")
+                        else sess.model.base_model.model
+                    )
+                    base_obj.save_pretrained(dest)
+                    sess.tokenizer.save_pretrained(dest)
+                finally:
+                    sess.model.unmerge_adapter()
+            else:
+                merged = copy.deepcopy(sess.model).merge_and_unload()
+                merged.save_pretrained(dest)
+                sess.tokenizer.save_pretrained(dest)
 
         if format == ExportFormat.PEFT:
             _save_peft(out)

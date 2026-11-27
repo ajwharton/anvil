@@ -146,10 +146,10 @@ class SampleWorkerPool:
     def save_state(self, adapter_id: AdapterId, name: str) -> CheckpointRef:
         raise NotImplementedError(_TRAIN_MSG)
 
-    def load_state(self, adapter_id: AdapterId, checkpoint: CheckpointRef) -> None:
+    def load_state(self, adapter_id: AdapterId, ref: CheckpointRef | str) -> None:
         raise NotImplementedError(_TRAIN_MSG)
 
-    def save_weights_for_sampler(
+    def snapshot_for_sample(
         self, adapter_id: AdapterId, name: str
     ) -> CheckpointRef:
         raise NotImplementedError(_TRAIN_MSG)
