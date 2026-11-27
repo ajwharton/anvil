@@ -14,6 +14,7 @@ machine is not on a trusted LAN. See docs/org-self-host.md.
 
 from __future__ import annotations
 
+import hmac
 from typing import Any, Callable
 
 from fastapi import FastAPI, Request
@@ -79,7 +80,7 @@ def create_app(backend: Backend, *, token: str | None = None) -> FastAPI:
     async def _auth(request: Request, call_next: Callable[..., Any]):
         if token is not None:
             auth = request.headers.get("authorization", "")
-            if auth != f"Bearer {token}":
+            if not hmac.compare_digest(auth, f"Bearer {token}"):
                 return JSONResponse(status_code=401, content={"error": "unauthorized"})
         return await call_next(request)
 

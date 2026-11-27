@@ -113,7 +113,7 @@ class RecipeBook:
             self.search_roots = book_search_roots(personal=self.root)
 
     def _path(self, recipe_id: str, *, root: Path | None = None) -> Path:
-        if not _SAFE_ID.fullmatch(recipe_id):
+        if not _SAFE_ID.fullmatch(recipe_id) or ".." in recipe_id:
             raise ValueError(f"bad recipe id: {recipe_id!r}")
         base = root if root is not None else self.root
         # org packs may nest under recipes/
@@ -123,7 +123,7 @@ class RecipeBook:
         return base / f"{recipe_id}.json"
 
     def save(self, recipe: BookRecipe) -> Path:
-        if not _SAFE_ID.fullmatch(recipe.id):
+        if not _SAFE_ID.fullmatch(recipe.id) or ".." in recipe.id:
             raise ValueError(f"bad recipe id: {recipe.id!r}")
         path = self.root / f"{recipe.id}.json"
         path.write_text(
@@ -133,6 +133,8 @@ class RecipeBook:
         return path
 
     def get(self, recipe_id: str) -> BookRecipe | None:
+        if not _SAFE_ID.fullmatch(recipe_id) or ".." in recipe_id:
+            raise ValueError(f"bad recipe id: {recipe_id!r}")
         # Prefer personal root first
         for root in self.search_roots:
             for candidate in (

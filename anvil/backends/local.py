@@ -83,6 +83,13 @@ def _normalize_loss(loss_fn: LossFn | str) -> str:
     return str(loss_fn)
 
 
+def _safe_checkpoint_name(name: str) -> str:
+    """Validate checkpoint/snapshot name to prevent path traversal."""
+    if not name or "/" in name or "\\" in name or ".." in name or "\x00" in name:
+        raise ValueError(f"invalid checkpoint name: {name!r}")
+    return name
+
+
 def _stop_string_criteria(
     transformers: Any, tokenizer: Any, prompt_len: int, stop_strings: tuple[str, ...]
 ) -> Any:
@@ -780,7 +787,8 @@ class LocalBackend:
     def save_state(self, adapter_id: AdapterId, name: str) -> CheckpointRef:
         torch, _, _ = _deps()
         sess = self._get(adapter_id)
-        path = self._root / adapter_id.value / "train_state" / name
+        safe = _safe_checkpoint_name(name)
+        path = self._root / adapter_id.value / "train_state" / safe
         path.mkdir(parents=True, exist_ok=True)
         sess.model.save_pretrained(path)
         if sess.optimizer is not None:
@@ -791,15 +799,16 @@ class LocalBackend:
             "rank": sess.config.lora.rank,
         }
         (path / "anvil_state.json").write_text(json.dumps(meta, indent=2), encoding="utf-8")
-        return CheckpointRef(name=name, path=str(path), kind="train_state")
+        return CheckpointRef(name=safe, path=str(path), kind="train_state")
 
     def load_state(self, adapter_id: AdapterId, ref: CheckpointRef | str) -> None:
         torch, _, peft = _deps()
         sess = self._get(adapter_id)
-        name = ref.name if isinstance(ref, CheckpointRef) else ref
-        path = Path(ref.path) if isinstance(ref, CheckpointRef) else (
-            self._root / adapter_id.value / "train_state" / name
-        )
+        if isinstance(ref, CheckpointRef):
+            path = Path(ref.path)
+        else:
+            safe = _safe_checkpoint_name(ref)
+            path = self._root / adapter_id.value / "train_state" / safe
         from safetensors.torch import load_file
 
         sd = load_file(str(path / "adapter_model.safetensors"))
@@ -824,14 +833,15 @@ class LocalBackend:
     def snapshot_for_sample(self, adapter_id: AdapterId, name: str) -> CheckpointRef:
         _, _, peft = _deps()
         sess = self._get(adapter_id)
+        safe = _safe_checkpoint_name(name)
         sd = peft.get_peft_model_state_dict(sess.model)
-        sess.sampler_snapshots[name] = {
+        sess.sampler_snapshots[safe] = {
             k: v.detach().cpu().clone() for k, v in sd.items()
         }
-        path = self._root / adapter_id.value / "sampler_weights" / name
+        path = self._root / adapter_id.value / "sampler_weights" / safe
         path.mkdir(parents=True, exist_ok=True)
         sess.model.save_pretrained(path)
-        return CheckpointRef(name=name, path=str(path), kind="sampler")
+        return CheckpointRef(name=safe, path=str(path), kind="sampler")
 
     def _model_for_sample(
         self, base_model: str, adapter_id: AdapterId | None
