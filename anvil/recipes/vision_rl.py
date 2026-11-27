@@ -263,6 +263,7 @@ def run_vision_rl_queue(
     endpoint: str = "fake://",
     run_dir: str | None = None,
     detokenize: DetokenizeFn | None = None,
+    tokenize: TokenizeFn | None = None,
     overrides: dict[str, Any] | None = None,
     fetch_remote: bool = False,
 ) -> VisionRLQueueResult:
@@ -312,6 +313,7 @@ def run_vision_rl_queue(
                 endpoint=endpoint,
                 run_dir=stage_dir,
                 detokenize=detokenize,
+                tokenize=tokenize,
                 overrides=overrides,
                 fetch_remote=fetch_remote,
                 early_stop=True,
