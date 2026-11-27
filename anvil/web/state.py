@@ -121,7 +121,6 @@ class RunStore:
             export_root
             or os.environ.get("ANVIL_EXPORT_ROOT", str(Path.home() / ".anvil" / "exports"))
         )
-        self.export_root.mkdir(parents=True, exist_ok=True)
         fake_root = Path(os.environ.get("ANVIL_FAKE_ROOT", str(Path.home() / ".anvil" / "fake")))
         self._backend = FakeBackend(root=fake_root)
         self._svc = ServiceClient(endpoint="fake://", backend=self._backend)
@@ -129,8 +128,8 @@ class RunStore:
         self._clients: dict[str, Any] = {}  # run_id -> TrainingClient
         self.host = os.environ.get("ANVIL_HOST_LABEL", os.uname().nodename)
         self.spark_dashboard_urls = {
-            "forge": os.environ.get("SPARK_DASHBOARD_FORGE", "http://192.168.100.162:3000"),
-            "hammer": os.environ.get("SPARK_DASHBOARD_HAMMER", "http://192.168.100.92:3000"),
+            "forge": os.environ.get("SPARK_DASHBOARD_FORGE", ""),
+            "hammer": os.environ.get("SPARK_DASHBOARD_HAMMER", ""),
         }
 
     # --- inventory ---------------------------------------------------------
@@ -401,15 +400,19 @@ class RunStore:
         rec = self.get_run(run_id)
         with self._lock:
             tc = self._clients[run_id]
-        out = self.export_root / run_id / fmt
         try:
             export_fmt = ExportFormat(fmt)
-        except ValueError:
-            export_fmt = ExportFormat.PEFT
+        except ValueError as e:
+            valid = ", ".join(f.value for f in ExportFormat)
+            raise ValueError(f"unsupported export format {fmt!r}; expected one of: {valid}") from e
+        self.export_root.mkdir(parents=True, exist_ok=True)
+        out = (self.export_root / run_id / export_fmt.value).resolve()
+        if not out.is_relative_to(self.export_root.resolve()):
+            raise ValueError(f"export path escapes export_root: {out}")
         result = tc.export_adapter(str(out), format=export_fmt)
         rec.export_path = result.path
         rec.status = "exported"
-        rec.log(f"exported {fmt} → {result.path}")
+        rec.log(f"exported {export_fmt.value} → {result.path}")
         return {"run_id": run_id, "path": result.path, "format": result.format.value}
 
     def save_checkpoint(self, run_id: str, name: str | None = None) -> dict[str, Any]:

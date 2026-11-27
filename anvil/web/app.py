@@ -9,6 +9,7 @@ Run::
 from __future__ import annotations
 
 import asyncio
+import html
 import json
 import os
 import re
@@ -317,7 +318,10 @@ def create_app() -> FastAPI:
     def recipe_book_get(recipe_id: str) -> dict[str, Any]:
         from anvil.recipes.book import RecipeBook
 
-        rec = RecipeBook().get(recipe_id)
+        try:
+            rec = RecipeBook().get(recipe_id)
+        except ValueError as e:
+            raise HTTPException(400, str(e)) from e
         if rec is None:
             raise HTTPException(404, f"no personal recipe {recipe_id!r}")
         return rec.to_public()
@@ -605,17 +609,20 @@ def create_app() -> FastAPI:
             step = last.get("step") if last else None
             step_s = str(step) if step is not None else "—"
             rows.append(
-                f'<tr><td><a href="{r["observe_url"]}">{r["run_id"]}</a></td>'
-                f'<td class="mono">{step_s}</td><td class="mono">{signal_s}</td>'
-                f'<td class="mono">{r["n_steps"]}</td></tr>'
+                f'<tr><td><a href="{html.escape(str(r["observe_url"]), quote=True)}">'
+                f'{html.escape(str(r["run_id"]))}</a></td>'
+                f'<td class="mono">{html.escape(step_s)}</td>'
+                f'<td class="mono">{html.escape(signal_s)}</td>'
+                f'<td class="mono">{int(r["n_steps"])}</td></tr>'
             )
+        root_escaped = html.escape(str(data["root"]))
         body = (
             "\n".join(rows)
             if rows
             else '<tr><td colspan="4" class="meta">no runs yet — start '
             "<code>scripts/grpo_observe_demo.py</code> or "
             "<code>scripts/vlm_smoke.py --run-id …</code> with this "
-            f"ANVIL_OBSERVE_ROOT ({data['root']})</td></tr>"
+            f"ANVIL_OBSERVE_ROOT ({root_escaped})</td></tr>"
         )
         return f"""<!doctype html>
 <html><head><meta charset="utf-8"><title>anvil observe</title>
@@ -629,7 +636,7 @@ def create_app() -> FastAPI:
  .meta{{color:#8b949e}} code{{background:#21262d;padding:2px 6px;border-radius:4px}}
 </style></head><body>
 <h1>anvil observe — live runs</h1>
-<p class="meta">root <code>{data["root"]}</code> · auto-refresh 5s ·
+<p class="meta">root <code>{root_escaped}</code> · auto-refresh 5s ·
 <a href="/">control plane</a></p>
 <table><thead><tr><th>run</th><th>last step</th><th>signal</th><th>n_steps</th></tr></thead>
 <tbody>{body}</tbody></table>
@@ -653,4 +660,13 @@ def create_app() -> FastAPI:
     return app
 
 
-app = create_app()
+_APP: FastAPI | None = None
+
+
+def __getattr__(name: str) -> Any:
+    global _APP
+    if name == "app":
+        if _APP is None:
+            _APP = create_app()
+        return _APP
+    raise AttributeError(f"module {__name__!r} has no attribute {name!r}")

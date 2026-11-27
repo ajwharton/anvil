@@ -16,6 +16,7 @@ from __future__ import annotations
 
 import json
 import os
+import shlex
 import shutil
 import subprocess
 from dataclasses import asdict, dataclass, field
@@ -197,16 +198,25 @@ def try_run_converter(
     dest: Path,
     timeout: float = 600.0,
 ) -> tuple[bool, str]:
-    """Run optional shell converter. Returns (ok, message)."""
+    """Run optional external converter without invoking a shell. Returns (ok, message)."""
     cmd_tmpl = os.environ.get(env_key, "").strip()
     if not cmd_tmpl:
         return False, f"{env_key} not set — recipe only"
-    # Support {src} and {dst} placeholders
-    cmd = cmd_tmpl.replace("{src}", str(source_dir)).replace("{dst}", str(dest))
+    try:
+        tokens = shlex.split(cmd_tmpl)
+    except ValueError as e:
+        return False, f"{env_key} invalid command syntax: {e}"
+    if not tokens:
+        return False, f"{env_key} not set — recipe only"
+    # Support {src} and {dst} placeholders per argv token (no shell interpolation)
+    argv = [
+        tok.replace("{src}", str(source_dir)).replace("{dst}", str(dest))
+        for tok in tokens
+    ]
     try:
         proc = subprocess.run(
-            cmd,
-            shell=True,
+            argv,
+            shell=False,
             check=False,
             capture_output=True,
             text=True,

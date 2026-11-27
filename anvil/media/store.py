@@ -77,10 +77,15 @@ class LocalMediaStore:
         if not ref.startswith(self.scheme):
             raise ValueError(f"unsupported ref scheme: {ref!r}")
         rest = ref[len(self.scheme) :]
+        if "/" in rest or "\\" in rest or ".." in rest or "\x00" in rest:
+            raise ValueError(f"bad ref path: {ref!r}")
         hex_part = rest.split(".", 1)[0]
         if len(hex_part) != 64 or any(c not in "0123456789abcdef" for c in hex_part.lower()):
             raise ValueError(f"bad ref digest: {ref!r}")
-        return self.root / hex_part[:2] / rest
+        candidate = (self.root / hex_part[:2] / rest).resolve()
+        if not candidate.is_relative_to(self.root.resolve()):
+            raise ValueError(f"ref escapes media store root: {ref!r}")
+        return candidate
 
     def get(self, ref: str) -> bytes:
         path = self._path_for(ref)
